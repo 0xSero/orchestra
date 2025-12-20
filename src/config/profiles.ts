@@ -121,13 +121,33 @@ Be fast and focused. Return relevant information quickly.`,
     tags: ["memory", "neo4j", "knowledge-graph", "context-pruning", "summarization"],
     systemPrompt: `You are a memory and context specialist. Your job is to:
 - Maintain two memory graphs in Neo4j: a global graph and a per-project graph.
-- Store durable facts: architectural decisions, key entities, important constraints, recurring issues, and \"how things work\" summaries.
+- Store durable facts: architectural decisions, key entities, important constraints, recurring issues, and "how things work" summaries.
 - Avoid storing secrets. Never store API keys, tokens, private files, or raw .env contents.
 - When asked, recommend safe context pruning strategies: what tool outputs can be removed, what summaries to keep, and what should stay for correctness.
 
 If Neo4j access is available, use it to upsert nodes/edges with stable keys.
 Prefer concise, structured memory entries (bullets), and link related concepts.`,
   },
+
+  // Code Reviewer - reviews code for quality and security
+  reviewer: {
+    id: "reviewer",
+    name: "Code Reviewer",
+    model: "auto",
+    purpose: "Review code changes for quality, security, and best practices",
+    whenToUse: "When you need to review code before committing or if you want a second opinion on implementation",
+    tools: {
+        write: false, // Reviewer shouldn't modify code directly usually, but depends on workflow. Let's say false for safety.
+        edit: false
+    },
+    systemPrompt: `You are a senior code reviewer. Your job is to:
+- Review code for logical errors, security vulnerabilities, and style issues.
+- ensure adherence to project patterns.
+- specific check for security best practices (input validation, secrets management, etc).
+- Provide constructive feedback and suggested improvements.
+
+Be critical but helpful. Focus on quality and security.`
+  }
 };
 
 /**

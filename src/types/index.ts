@@ -155,6 +155,38 @@ export interface WorkerResponse {
   duration?: number;
 }
 
+export interface WorkflowStep {
+  id: string;
+  name: string;
+  workerId?: string;
+  action?: string;
+  params?: Record<string, any>;
+  next?: string;
+}
+
+export interface WorkflowConfig {
+  id: string;
+  name: string;
+  description?: string;
+  type: "sequential" | "parallel" | "boomerang";
+  steps?: WorkflowStep[];
+  // For boomerang:
+  initialTask?: string;
+  workerChain?: string[];
+}
+
+export interface WorkflowInstance {
+  id: string;
+  configId: string;
+  status: "pending" | "running" | "completed" | "failed";
+  currentStepId?: string;
+  history: Array<{ stepId: string; output: any; timestamp: Date }>;
+  result?: any;
+  error?: string;
+  startedAt: Date;
+  completedAt?: Date;
+}
+
 export interface OrchestratorEvents {
   "worker:spawned": { worker: WorkerInstance };
   "worker:ready": { worker: WorkerInstance };
@@ -163,4 +195,8 @@ export interface OrchestratorEvents {
   "worker:stopped": { worker: WorkerInstance };
   "worker:response": { worker: WorkerInstance; response: WorkerResponse };
   "registry:updated": { registry: Registry };
+  "workflow:started": { workflow: WorkflowInstance };
+  "workflow:step": { workflow: WorkflowInstance; stepId: string };
+  "workflow:completed": { workflow: WorkflowInstance; result: any };
+  "workflow:failed": { workflow: WorkflowInstance; error: string };
 }

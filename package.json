@@ -29,6 +29,7 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "sst": "^3.17.25",
     "typescript": "^5.0.0"
   },
   "peerDependencies": {

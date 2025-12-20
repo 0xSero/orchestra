@@ -1066,6 +1066,62 @@ export const findWorker = tool({
   },
 });
 
+import { workflowEngine } from "../core/workflow";
+import { boomerangWorkflow } from "../workflows/boomerang";
+
+export const runWorkflow = tool({
+  description: "Run a predefined workflow. Currently supports 'roocode-boomerang'.",
+  args: {
+    workflowId: tool.schema.string().describe("ID of the workflow to run (e.g. 'roocode-boomerang')"),
+    input: tool.schema.string().describe("Initial input for the workflow"),
+    workerChain: tool.schema.array(tool.schema.string()).optional().describe("Optional override for worker chain (e.g. ['architect', 'coder', 'reviewer'])")
+  },
+  async execute(args) {
+     const workflowId = args.workflowId;
+     // Ensure default workflows are registered if not already
+     if (workflowId === "roocode-boomerang" && !workflowEngine.getWorkflow(workflowId)) {
+         workflowEngine.registerWorkflow(boomerangWorkflow);
+     }
+
+     try {
+         const instance = await workflowEngine.startWorkflow(workflowId, args.input, { workerChain: args.workerChain });
+         
+         // Wait for completion (up to 2 minutes)
+         return await new Promise<string>((resolve) => {
+             const timeout = setTimeout(() => {
+                 resolve(`Workflow started (ID: ${instance.id}). It is running in the background.`);
+             }, 120000); 
+
+             const onComplete = (data: { workflow: any; result: any }) => {
+                 if (data.workflow.id === instance.id) {
+                     cleanup();
+                     resolve(`Workflow completed:\n${data.result}`);
+                 }
+             };
+
+             const onFail = (data: { workflow: any; error: any }) => {
+                 if (data.workflow.id === instance.id) {
+                     cleanup();
+                     resolve(`Workflow failed: ${data.error}`);
+                 }
+             };
+
+             const cleanup = () => {
+                 clearTimeout(timeout);
+                 workflowEngine.off("workflow:completed", onComplete);
+                 workflowEngine.off("workflow:failed", onFail);
+             };
+
+             workflowEngine.on("workflow:completed", onComplete);
+             workflowEngine.on("workflow:failed", onFail);
+         });
+
+     } catch (e) {
+         return `Failed to start workflow: ${e instanceof Error ? e.message : String(e)}`;
+     }
+  }
+});
+
 /**
  * All tools exported for the plugin
  */
@@ -1090,4 +1146,5 @@ export const orchestratorTools = {
   delegate_task: delegateTask,
   stop_worker: stopWorkerTool,
   find_worker: findWorker,
+  run_workflow: runWorkflow,
 };

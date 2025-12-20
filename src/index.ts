@@ -7,8 +7,12 @@ import type { WorkerInstance } from "./types";
 import type { Config } from "@opencode-ai/sdk";
 import { createIdleNotifier } from "./ux/idle-notification";
 import { createPruningTransform } from "./ux/pruning";
+import { registerDefaultWorkflows } from "./workflows";
 
 export const OrchestratorPlugin: Plugin = async (ctx) => {
+  // Register default workflows (e.g. Boomerang)
+  registerDefaultWorkflows();
+
   const { config, sources } = await loadOrchestratorConfig({
     directory: ctx.directory,
     worktree: ctx.worktree || undefined,
