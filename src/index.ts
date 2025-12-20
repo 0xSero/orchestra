@@ -1,7 +1,7 @@
 import type { Plugin } from "@opencode-ai/plugin";
 import { loadOrchestratorConfig } from "./config/orchestrator";
-import { registry } from "./core/registry";
-import { orchestratorTools, setClient, setDirectory, setProfiles, setProjectId, setSpawnDefaults, setUiDefaults, setWorktree } from "./tools";
+import { createOrchestratorRuntime } from "./core/runtime";
+import { createOrchestratorTools } from "./tools";
 import { spawnWorkers } from "./workers/spawner";
 import type { WorkerInstance } from "./types";
 import type { Config } from "@opencode-ai/sdk";
@@ -14,18 +14,14 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
     worktree: ctx.worktree || undefined,
   });
 
-  setDirectory(ctx.directory);
-  setWorktree(ctx.worktree);
-  setProjectId(ctx.project.id);
-  setClient(ctx.client);
-  setSpawnDefaults({ basePort: config.basePort, timeout: config.startupTimeout });
-  setProfiles(config.profiles);
-  setUiDefaults({ defaultListFormat: config.ui?.defaultListFormat });
-
-  const showToast = (message: string, variant: "success" | "info" | "warning" | "error") =>
-    (config.ui?.toasts === false
-      ? Promise.resolve()
-      : ctx.client.tui.showToast({ body: { message, variant } }).catch(() => {}));
+  const runtime = createOrchestratorRuntime({
+    directory: ctx.directory,
+    worktree: ctx.worktree || undefined,
+    projectId: ctx.project.id,
+    client: ctx.client,
+    config,
+  });
+  const orchestratorTools = createOrchestratorTools(runtime);
 
   const lastStatus = new Map<string, string>();
   const onWorkerUpdate = (instance: WorkerInstance) => {
@@ -35,45 +31,46 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
     lastStatus.set(id, status);
 
     if (status === "ready") {
-      void showToast(`Worker "${instance.profile.name}" ready`, "success");
+      void runtime.showToast(`Worker "${instance.profile.name}" ready`, "success");
     } else if (status === "error") {
-      void showToast(`Worker "${instance.profile.name}" error: ${instance.error ?? "unknown"}`, "error");
+      void runtime.showToast(`Worker "${instance.profile.name}" error: ${instance.error ?? "unknown"}`, "error");
     }
   };
-  registry.on("registered", onWorkerUpdate);
-  registry.on("updated", onWorkerUpdate);
+  runtime.registry.on("registered", onWorkerUpdate);
+  runtime.registry.on("updated", onWorkerUpdate);
 
   const configMsg = sources.project
     ? `Orchestrator loaded (project config)`
     : sources.global
       ? `Orchestrator loaded (global config)`
       : `Orchestrator loaded (defaults)`;
-  void showToast(configMsg, "success");
+  void runtime.showToast(configMsg, "success");
 
   if (!sources.global && !sources.project) {
-    void showToast("Tip: run `orchestrator.setup` to auto-configure profile models", "info");
+    void runtime.showToast("Tip: run `orchestrator.setup` to auto-configure profile models", "info");
     void ctx.client.tui.appendPrompt({ body: { text: "orchestrator.setup" } }).catch(() => {});
   }
 
   if (config.autoSpawn && config.spawn.length > 0) {
     void (async () => {
-      void showToast(`Spawning ${config.spawn.length} worker(s)…`, "info");
+      void runtime.showToast(`Spawning ${config.spawn.length} worker(s)…`, "info");
       const profilesToSpawn = config.spawn.map((id) => config.profiles[id]).filter(Boolean);
       const { succeeded, failed } = await spawnWorkers(profilesToSpawn, {
         basePort: config.basePort,
         timeout: config.startupTimeout,
         directory: ctx.directory,
+        registry: runtime.registry,
       });
       if (failed.length === 0) {
-        void showToast(`Spawned ${succeeded.length} worker(s)`, "success");
+        void runtime.showToast(`Spawned ${succeeded.length} worker(s)`, "success");
       } else {
-        void showToast(
+        void runtime.showToast(
           `Spawned ${succeeded.length} worker(s), ${failed.length} failed`,
           succeeded.length > 0 ? "warning" : "error"
         );
       }
     })().catch((err) => {
-      void showToast(`Auto-spawn failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      void runtime.showToast(`Auto-spawn failed: ${err instanceof Error ? err.message : String(err)}`, "error");
     });
   }
 
@@ -97,8 +94,10 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
             `- list_profiles / list_workers to understand what's available\n` +
             `- spawn_worker to start the right specialist\n` +
             `- find_worker and delegate_task to route work\n` +
-            `- ask_worker to send a specific request\n\n` +
-            `Prefer delegating: vision for images, docs for research, coder for implementation, architect for planning, explorer for quick codebase lookups.`;
+            `- ask_worker to send a specific request\n` +
+            `- list_workflows / run_workflow for structured multi-step execution\n\n` +
+            `Prefer delegating: vision for images, docs for research, coder for implementation, architect for planning, explorer for quick codebase lookups.\n` +
+            `Prefer workflows for higher-quality changes with predictable structure (e.g. roocode.boomerang.sequential).`;
 
         const existing = (opencodeConfig.agent ?? {}) as Record<string, any>;
         const prior = (existing[name] ?? {}) as Record<string, unknown>;
@@ -150,6 +149,14 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
             description: "List running workers",
             template: "Call list_workers({ format: 'markdown' }).",
           },
+          [`${prefix}workflows`]: {
+            description: "List available workflows",
+            template: "Call list_workflows({ format: 'markdown' }).",
+          },
+          [`${prefix}boomerang`]: {
+            description: "Run Roocode boomerang workflow (plan → implement → review → fix)",
+            template: "Call run_workflow({ workflowId: 'roocode.boomerang.sequential', task: 'Describe the task you want to run' }).",
+          },
         };
 
         const profileCommands: Record<string, any> = {};
@@ -169,8 +176,8 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
     },
     "experimental.chat.system.transform": async (_input, output) => {
       if (config.ui?.injectSystemContext === false) return;
-      if (registry.workers.size === 0) return;
-      output.system.push(registry.getSummary({ maxWorkers: config.ui?.systemContextMaxWorkers ?? 12 }));
+      if (runtime.registry.workers.size === 0) return;
+      output.system.push(runtime.registry.getSummary({ maxWorkers: config.ui?.systemContextMaxWorkers ?? 12 }));
     },
     "experimental.chat.messages.transform": pruneTransform,
     event: idleNotifier,

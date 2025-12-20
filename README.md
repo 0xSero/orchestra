@@ -49,9 +49,10 @@
 
 - **6 Built-in Worker Profiles** - Vision, Docs, Coder, Architect, Explorer, Memory
 - **Hub-and-Spoke Architecture** - Central orchestrator with specialized workers
+- **Workflow Engine** - Structured multi-step runs (includes Roocode sequential boomerang)
 - **Neo4j-Backed Memory System** - Persistent knowledge graph for project/global context
 - **Profile-Based Spawning** - Auto-model resolution from OpenCode config
-- **22+ Tool APIs** - Comprehensive tooling for worker management and delegation
+- **24+ Tool APIs** - Comprehensive tooling for worker management, delegation, and workflows
 - **DCP-Inspired Context Pruning** - Automatic context management for long sessions
 - **Dynamic Port Allocation** - Avoids conflicts with automatic port assignment
 - **Session-Based Isolation** - Each worker maintains its own conversation context
@@ -173,6 +174,11 @@ delegate_task({ task: "Analyze this screenshot", requiresVision: true })
 delegate_task({ task: "Find the official React hooks documentation" })
 ```
 
+**Run a workflow (Roocode boomerang):**
+```bash
+run_workflow({ workflowId: "roocode.boomerang.sequential", task: "Implement feature X and update docs" })
+```
+
 **Direct messaging:**
 ```bash
 ask_worker({ workerId: "vision", message: "What's in this image?", attachments: [...] })
@@ -225,6 +231,10 @@ stateDiagram-v2
 - `delegate_task` - Auto-route to best worker
 - `ask_worker` - Direct worker messaging
 - `find_worker` - Find suitable worker
+
+### Workflows
+- `list_workflows` - List available workflows
+- `run_workflow` - Run a structured multi-step workflow
 
 ### Configuration
 - `list_models` - Available OpenCode models
@@ -295,6 +305,32 @@ bun run build
 # Run tests
 bun test
 ```
+
+### Optional E2E test (OpenCode)
+
+The repo includes an optional E2E test that starts a local OpenCode server via `@opencode-ai/sdk` and prompts it.
+
+```bash
+OPENCODE_ORCH_E2E=1 OPENCODE_ORCH_E2E_MODEL=opencode/gpt-5-nano bun test
+```
+
+If your provider requires credentials, set the relevant environment variables for your OpenCode setup first.
+
+## Resource usage (CPU / memory / cost)
+
+Open Orchestra can spin up **multiple local OpenCode servers** (one per worker). That’s powerful, but it means resource usage scales with:
+
+- **Number of workers**: each worker is a separate process/server with its own session context.
+- **Concurrency**: parallel worker work increases CPU usage; sequential workflows trade time for lower CPU spikes.
+- **Model context + attachments**: larger prompts/outputs increase memory pressure and latency.
+
+Practical guidance:
+
+- Keep `workers` auto-spawn minimal (start with `vision`, `docs`, `coder`).
+- Prefer `run_workflow({ workflowId: "roocode.boomerang.sequential", ... })` when you want a predictable structure (plan → implement → review → fix).
+- Use pruning for long sessions to reduce context bloat.
+
+CI includes a resource summary (max RSS, CPU%, wall time) for `bun test` in the GitHub Actions step summary.
 
 ## Project Structure
 

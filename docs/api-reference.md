@@ -1,11 +1,12 @@
 # API Reference
 
-This document provides comprehensive documentation for all 22+ tool APIs provided by Open Orchestra.
+This document provides comprehensive documentation for all 24+ tool APIs provided by Open Orchestra.
 
 ## Table of Contents
 
 - [Worker Management](#worker-management)
 - [Task Delegation](#task-delegation)
+- [Workflows](#workflows)
 - [Configuration](#configuration)
 - [Memory (Neo4j)](#memory-neo4j)
 - [Help](#help)
@@ -252,6 +253,60 @@ find_worker({
   "reason": "When you need to look up official documentation, find code examples, understand library APIs, or research best practices",
   "status": "ready"
 }
+```
+
+---
+
+## Workflows
+
+Workflows are **structured multi-step runs** that coordinate workers in a deterministic sequence. They’re useful when you want **repeatable quality** and predictable resource usage.
+
+### `list_workflows`
+
+List available workflows (built-in).
+
+**Parameters:**
+
+```typescript
+{
+  format?: "markdown" | "json";
+}
+```
+
+**Example:**
+
+```bash
+list_workflows({})
+```
+
+### `run_workflow`
+
+Run a workflow and return a consolidated report.
+
+**Parameters:**
+
+```typescript
+{
+  workflowId: string;
+  task: string;
+  autoSpawn?: boolean;
+  format?: "markdown" | "json";
+  attachments?: Array<{
+    type: "image" | "file";
+    path?: string;
+    base64?: string;
+    mimeType?: string;
+  }>;
+}
+```
+
+**Example (Roocode boomerang):**
+
+```bash
+run_workflow({
+  workflowId: "roocode.boomerang.sequential",
+  task: "Implement feature X, ensure tests pass, update docs"
+})
 ```
 
 ---

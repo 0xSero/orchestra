@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      run_e2e:
+        description: "Run optional E2E test (requires working OpenCode provider config)"
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Unit tests (with resource capture)
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f time.test.log
+          /usr/bin/time -v bun test 2> time.test.log
+          echo "### bun test resource usage" >> "$GITHUB_STEP_SUMMARY"
+          bun scripts/ci/summarize-usrbin-time.ts time.test.log >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload timing logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-resource-logs
+          path: |
+            time.test.log
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: test
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_e2e == 'true' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: E2E (OpenCode) - opencode/gpt-5-nano
+        env:
+          OPENCODE_ORCH_E2E: "1"
+          OPENCODE_ORCH_E2E_MODEL: "opencode/gpt-5-nano"
+          # If your OpenCode provider needs credentials, set them as repo secrets and map them here.
+          # Example (depends on your setup):
+          # OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f time.e2e.log
+          /usr/bin/time -v bun test 2> time.e2e.log
+          echo "### e2e resource usage" >> "$GITHUB_STEP_SUMMARY"
+          bun scripts/ci/summarize-usrbin-time.ts time.e2e.log >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload timing logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-resource-logs
+          path: |
+            time.e2e.log
+

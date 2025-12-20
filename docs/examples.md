@@ -172,6 +172,21 @@ memory_put({
 })
 ```
 
+### 2. Roocode Boomerang (Sequential Workflow)
+
+Use a workflow when you want a **repeatable** plan → implement → review → fix loop with clear step boundaries.
+
+```bash
+# Discover available workflows
+list_workflows({})
+
+# Run the built-in Roocode sequential boomerang
+run_workflow({
+  workflowId: "roocode.boomerang.sequential",
+  task: "Refactor our auth middleware to support tenant-aware RBAC, add tests, and update docs"
+})
+```
+
 ### 2. Parallel Processing
 
 ```bash

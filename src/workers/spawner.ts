@@ -4,8 +4,12 @@
 
 import { createOpencode, createOpencodeClient } from "@opencode-ai/sdk";
 import type { WorkerProfile, WorkerInstance } from "../types";
-import { registry } from "../core/registry";
+import type { WorkerRegistry } from "../core/registry";
+import { registry as defaultRegistry } from "../core/registry";
 import { buildPromptParts, extractTextFromPromptResponse, type WorkerAttachment } from "./prompt";
+import { realpath } from "node:fs/promises";
+import { resolve as resolvePath, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 interface SpawnOptions {
   /** Base port to start from */
@@ -14,6 +18,8 @@ interface SpawnOptions {
   timeout: number;
   /** Directory to run in */
   directory: string;
+  /** Registry instance to use (defaults to singleton for back-compat) */
+  registry?: WorkerRegistry;
 }
 
 function isValidPort(value: unknown): value is number {
@@ -26,6 +32,70 @@ function parseProviderId(model: string): { providerId?: string; modelKey?: strin
   return {};
 }
 
+const DEFAULT_MAX_MESSAGE_CHARS = 50_000;
+const DEFAULT_MAX_ATTACHMENTS = 8;
+const DEFAULT_MAX_BASE64_CHARS = 6_000_000; // ~4.5MB raw, conservative
+
+function isInsideDir(root: string, candidate: string): boolean {
+  const rootAbs = resolvePath(root);
+  const candAbs = resolvePath(candidate);
+  return candAbs === rootAbs || candAbs.startsWith(rootAbs + sep);
+}
+
+async function sanitizeAttachmentPaths(input: {
+  attachments?: WorkerAttachment[];
+  allowedRoot: string;
+}): Promise<WorkerAttachment[] | undefined> {
+  const { attachments, allowedRoot } = input;
+  if (!attachments || attachments.length === 0) return undefined;
+  if (attachments.length > DEFAULT_MAX_ATTACHMENTS) {
+    throw new Error(`Too many attachments (max ${DEFAULT_MAX_ATTACHMENTS}).`);
+  }
+
+  const rootReal = await realpath(allowedRoot).catch(() => resolvePath(allowedRoot));
+
+  const out: WorkerAttachment[] = [];
+  for (const a of attachments) {
+    if (!a || (a.type !== "image" && a.type !== "file")) continue;
+
+    // base64 payloads are allowed, but bounded.
+    if (a.base64) {
+      if (a.base64.length > DEFAULT_MAX_BASE64_CHARS) {
+        throw new Error(`Attachment base64 too large (max ${DEFAULT_MAX_BASE64_CHARS} chars).`);
+      }
+      out.push(a);
+      continue;
+    }
+
+    if (!a.path) continue;
+    let p = a.path;
+    if (p.startsWith("file://")) {
+      try {
+        p = fileURLToPath(p);
+      } catch {
+        throw new Error("Invalid file:// attachment URL.");
+      }
+    }
+
+    // Resolve relative paths against the allowed root.
+    const abs = resolvePath(rootReal, p);
+    const absReal = await realpath(abs).catch(() => abs);
+    if (!isInsideDir(rootReal, absReal)) {
+      throw new Error("Attachment path is outside the allowed project directory.");
+    }
+
+    out.push({ ...a, path: absReal });
+  }
+  return out.length ? out : undefined;
+}
+
+function sanitizeMessage(message: string): string {
+  if (typeof message !== "string") return "";
+  if (message.length <= DEFAULT_MAX_MESSAGE_CHARS) return message;
+  // Fail-closed rather than silently truncating (truncation can change meaning).
+  throw new Error(`Message too large (max ${DEFAULT_MAX_MESSAGE_CHARS} chars).`);
+}
+
 /**
  * Spawn a new worker instance
  */
@@ -33,6 +103,7 @@ export async function spawnWorker(
   profile: WorkerProfile,
   options: SpawnOptions
 ): Promise<WorkerInstance> {
+  const registry = options.registry ?? defaultRegistry;
   if (!profile.model.includes("/") && !profile.model.startsWith("auto")) {
     throw new Error(
       `Invalid model "${profile.model}". OpenCode models must be in "provider/model" format. ` +
@@ -174,13 +245,15 @@ export async function spawnWorker(
  */
 export async function connectToWorker(
   profile: WorkerProfile,
-  port: number
+  port: number,
+  options?: { registry?: WorkerRegistry; directory?: string }
 ): Promise<WorkerInstance> {
+  const registry = options?.registry ?? defaultRegistry;
   const instance: WorkerInstance = {
     profile,
     status: "starting",
     port,
-    directory: process.cwd(),
+    directory: options?.directory ?? process.cwd(),
     startedAt: new Date(),
   };
 
@@ -227,7 +300,8 @@ export async function connectToWorker(
 /**
  * Stop a worker
  */
-export async function stopWorker(workerId: string): Promise<boolean> {
+export async function stopWorker(workerId: string, options?: { registry?: WorkerRegistry }): Promise<boolean> {
+  const registry = options?.registry ?? defaultRegistry;
   const instance = registry.getWorker(workerId);
   if (!instance) {
     return false;
@@ -255,8 +329,10 @@ export async function sendToWorker(
   options?: {
     attachments?: WorkerAttachment[];
     timeout?: number;
+    registry?: WorkerRegistry;
   }
 ): Promise<{ success: boolean; response?: string; error?: string }> {
+  const registry = options?.registry ?? defaultRegistry;
   const instance = registry.getWorker(workerId);
 
   if (!instance) {
@@ -271,11 +347,23 @@ export async function sendToWorker(
     return { success: false, error: `Worker "${workerId}" not properly initialized` };
   }
 
+  let safeMessage: string;
+  try {
+    safeMessage = sanitizeMessage(message);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { success: false, error: `Invalid message: ${msg}` };
+  }
+
   // Mark as busy
   registry.updateStatus(workerId, "busy");
 
   try {
-    const parts = await buildPromptParts({ message, attachments: options?.attachments });
+    const safeAttachments = await sanitizeAttachmentPaths({
+      attachments: options?.attachments,
+      allowedRoot: instance.directory ?? process.cwd(),
+    });
+    const parts = await buildPromptParts({ message: safeMessage, attachments: safeAttachments });
 
     const abort = new AbortController();
     const timeoutMs = options?.timeout ?? 120_000;

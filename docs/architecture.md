@@ -30,6 +30,7 @@ graph TB
         Spawner["Worker Spawner"]
         Config["Config Manager"]
         Tools["Tool APIs"]
+        Workflows["Workflow Engine"]
     end
     
     subgraph Workers["Worker Pool"]
@@ -48,6 +49,7 @@ graph TB
     Plugin --> Spawner
     Plugin --> Config
     Plugin --> Tools
+    Plugin --> Workflows
     
     Registry --> W1
     Registry --> W2
@@ -133,14 +135,19 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
   // Load config
   const { config, sources } = await loadOrchestratorConfig({...});
   
-  // Initialize subsystems
-  setDirectory(ctx.directory);
-  setClient(ctx.client);
-  setProfiles(config.profiles);
+  // Initialize runtime (explicit context, no global mutable state)
+  const runtime = createOrchestratorRuntime({
+    directory: ctx.directory,
+    worktree: ctx.worktree,
+    projectId: ctx.project.id,
+    client: ctx.client,
+    config,
+  });
+  const orchestratorTools = createOrchestratorTools(runtime);
   
   // Auto-spawn workers if configured
   if (config.autoSpawn && config.spawn.length > 0) {
-    await spawnWorkers(profilesToSpawn, options);
+    await spawnWorkers(profilesToSpawn, { ...options, registry: runtime.registry });
   }
   
   return {
@@ -155,7 +162,7 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
 
 #### 2. Worker Registry (`src/core/registry.ts`)
 
-Singleton registry that tracks all worker instances:
+Registry instance that tracks all worker instances for the current plugin runtime:
 
 ```typescript
 class WorkerRegistry {
@@ -522,3 +529,5 @@ orchestrator.spawn.ethers-expert
 2. **Tool Restrictions** - Profiles like `architect` disable write tools
 3. **No Secret Storage** - Memory system explicitly excludes secrets
 4. **Local Communication** - Workers communicate via localhost only
+5. **Attachment Sandboxing** - File-path attachments are restricted to the project directory to reduce accidental file exfiltration
+6. **Safety Limits** - Worker messages and attachments are bounded to prevent runaway context / resource usage
