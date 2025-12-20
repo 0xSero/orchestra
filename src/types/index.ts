@@ -113,6 +113,53 @@ export interface OrchestratorConfig {
     /** Tools that should never be pruned */
     protectedTools?: string[];
   };
+
+  /**
+   * Workflow system configuration (multi-step orchestrations).
+   * Workflows are local to this plugin and run by delegating to worker profiles.
+   */
+  workflows?: {
+    enabled?: boolean;
+    /** Optional allow-list of workflow IDs that can be executed. If set, others are blocked. */
+    allow?: string[];
+    /** Built-in Roocode sequential boomerang workflow defaults/overrides. */
+    roocodeBoomerang?: {
+      enabled?: boolean;
+      maxSteps?: number;
+      perStepTimeoutMs?: number;
+      maxTaskChars?: number;
+      maxCarryChars?: number;
+      /**
+       * Optional step override (advanced). If provided, replaces the default sequence.
+       * Each step references a worker profile by id and a prompt template.
+       */
+      steps?: Array<{
+        id: string;
+        profileId: string;
+        prompt: string;
+        forwardAttachments?: boolean;
+      }>;
+    };
+  };
+
+  /**
+   * Security hardening knobs.
+   * These are intentionally conservative by default.
+   */
+  security?: {
+    /**
+     * Attachment path sandboxing.
+     * Note: the plugin always defaults to restricting path attachments to the current project directory.
+     */
+    attachments?: {
+      allowFileAttachments?: boolean;
+      maxFileBytes?: number;
+      maxBase64Chars?: number;
+      maxAttachments?: number;
+    };
+    /** If true (default), refuse to write memory entries that look like secrets. */
+    blockSecretsInMemory?: boolean;
+  };
 }
 
 export type OrchestratorConfigFile = {
@@ -126,6 +173,8 @@ export type OrchestratorConfigFile = {
   agent?: OrchestratorConfig["agent"];
   commands?: OrchestratorConfig["commands"];
   pruning?: OrchestratorConfig["pruning"];
+  workflows?: OrchestratorConfig["workflows"];
+  security?: OrchestratorConfig["security"];
   /** Profiles available to spawn (overrides/custom). Strings reference built-ins. */
   profiles?: Array<string | WorkerProfile>;
   /** Profiles to auto-spawn. Strings reference profiles by id. */

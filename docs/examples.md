@@ -88,11 +88,7 @@ ask_worker({
 
 # Implement based on research
 delegate_task({
-  task: "Convert this component to a Server Component based on the documentation insights",
-  attachments: [{
-    type: "file",
-    path: "./components/Profile.tsx"
-  }]
+  task: "Convert ./components/Profile.tsx to a Server Component based on the documentation insights (follow existing patterns)."
 })
 ```
 
@@ -112,11 +108,7 @@ delegate_task({
 # Get specific help
 ask_worker({
   workerId: "coder",
-  message: "Fix the memory leak by properly cleaning up event listeners and intervals in the useEffect hook",
-  attachments: [{
-    type: "file",
-    path: "./hooks/useDataStream.ts"
-  }]
+  message: "Fix the memory leak in ./hooks/useDataStream.ts by properly cleaning up event listeners and intervals in the useEffect hook."
 })
 ```
 
@@ -267,10 +259,7 @@ memory_put({
 delegate_task({
   task: "Review this TypeScript file against our coding standards and suggest improvements",
   workerId: "coder",
-  attachments: [{
-    type: "file",
-    path: "./src/utils/validation.ts"
-  }]
+  // Tip: include a snippet or paste the file contents into the task for best results.
 })
 ```
 
@@ -348,11 +337,7 @@ memory_put({
 # Analyze performance bottleneck
 delegate_task({
   task: "Analyze this React component for performance issues and suggest optimizations",
-  workerId: "coder",
-  attachments: [{
-    type: "file",
-    path: "./components/DataGrid.tsx"
-  }]
+  workerId: "coder"
 })
 
 # Implement optimizations
@@ -389,11 +374,7 @@ spawn_worker({ profileId: "security" })
 
 ask_worker({
   workerId: "security",
-  message: "Perform a security audit of this authentication middleware. Check for OWASP vulnerabilities and suggest fixes.",
-  attachments: [{
-    type: "file",
-    path: "./middleware/auth.ts"
-  }]
+  message: "Perform a security audit of ./middleware/auth.ts. Check for OWASP vulnerabilities and suggest fixes."
 })
 
 # Document security measures

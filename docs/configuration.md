@@ -57,6 +57,28 @@ Configs are deeply merged with project settings taking precedence over global se
     "protectedTools": ["task", "todowrite", "todoread"]
   },
   
+  "workflows": {
+    "enabled": true,
+    "allow": ["roocode.boomerang.sequential"],
+    "roocodeBoomerang": {
+      "enabled": true,
+      "maxSteps": 4,
+      "perStepTimeoutMs": 120000,
+      "maxTaskChars": 12000,
+      "maxCarryChars": 24000
+    }
+  },
+
+  "security": {
+    "blockSecretsInMemory": true,
+    "attachments": {
+      "allowFileAttachments": false,
+      "maxFileBytes": 10485760,
+      "maxBase64Chars": 14680064,
+      "maxAttachments": 8
+    }
+  },
+  
   "profiles": [...],
   "workers": [...]
 }

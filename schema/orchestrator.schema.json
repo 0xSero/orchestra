@@ -65,6 +65,65 @@
         "protectedTools": { "type": "array", "items": { "type": "string" }, "default": ["task", "todowrite", "todoread"] }
       }
     },
+    "workflows": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Workflow system configuration (multi-step orchestrations that delegate to workers).",
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "allow": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Optional allow-list of workflow IDs. If set, only these workflows can be executed."
+        },
+        "roocodeBoomerang": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Built-in Roocode sequential boomerang workflow defaults/overrides.",
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "maxSteps": { "type": "number", "default": 4 },
+            "perStepTimeoutMs": { "type": "number", "default": 120000 },
+            "maxTaskChars": { "type": "number", "default": 12000 },
+            "maxCarryChars": { "type": "number", "default": 24000 },
+            "steps": {
+              "type": "array",
+              "description": "Advanced: override the default step sequence.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "profileId", "prompt"],
+                "properties": {
+                  "id": { "type": "string" },
+                  "profileId": { "type": "string" },
+                  "prompt": { "type": "string" },
+                  "forwardAttachments": { "type": "boolean", "default": false }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Security hardening knobs.",
+      "properties": {
+        "blockSecretsInMemory": { "type": "boolean", "default": true },
+        "attachments": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Attachment limits (applied to path/base64 attachments).",
+          "properties": {
+            "allowFileAttachments": { "type": "boolean", "default": false },
+            "maxFileBytes": { "type": "number", "default": 10485760 },
+            "maxBase64Chars": { "type": "number", "default": 14680064 },
+            "maxAttachments": { "type": "number", "default": 8 }
+          }
+        }
+      }
+    },
     "profiles": {
       "type": "array",
       "description": "Profiles available to spawn. Use this to set worker→model mapping without auto-spawning.",

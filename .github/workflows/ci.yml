@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test (measure resources)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Bun: $(bun --version)"
+          /usr/bin/time -v bun test 2> time.txt
+          echo "## Test resource usage" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Command**: \`bun test\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          grep -E 'Command being timed|User time|System time|Percent of CPU|Elapsed|Maximum resident set size|Major.*page faults|Minor.*page faults|File system inputs|File system outputs|Exit status' time.txt || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  e2e:
+    # Optional: requires OpenCode provider credentials.
+    if: ${{ vars.OPENCODE_ORCH_E2E == '1' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: E2E (OpenCode)
+        env:
+          OPENCODE_ORCH_E2E: "1"
+          OPENCODE_ORCH_E2E_MODEL: "opencode/gpt-5-nano"
+          # Configure provider credentials in repo secrets, as needed by your OpenCode setup.
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/time -v bun test 2> time.txt
+          echo "## E2E resource usage" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Command**: \`bun test\` (with OPENCODE_ORCH_E2E=1)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          grep -E 'Command being timed|User time|System time|Percent of CPU|Elapsed|Maximum resident set size|Major.*page faults|Minor.*page faults|File system inputs|File system outputs|Exit status' time.txt || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+

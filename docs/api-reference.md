@@ -6,6 +6,7 @@ This document provides comprehensive documentation for all 22+ tool APIs provide
 
 - [Worker Management](#worker-management)
 - [Task Delegation](#task-delegation)
+- [Workflows](#workflows)
 - [Configuration](#configuration)
 - [Memory (Neo4j)](#memory-neo4j)
 - [Help](#help)
@@ -253,6 +254,61 @@ find_worker({
   "status": "ready"
 }
 ```
+
+---
+
+## Workflows
+
+Workflows are multi-step orchestrations that delegate to workers and return a final result plus basic resource-usage metrics.
+
+### `list_workflows`
+
+List built-in workflows available in this orchestrator.
+
+**Parameters:**
+```typescript
+{
+  format?: "markdown" | "json";
+}
+```
+
+**Example:**
+```bash
+list_workflows({ format: "markdown" })
+```
+
+### `run_workflow`
+
+Run a workflow by ID.
+
+**Parameters:**
+```typescript
+{
+  workflowId: string;       // e.g. "roocode.boomerang.sequential"
+  task: string;             // workflow input
+  attachments?: Array<{
+    type: "image" | "file";
+    path?: string;
+    base64?: string;
+    mimeType?: string;
+  }>;
+  format?: "markdown" | "json";
+  maxSteps?: number;        // safety limit
+  perStepTimeoutMs?: number;// safety limit
+}
+```
+
+**Example:**
+```bash
+run_workflow({
+  workflowId: "roocode.boomerang.sequential",
+  task: "Implement X and update tests",
+})
+```
+
+**Notes:**
+- For security, attachment `path` inputs are sandboxed to the project directory.
+- Output includes per-step timing plus total request/response character counts.
 
 ---
 

@@ -41,6 +41,7 @@ describe("prompt helpers", () => {
     const parts = await buildPromptParts({
       message: "hello",
       attachments: [{ type: "image", path: imgPath }],
+      security: { allowedRoots: [dir] },
     });
 
     expect(parts[0]).toEqual({ type: "text", text: "hello" });

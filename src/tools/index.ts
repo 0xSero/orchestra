@@ -11,9 +11,8 @@ import { loadOrchestratorConfig, getDefaultGlobalOrchestratorConfigPath, getDefa
 import { registry } from "../core/registry";
 import { sendToWorker, spawnWorker, spawnWorkers, stopWorker } from "../workers/spawner";
 import { getProfile, builtInProfiles } from "../config/profiles";
-import type { OrchestratorConfigFile, WorkerProfile } from "../types";
+import type { OrchestratorConfig, OrchestratorConfigFile, WorkerProfile } from "../types";
 import {
-  fetchOpencodeConfig,
   fetchProviders,
   filterProviders,
   flattenProviders,
@@ -22,9 +21,11 @@ import {
   pickVisionModel,
   resolveModelRef,
 } from "../models/catalog";
+import { getFallbackModel as coreGetFallbackModel, resolveAutoModel as coreResolveAutoModel } from "../core/model-resolution";
 import { hydrateProfileModelsFromOpencode } from "../models/hydrate";
 import { loadNeo4jConfigFromEnv } from "../memory/neo4j";
 import { linkMemory, recentMemory, searchMemory, upsertMemory, type MemoryScope } from "../memory/graph";
+import { getWorkflowEngine } from "../core/workflows/state";
 
 // Module-level directory reference (set by plugin init)
 let _directory = process.cwd();
@@ -34,6 +35,8 @@ let _client: PluginInput["client"] | undefined;
 let _defaultListFormat: "markdown" | "json" = "markdown";
 let _worktree: string | undefined;
 let _projectId: string | undefined;
+let _security: OrchestratorConfig["security"] | undefined;
+let _workflows: OrchestratorConfig["workflows"] | undefined;
 
 type ToolContext = {
   agent?: string;
@@ -67,6 +70,14 @@ export function setProfiles(profiles: Record<string, WorkerProfile>) {
 
 export function setUiDefaults(input: { defaultListFormat?: "markdown" | "json" }) {
   if (input.defaultListFormat) _defaultListFormat = input.defaultListFormat;
+}
+
+export function setSecurityDefaults(input: OrchestratorConfig["security"] | undefined) {
+  _security = input;
+}
+
+export function setWorkflowDefaults(input: OrchestratorConfig["workflows"] | undefined) {
+  _workflows = input;
 }
 
 function toBool(v: unknown): boolean {
@@ -139,48 +150,15 @@ function renderMarkdownTable(headers: string[], rows: string[][]): string {
   return [head, sep, body].filter(Boolean).join("\n");
 }
 
-async function getLastUsedModelFromSession(ctx?: ToolContext): Promise<string | undefined> {
-  if (!_client) return undefined;
-  if (!ctx?.sessionID) return undefined;
-  const res = await _client.session
-    .messages({ path: { id: ctx.sessionID }, query: { directory: _directory, limit: 25 } })
-    .catch(() => undefined);
-  const messages = res?.data as any[] | undefined;
-  if (!Array.isArray(messages)) return undefined;
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const info = (messages[i] as any)?.info;
-    if (info?.role !== "user") continue;
-    const model = info?.model;
-    if (model?.providerID && model?.modelID) return `${model.providerID}/${model.modelID}`;
-  }
-  return undefined;
-}
-
 async function getFallbackModel(ctx?: ToolContext): Promise<string> {
-  const lastUsed = await getLastUsedModelFromSession(ctx);
-  if (lastUsed) return lastUsed;
-  if (_client) {
-    const cfg = await fetchOpencodeConfig(_client, _directory).catch(() => undefined);
-    if (cfg?.model) return cfg.model;
-  }
-  return "opencode/gpt-5-nano";
+  // Back-compat wrapper (keep old semantics while centralizing logic).
+  // Note: uses the plugin's working directory and optional sessionID.
+  return coreGetFallbackModel({ client: _client, directory: _directory, sessionID: ctx?.sessionID });
 }
 
 async function resolveAutoModel(profile: WorkerProfile, ctx?: ToolContext): Promise<string> {
-  if (!_client) return profile.model;
-  if (!profile.model.startsWith("auto")) return profile.model;
-
-  const fallback = await getFallbackModel(ctx);
-  const { providers } = await fetchProviders(_client, _directory);
-  const catalog = flattenProviders(filterProviders(providers, "configured"));
-
-  const tag = profile.model;
-  const isVision = profile.supportsVision || /auto:vision/i.test(tag);
-  const isDocs = /auto:docs/i.test(tag);
-  const isFast = /auto:fast/i.test(tag);
-
-  const picked = isVision ? pickVisionModel(catalog) : isDocs ? pickDocsModel(catalog) : isFast ? pickFastModel(catalog) : undefined;
-  return picked?.full ?? fallback;
+  // Back-compat wrapper (keep old signature).
+  return coreResolveAutoModel({ client: _client, directory: _directory, sessionID: ctx?.sessionID, profile });
 }
 
 async function normalizeModelInput(model: string): Promise<{ ok: true; model: string } | { ok: false; error: string }> {
@@ -609,6 +587,31 @@ export const memoryPut = tool({
     tags: tool.schema.array(tool.schema.string()).optional().describe("Optional tags"),
   },
   async execute(args) {
+    const looksLikeSecret = (s: string): boolean => {
+      const x = s.trim();
+      if (x.length < 16) return false;
+      const patterns: RegExp[] = [
+        /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i,
+        /\bAKIA[0-9A-Z]{16}\b/, // AWS access key id
+        /\bASIA[0-9A-Z]{16}\b/, // AWS temp access key id
+        /\bghp_[A-Za-z0-9]{36}\b/, // GitHub classic PAT
+        /\bgithub_pat_[A-Za-z0-9_]{40,}\b/i, // GitHub fine-grained
+        /\bsk-[A-Za-z0-9]{20,}\b/, // OpenAI-ish
+        /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/, // Slack tokens
+        /\bAIzaSy[0-9A-Za-z\-_]{35}\b/, // Google API key
+      ];
+      return patterns.some((re) => re.test(x));
+    };
+
+    const blockSecrets = _security?.blockSecretsInMemory ?? true;
+    if (blockSecrets && (looksLikeSecret(args.key) || looksLikeSecret(args.value))) {
+      return [
+        "Refusing to store this memory entry because it looks like it may contain a secret.",
+        "",
+        "Security policy: never store API keys, tokens, private keys, or raw .env contents in memory.",
+      ].join("\n");
+    }
+
     const cfg = loadNeo4jConfigFromEnv();
     if (!cfg) {
       return "Neo4j is not configured. Set env vars: OPENCODE_NEO4J_URI, OPENCODE_NEO4J_USERNAME, OPENCODE_NEO4J_PASSWORD (and optional OPENCODE_NEO4J_DATABASE).";
@@ -741,6 +744,135 @@ export const orchestratorHelp = tool({
   },
 });
 
+async function ensureWorkerInternal(profileId: string, ctx?: ToolContext): Promise<string> {
+  const existing = registry.getWorker(profileId);
+  if (existing) return existing.profile.id;
+  const profile = getProfile(profileId, _profiles);
+  if (!profile) {
+    const available = Object.keys(_profiles).sort().join(", ");
+    throw new Error(`Unknown profile "${profileId}". Available profiles: ${available || "(none)"}`);
+  }
+  const resolvedModel = await resolveAutoModel(profile, ctx);
+  const instance = await spawnWorker(
+    { ...profile, model: resolvedModel },
+    { basePort: _spawnDefaults.basePort, timeout: _spawnDefaults.timeout, directory: _directory }
+  );
+  return instance.profile.id;
+}
+
+export const listWorkflows = tool({
+  description: "List built-in workflows available in this orchestrator (e.g. Roocode boomerang).",
+  args: {
+    format: tool.schema.enum(["markdown", "json"]).optional().describe("Output format (default: markdown)"),
+  },
+  async execute(args) {
+    const engine = getWorkflowEngine();
+    const workflows = engine.list().sort((a, b) => a.id.localeCompare(b.id));
+    const format: "markdown" | "json" = args.format ?? _defaultListFormat;
+    if (format === "json") return JSON.stringify(workflows, null, 2);
+    if (workflows.length === 0) return "No workflows registered.";
+    const rows = workflows.map((w) => [w.id, w.title, w.description]);
+    return renderMarkdownTable(["Workflow ID", "Title", "Description"], rows);
+  },
+});
+
+export const runWorkflow = tool({
+  description:
+    "Run a multi-step workflow (built-in: roocode.boomerang.sequential). Returns output plus resource usage metrics (time/char counts).",
+  args: {
+    workflowId: tool.schema.string().describe("Workflow ID (see list_workflows)"),
+    task: tool.schema.string().describe("Task to run through the workflow"),
+    attachments: tool.schema
+      .array(
+        tool.schema.object({
+          type: tool.schema.enum(["image", "file"]),
+          path: tool.schema.string().optional(),
+          base64: tool.schema.string().optional(),
+          mimeType: tool.schema.string().optional(),
+        })
+      )
+      .optional()
+      .describe("Optional attachments forwarded to steps that opt-in"),
+    format: tool.schema.enum(["markdown", "json"]).optional().describe("Output format (default: markdown)"),
+    maxSteps: tool.schema.number().optional().describe("Safety limit: max steps executed (default: 12)"),
+    perStepTimeoutMs: tool.schema.number().optional().describe("Safety limit: per-step timeout (default: 120000)"),
+  },
+  async execute(args, ctx: ToolContext) {
+    const engine = getWorkflowEngine();
+    const format: "markdown" | "json" = args.format ?? _defaultListFormat;
+
+    if (_workflows?.enabled === false) {
+      return format === "json"
+        ? JSON.stringify({ ok: false, error: "Workflows are disabled by configuration." }, null, 2)
+        : "Workflows are disabled by configuration.";
+    }
+    if (Array.isArray(_workflows?.allow) && _workflows!.allow!.length > 0 && !_workflows!.allow!.includes(args.workflowId)) {
+      return format === "json"
+        ? JSON.stringify({ ok: false, error: `Workflow "${args.workflowId}" is not in the allow-list.` }, null, 2)
+        : `Workflow "${args.workflowId}" is not in the allow-list.`;
+    }
+
+    const wfCtx = {
+      directory: _directory,
+      worktree: _worktree,
+      projectId: _projectId,
+      profiles: Object.fromEntries(Object.entries(_profiles).map(([k, v]) => [k, { id: v.id, model: v.model }])),
+      ensureWorker: async (profileId: string) => ({ workerId: await ensureWorkerInternal(profileId, ctx) }),
+      askWorker: async (workerId: string, message: string, opts?: { attachments?: any[]; timeoutMs?: number }) => {
+        const res = await sendToWorker(workerId, message, {
+          attachments: opts?.attachments as any,
+          timeout: opts?.timeoutMs,
+          security: _security?.attachments,
+        });
+        if (!res.success) throw new Error(res.error ?? "Worker call failed");
+        return res.response ?? "";
+      },
+    };
+
+    const roocodeDefaults = _workflows?.roocodeBoomerang;
+    const result = await engine.run({
+      workflowId: args.workflowId,
+      ctx: wfCtx,
+      payload: { task: args.task, attachments: args.attachments as any },
+      security: {
+        maxSteps: args.maxSteps ?? roocodeDefaults?.maxSteps,
+        perStepTimeoutMs: args.perStepTimeoutMs ?? roocodeDefaults?.perStepTimeoutMs,
+        maxTaskChars: roocodeDefaults?.maxTaskChars,
+        maxCarryChars: roocodeDefaults?.maxCarryChars,
+      },
+    });
+
+    if (format === "json") return JSON.stringify(result, null, 2);
+
+    const lines: string[] = [];
+    lines.push(`# Workflow: ${result.workflowId}`);
+    lines.push("");
+    lines.push(`- ok: ${result.ok ? "true" : "false"}`);
+    lines.push(`- duration: ${result.metrics.totalDurationMs}ms`);
+    lines.push(`- request chars: ${result.metrics.totalRequestChars}`);
+    lines.push(`- response chars: ${result.metrics.totalResponseChars}`);
+    lines.push("");
+
+    if (!result.ok) {
+      lines.push("## Error");
+      lines.push(String(result.error ?? "Unknown error"));
+      return lines.join("\n");
+    }
+
+    const output = (result as any).output as any;
+    const finalText = typeof output?.final === "string" ? output.final : "";
+    lines.push("## Output");
+    lines.push(finalText.length ? finalText : "(empty)");
+    lines.push("");
+    lines.push("## Steps");
+    for (const s of result.steps) {
+      lines.push(`- **${s.stepId}** → \`${s.workerId}\` (${s.ok ? "ok" : "error"}, ${s.durationMs}ms, req ${s.requestChars}, resp ${s.responseChars})`);
+      if (!s.ok && s.error) lines.push(`  - error: ${s.error}`);
+    }
+    return lines.join("\n");
+  },
+});
+
 /**
  * Tool to send a message to a specific worker
  */
@@ -779,7 +911,7 @@ Available workers depend on what's been spawned. Common workers:
           ? [{ type: "image" as const, base64: imageBase64 }]
           : undefined;
 
-    const result = await sendToWorker(workerId, message, { attachments });
+    const result = await sendToWorker(workerId, message, { attachments, security: _security?.attachments });
 
     if (!result.success) {
       return `Error communicating with worker "${workerId}": ${result.error}`;
@@ -1005,7 +1137,7 @@ export const delegateTask = tool({
       return "No workers available. Spawn one with spawn_worker({ profileId: 'coder' }) or run ensure_workers({ profileIds: [...] }).";
     }
 
-    const result = await sendToWorker(targetId, args.task, { attachments: args.attachments });
+    const result = await sendToWorker(targetId, args.task, { attachments: args.attachments, security: _security?.attachments });
     if (!result.success) return `Delegation failed (${targetId}): ${result.error}`;
 
     return [`# Delegated to ${targetId}`, "", result.response ?? ""].join("\n");
@@ -1073,6 +1205,8 @@ export const orchestratorTools = {
   list_models: listModels,
   list_profiles: listProfiles,
   list_workers: listWorkers,
+  list_workflows: listWorkflows,
+  run_workflow: runWorkflow,
   orchestrator_config: orchestratorConfig,
   autofill_profile_models: autofillProfileModels,
   set_profile_model: setProfileModel,

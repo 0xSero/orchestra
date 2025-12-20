@@ -208,6 +208,8 @@ stateDiagram-v2
 - [Architecture Deep Dive](./docs/architecture.md) - System design and patterns
 - [API Reference](./docs/api-reference.md) - Complete tool documentation
 - [Configuration Guide](./docs/configuration.md) - Profiles and settings
+- [Workflows](./docs/workflows.md) - Multi-step workflows (Roocode boomerang)
+- [Security](./docs/security.md) - Threat model + hardening notes
 - [Examples](./docs/examples.md) - Common workflows and use cases
 - [Memory System](./docs/memory.md) - Neo4j-backed knowledge management
 - [CHANGELOG](./CHANGELOG.md) - Version history and changes
@@ -225,6 +227,10 @@ stateDiagram-v2
 - `delegate_task` - Auto-route to best worker
 - `ask_worker` - Direct worker messaging
 - `find_worker` - Find suitable worker
+
+### Workflows
+- `list_workflows` - List built-in workflows
+- `run_workflow` - Run a multi-step workflow (Roocode sequential boomerang)
 
 ### Configuration
 - `list_models` - Available OpenCode models
@@ -295,6 +301,15 @@ bun run build
 # Run tests
 bun test
 ```
+
+## CI
+
+GitHub Actions runs:
+
+- `bun run typecheck`
+- `bun test` (with `/usr/bin/time -v` resource usage summary in the job output)
+
+Optional E2E can be enabled by setting the repository variable `OPENCODE_ORCH_E2E=1` and providing appropriate OpenCode/provider secrets (see `.github/workflows/ci.yml`).
 
 ## Project Structure
 

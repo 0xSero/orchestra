@@ -169,6 +169,57 @@ function parseOrchestratorConfigFile(raw: unknown): Partial<OrchestratorConfigFi
     partial.pruning = pruning as OrchestratorConfig["pruning"];
   }
 
+  if (isPlainObject((raw as any).workflows)) {
+    const wraw = (raw as any).workflows as Record<string, unknown>;
+    const workflows: Record<string, unknown> = {};
+    if (typeof (wraw as any).enabled === "boolean") workflows.enabled = (wraw as any).enabled;
+    if (Array.isArray((wraw as any).allow) && (wraw as any).allow.every((x: unknown) => typeof x === "string")) {
+      workflows.allow = (wraw as any).allow;
+    }
+    if (isPlainObject((wraw as any).roocodeBoomerang)) {
+      const rraw = (wraw as any).roocodeBoomerang as Record<string, unknown>;
+      const rb: Record<string, unknown> = {};
+      if (typeof (rraw as any).enabled === "boolean") rb.enabled = (rraw as any).enabled;
+      if (typeof (rraw as any).maxSteps === "number") rb.maxSteps = (rraw as any).maxSteps;
+      if (typeof (rraw as any).perStepTimeoutMs === "number") rb.perStepTimeoutMs = (rraw as any).perStepTimeoutMs;
+      if (typeof (rraw as any).maxTaskChars === "number") rb.maxTaskChars = (rraw as any).maxTaskChars;
+      if (typeof (rraw as any).maxCarryChars === "number") rb.maxCarryChars = (rraw as any).maxCarryChars;
+      if (Array.isArray((rraw as any).steps)) {
+        const steps = (rraw as any).steps as unknown[];
+        const parsedSteps: any[] = [];
+        for (const s of steps) {
+          if (!isPlainObject(s)) continue;
+          const id = typeof (s as any).id === "string" ? (s as any).id : undefined;
+          const profileId = typeof (s as any).profileId === "string" ? (s as any).profileId : undefined;
+          const prompt = typeof (s as any).prompt === "string" ? (s as any).prompt : undefined;
+          if (!id || !profileId || !prompt) continue;
+          const step: any = { id, profileId, prompt };
+          if (typeof (s as any).forwardAttachments === "boolean") step.forwardAttachments = (s as any).forwardAttachments;
+          parsedSteps.push(step);
+        }
+        rb.steps = parsedSteps;
+      }
+      workflows.roocodeBoomerang = rb;
+    }
+    partial.workflows = workflows as OrchestratorConfig["workflows"];
+  }
+
+  if (isPlainObject((raw as any).security)) {
+    const sraw = (raw as any).security as Record<string, unknown>;
+    const security: Record<string, unknown> = {};
+    if (typeof (sraw as any).blockSecretsInMemory === "boolean") security.blockSecretsInMemory = (sraw as any).blockSecretsInMemory;
+    if (isPlainObject((sraw as any).attachments)) {
+      const araw = (sraw as any).attachments as Record<string, unknown>;
+      const attachments: Record<string, unknown> = {};
+      if (typeof (araw as any).allowFileAttachments === "boolean") attachments.allowFileAttachments = (araw as any).allowFileAttachments;
+      if (typeof (araw as any).maxFileBytes === "number") attachments.maxFileBytes = (araw as any).maxFileBytes;
+      if (typeof (araw as any).maxBase64Chars === "number") attachments.maxBase64Chars = (araw as any).maxBase64Chars;
+      if (typeof (araw as any).maxAttachments === "number") attachments.maxAttachments = (araw as any).maxAttachments;
+      security.attachments = attachments;
+    }
+    partial.security = security as OrchestratorConfig["security"];
+  }
+
   return partial;
 }
 
@@ -206,6 +257,25 @@ export async function loadOrchestratorConfig(input: {
       maxToolOutputChars: 12000,
       maxToolInputChars: 4000,
       protectedTools: ["task", "todowrite", "todoread"],
+    },
+    workflows: {
+      enabled: true,
+      roocodeBoomerang: {
+        enabled: true,
+        maxSteps: 4,
+        perStepTimeoutMs: 120000,
+        maxTaskChars: 12000,
+        maxCarryChars: 24000,
+      },
+    },
+    security: {
+      blockSecretsInMemory: true,
+      attachments: {
+        allowFileAttachments: false,
+        maxFileBytes: 10 * 1024 * 1024,
+        maxBase64Chars: 14 * 1024 * 1024,
+        maxAttachments: 8,
+      },
     },
     profiles: [],
     workers: [],
@@ -277,6 +347,8 @@ export async function loadOrchestratorConfig(input: {
     agent: (mergedFile.agent ?? defaultsFile.agent) as OrchestratorConfig["agent"],
     commands: (mergedFile.commands ?? defaultsFile.commands) as OrchestratorConfig["commands"],
     pruning: (mergedFile.pruning ?? defaultsFile.pruning) as OrchestratorConfig["pruning"],
+    workflows: (mergedFile.workflows ?? defaultsFile.workflows) as OrchestratorConfig["workflows"],
+    security: (mergedFile.security ?? defaultsFile.security) as OrchestratorConfig["security"],
     profiles,
     spawn: spawnUnique,
   };

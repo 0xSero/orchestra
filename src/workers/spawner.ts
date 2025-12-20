@@ -255,6 +255,12 @@ export async function sendToWorker(
   options?: {
     attachments?: WorkerAttachment[];
     timeout?: number;
+    security?: {
+      allowFileAttachments?: boolean;
+      maxFileBytes?: number;
+      maxBase64Chars?: number;
+      maxAttachments?: number;
+    };
   }
 ): Promise<{ success: boolean; response?: string; error?: string }> {
   const instance = registry.getWorker(workerId);
@@ -275,7 +281,19 @@ export async function sendToWorker(
   registry.updateStatus(workerId, "busy");
 
   try {
-    const parts = await buildPromptParts({ message, attachments: options?.attachments });
+    const parts = await buildPromptParts({
+      message,
+      attachments: options?.attachments,
+      security: {
+        // Only allow file-path attachments from within the worker's directory context.
+        // This prevents prompt-driven attempts to attach arbitrary host files (e.g. /etc/passwd).
+        allowedRoots: [instance.directory ?? process.cwd()],
+        allowFileAttachments: options?.security?.allowFileAttachments ?? false,
+        maxFileBytes: options?.security?.maxFileBytes,
+        maxBase64Chars: options?.security?.maxBase64Chars,
+        maxAttachments: options?.security?.maxAttachments,
+      },
+    });
 
     const abort = new AbortController();
     const timeoutMs = options?.timeout ?? 120_000;
