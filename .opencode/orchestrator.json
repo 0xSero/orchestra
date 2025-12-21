@@ -1,6 +1,10 @@
 {
   "$schema": "../schema/orchestrator.schema.json",
   "autoSpawn": true,
+  "workflows": {
+    "enabled": true,
+    "roocodeBoomerang": { "enabled": true }
+  },
 
   "agent": {
     "enabled": true,

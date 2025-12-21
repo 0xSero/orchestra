@@ -3,14 +3,10 @@ import { createOpencode } from "@opencode-ai/sdk";
 import { extractTextFromPromptResponse } from "../src/workers/prompt";
 import { setupE2eEnv } from "./helpers/e2e-env";
 
-const e2eEnabled = process.env.OPENCODE_ORCH_E2E !== "0" && process.env.SKIP_E2E !== "1";
-const e2eTest = e2eEnabled ? test : test.skip;
-
 describe("e2e", () => {
   let restoreEnv: (() => void) | undefined;
 
   beforeAll(async () => {
-    if (!e2eEnabled) return;
     const env = await setupE2eEnv();
     restoreEnv = env.restore;
   });
@@ -19,7 +15,7 @@ describe("e2e", () => {
     restoreEnv?.();
   });
 
-  e2eTest("can prompt a spawned opencode server and get text", async () => {
+  test("can prompt a spawned opencode server and get text", async () => {
     const model = process.env.OPENCODE_ORCH_E2E_MODEL ?? "opencode/gpt-5-nano";
 
     const { client, server } = await createOpencode({

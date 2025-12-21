@@ -246,6 +246,7 @@ export const orchestratorConfig = tool({
       `- basePort: ${config.basePort}`,
       `- startupTimeout: ${config.startupTimeout}ms`,
       `- workflows: ${config.workflows?.enabled === false ? "disabled" : "enabled"}`,
+      `- memory: ${config.memory?.enabled === false ? "disabled" : "enabled"}`,
       "",
       "## Profiles (worker → model)",
       renderMarkdownTable(["ID", "Name", "Model", "Vision", "Web"], profileRows),

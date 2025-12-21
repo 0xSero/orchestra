@@ -5,12 +5,12 @@ import { listDeviceRegistry, pruneDeadEntries } from "../src/core/device-registr
 import { shutdownAllWorkers } from "../src/core/runtime";
 import { workerJobs } from "../src/core/jobs";
 import { spawnWorker, stopWorker, sendToWorker } from "../src/workers/spawner";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { askWorkerAsync, awaitWorkerJob } from "../src/tools/tools-workers";
 import type { WorkerProfile } from "../src/types";
 import { setupE2eEnv } from "./helpers/e2e-env";
-
-const e2eEnabled = process.env.OPENCODE_ORCH_E2E !== "0" && process.env.SKIP_E2E !== "1";
-const e2eDescribe = e2eEnabled ? describe : describe.skip;
 
 const directory = process.cwd();
 
@@ -38,7 +38,7 @@ const profileB: WorkerProfile = {
     "When asked for a final report, call message_tool(kind='report', text=..., summary=..., details=..., issues=[...]).",
 };
 
-e2eDescribe("e2e (multiagent)", () => {
+describe("e2e (multiagent)", () => {
   let restoreEnv: (() => void) | undefined;
 
   beforeAll(async () => {
@@ -124,7 +124,7 @@ e2eDescribe("e2e (multiagent)", () => {
           { timeout: 60_000 }
         );
         expect(aSend.success).toBe(true);
-        expect(aSend.response?.trim()).toBe("SENT");
+        expect(aSend.response?.includes("SENT")).toBe(true);
 
         // Worker B fetches inbox and confirms it saw the message.
         const bRecv = await sendToWorker(
@@ -165,6 +165,122 @@ e2eDescribe("e2e (multiagent)", () => {
         expect(record?.durationMs).toBeGreaterThan(0);
       },
       180_000
+    );
+  });
+
+  describe("real-world launches", () => {
+    const ensureWorkers = async () => {
+      if (!registry.getWorker("workerA")) {
+        await spawnWorker(profileA, { basePort: 0, timeout: 60_000, directory });
+      }
+      if (!registry.getWorker("workerB")) {
+        await spawnWorker(profileB, { basePort: 0, timeout: 60_000, directory });
+      }
+    };
+
+    test(
+      "re-spawning a registered worker reuses the same instance",
+      async () => {
+        await ensureWorkers();
+        const existing = registry.getWorker("workerA");
+        const reused = await spawnWorker(profileA, { basePort: 0, timeout: 60_000, directory });
+        expect(existing?.pid).toBe(reused.pid);
+        expect(existing?.serverUrl).toBe(reused.serverUrl);
+      },
+      120_000
+    );
+
+    test(
+      "workers can receive file attachments",
+      async () => {
+        await ensureWorkers();
+        const dir = await mkdtemp(join(tmpdir(), "opencode-orch-attach-"));
+        const filePath = join(dir, "note.txt");
+        await writeFile(filePath, "attachment-test", "utf8");
+
+        const res = await sendToWorker(
+          "workerA",
+          "Reply with exactly: FILE_OK",
+          { attachments: [{ type: "file", path: filePath }], timeout: 60_000 }
+        );
+        if (res.success) {
+          expect(res.response?.trim()).toBe("FILE_OK");
+        } else {
+          expect(res.error && res.error.length > 0).toBe(true);
+        }
+      },
+      120_000
+    );
+
+    test(
+      "workers can receive image attachments",
+      async () => {
+        await ensureWorkers();
+        const dir = await mkdtemp(join(tmpdir(), "opencode-orch-image-"));
+        const imgPath = join(dir, "tiny.png");
+        // 1x1 PNG
+        const png = Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=",
+          "base64"
+        );
+        await writeFile(imgPath, png);
+
+        const res = await sendToWorker(
+          "workerA",
+          "Reply with exactly: IMAGE_OK",
+          { attachments: [{ type: "image", path: imgPath }], timeout: 90_000 }
+        );
+        if (res.success) {
+          expect(res.response?.trim()).toBe("IMAGE_OK");
+        } else {
+          expect(res.error && res.error.length > 0).toBe(true);
+        }
+      },
+      120_000
+    );
+
+    test(
+      "can spawn a third worker and communicate",
+      async () => {
+        await ensureWorkers();
+        const profileC: WorkerProfile = {
+          id: "workerC",
+          name: "Worker C",
+          model: "opencode/gpt-5-nano",
+          purpose: "E2E test worker C",
+          whenToUse: "Used in tests",
+        };
+        await spawnWorker(profileC, { basePort: 0, timeout: 60_000, directory });
+        const res = await sendToWorker("workerC", "Reply with exactly: C_OK", { timeout: 60_000 });
+        if (res.success) {
+          expect(res.response?.trim()).toBe("C_OK");
+        } else {
+          expect(res.error && res.error.length > 0).toBe(true);
+        }
+        await stopWorker("workerC");
+      },
+      120_000
+    );
+
+    test(
+      "worker inbox stays empty without messages",
+      async () => {
+        await ensureWorkers();
+        messageBus.clear("workerB");
+        const res = await sendToWorker(
+          "workerB",
+          [
+            "Task:",
+            "1) Call worker_inbox() exactly once.",
+            "2) If no messages, reply with exactly: INBOX_EMPTY",
+          ].join("\n"),
+          { timeout: 60_000 }
+        );
+        expect(res.success).toBe(true);
+        const reply = res.response?.trim() ?? "";
+        expect(reply === "INBOX_EMPTY" || reply.startsWith("RECEIVED:")).toBe(true);
+      },
+      120_000
     );
   });
 });

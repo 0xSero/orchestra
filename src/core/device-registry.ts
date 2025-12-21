@@ -1,8 +1,9 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { logger } from "./logger";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { writeJsonAtomic } from "../helpers/fs";
+import { getUserConfigDir } from "../helpers/format";
+import { isProcessAlive } from "../helpers/process";
 
 export type DeviceRegistryWorkerEntry = {
   kind: "worker";
@@ -36,25 +37,9 @@ type DeviceRegistryFile = {
   entries: DeviceRegistryEntry[];
 };
 
-function getUserConfigDir(): string {
-  if (process.platform === "win32") {
-    return process.env.APPDATA || join(homedir(), "AppData", "Roaming");
-  }
-  return process.env.XDG_CONFIG_HOME || join(homedir(), ".config");
-}
-
 export function getDeviceRegistryPath(): string {
   // Prefer per-user config so multiple opencode instances can share state.
   return join(getUserConfigDir(), "opencode", "orchestrator-device-registry.json");
-}
-
-function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 async function readRegistryFile(path: string): Promise<DeviceRegistryFile> {
@@ -75,14 +60,7 @@ async function readRegistryFile(path: string): Promise<DeviceRegistryFile> {
 }
 
 async function writeRegistryFile(path: string, file: DeviceRegistryFile): Promise<void> {
-  await mkdir(dirname(path), { recursive: true }).catch(() => {});
-  const tmp = join(tmpdir(), `opencode-orch-registry-${process.pid}-${Date.now()}.json`);
-  await writeFile(tmp, JSON.stringify(file, null, 2), "utf8");
-  await rename(tmp, path).catch(async () => {
-    // Fallback for cross-device rename issues.
-    await writeFile(path, JSON.stringify(file, null, 2), "utf8");
-    await unlink(tmp).catch(() => {});
-  });
+  await writeJsonAtomic(path, file, { tmpPrefix: "opencode-orch-registry" });
 }
 
 export async function pruneDeadEntries(path = getDeviceRegistryPath()): Promise<void> {
@@ -145,13 +123,7 @@ export async function removeSessionEntry(sessionId: string, hostPid: number, pat
 }
 
 export async function listDeviceRegistry(path = getDeviceRegistryPath()): Promise<DeviceRegistryEntry[]> {
-  const start = Date.now();
   await pruneDeadEntries(path).catch(() => {});
   const file = await readRegistryFile(path);
-  const elapsed = Date.now() - start;
-  if (elapsed > 50) {
-    // Only log if it takes more than 50ms
-    logger.debug(`[device-registry] listDeviceRegistry: entries=${file.entries.length}, elapsed=${elapsed}ms`);
-  }
   return file.entries;
 }

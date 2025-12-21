@@ -22,13 +22,14 @@ import { createPruningTransform } from "./ux/pruning";
 import { resolveModelRef } from "./models/catalog";
 import { ensureRuntime, shutdownAllWorkers } from "./core/runtime";
 import { removeSessionEntry, upsertSessionEntry } from "./core/device-registry";
-import { logger, setLoggerConfig } from "./core/logger";
+import { setLoggerConfig } from "./core/logger";
 import { loadWorkflows } from "./workflows";
+import { recordMessageMemory } from "./memory/auto";
+import { initTelemetry, flushTelemetry, trackSpawn } from "./core/telemetry";
 
 export const OrchestratorPlugin: Plugin = async (ctx) => {
   // CRITICAL: Prevent recursive spawning - if this is a worker process, skip orchestrator initialization
   if (process.env.OPENCODE_ORCHESTRATOR_WORKER === "1") {
-    logger.info("[Orchestrator] Skipping plugin load - this is a worker process");
     return {}; // Return empty plugin - workers don't need orchestrator capabilities
   }
 
@@ -47,10 +48,15 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
   setSpawnDefaults({ basePort: config.basePort, timeout: config.startupTimeout });
   setProfiles(config.profiles);
   setUiDefaults({ defaultListFormat: config.ui?.defaultListFormat });
-  setLoggerConfig({ debug: config.ui?.debug === true });
+  setLoggerConfig({});
   setWorkflowConfig(config.workflows);
   setSecurityConfig(config.security);
   loadWorkflows(config);
+
+  // Initialize telemetry if enabled
+  if (config.telemetry?.enabled !== false) {
+    initTelemetry(config.telemetry?.apiKey, config.telemetry?.host);
+  }
 
   const showToast = (message: string, variant: "success" | "info" | "warning" | "error") =>
     (config.ui?.toasts === false
@@ -69,9 +75,11 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
       // Only toast when a worker comes online, not after every request.
       if (prev === "starting") {
         void showToast(`Worker "${instance.profile.name}" ready`, "success");
+        trackSpawn(id, "ready", { model: instance.profile.model });
       }
     } else if (status === "error") {
       void showToast(`Worker "${instance.profile.name}" error: ${instance.error ?? "unknown"}`, "error");
+      trackSpawn(id, "error", { error: instance.error });
     }
   };
   const onWorkerRemove = (instance: WorkerInstance) => {
@@ -93,21 +101,15 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
   }
 
   if (config.autoSpawn && config.spawn.length > 0) {
-    logger.debug(`[index] AutoSpawn enabled: spawning ${config.spawn.length} worker(s): [${config.spawn.join(", ")}]`);
     void (async () => {
       void showToast(`Spawning ${config.spawn.length} worker(s)…`, "info");
       const profilesToSpawn = config.spawn.map((id) => config.profiles[id]).filter(Boolean);
-      logger.debug(`[index] Resolved profiles to spawn: [${profilesToSpawn.map((p) => p.id).join(", ")}]`);
       const { succeeded, failed } = await spawnWorkers(profilesToSpawn, {
         basePort: config.basePort,
         timeout: config.startupTimeout,
         directory: ctx.directory,
         client: ctx.client,
       });
-      logger.debug(`[index] AutoSpawn complete: succeeded=${succeeded.length}, failed=${failed.length}`);
-      if (failed.length > 0) {
-        logger.debug(`[index] AutoSpawn failures: ${failed.map((f) => `${f.profile.id}: ${f.error}`).join("; ")}`);
-      }
       if (failed.length === 0) {
         void showToast(`Spawned ${succeeded.length} worker(s)`, "success");
       } else {
@@ -117,13 +119,8 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
         );
       }
     })().catch((err) => {
-      logger.error(`[index] AutoSpawn exception: ${err instanceof Error ? err.message : String(err)}`);
       void showToast(`Auto-spawn failed: ${err instanceof Error ? err.message : String(err)}`, "error");
     });
-  } else {
-    logger.debug(
-      `[index] AutoSpawn disabled or no workers to spawn: autoSpawn=${config.autoSpawn}, spawn.length=${config.spawn.length}`
-    );
   }
 
   const idleNotifier = createIdleNotifier(ctx, config.notifications?.idle ?? {});
@@ -277,6 +274,34 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
     "experimental.chat.messages.transform": pruneTransform,
     "chat.message": async (input, _output) => {
       if (input.agent === orchestratorAgentName) orchestratorSessionIds.add(input.sessionID);
+
+      if (config.memory?.enabled !== false && config.memory?.autoRecord !== false) {
+        const extractText = (msg: any): string => {
+          if (!msg) return "";
+          if (typeof msg.message === "string") return msg.message;
+          if (typeof msg.content === "string") return msg.content;
+          if (typeof msg.text === "string") return msg.text;
+          const parts = Array.isArray(msg.parts) ? msg.parts : Array.isArray(msg.content?.parts) ? msg.content.parts : [];
+          if (Array.isArray(parts)) {
+            return parts.map((p: any) => (p?.type === "text" && typeof p.text === "string" ? p.text : "")).join("\n");
+          }
+          return "";
+        };
+
+        const text = extractText(input);
+        if (text) {
+          void recordMessageMemory({
+            text,
+            sessionId: input.sessionID,
+            messageId: input.messageID,
+            role: typeof (input as any).role === "string" ? (input as any).role : undefined,
+            userId: typeof input.agent === "string" ? input.agent : undefined,
+            scope: config.memory?.scope ?? "project",
+            projectId: config.memory?.scope === "project" ? ctx.project.id : undefined,
+            maxChars: config.memory?.maxChars,
+          });
+        }
+      }
     },
     event: async ({ event }) => {
       if (event.type === "server.instance.disposed") {
@@ -284,6 +309,7 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
         registry.off("updated", onWorkerUpdate);
         registry.off("unregistered", onWorkerRemove);
         await shutdownAllWorkers().catch(() => {});
+        await flushTelemetry().catch(() => {});
       }
       if (event.type === "session.created" || event.type === "session.updated") {
         const info = (event as any)?.properties?.info as any;

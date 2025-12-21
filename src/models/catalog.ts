@@ -121,7 +121,7 @@ export function resolveModelRef(
     }
     return false;
   };
-  type Match = { providerID: string; modelID: string; score: number };
+  type Match = { providerID: string; modelID: string; score: number; providerSource: Provider["source"] };
   const scoreMatch = (needleRaw: string, provider: Provider, candidateRaw: string, candidateName?: string): number | undefined => {
     if (!matchCandidate(needleRaw, candidateRaw, candidateName)) return undefined;
 
@@ -143,13 +143,22 @@ export function resolveModelRef(
 
     return score;
   };
+  const providerRank = (source: Provider["source"]): number => {
+    if (source === "config" || source === "custom") return 0;
+    if (source === "env") return 1;
+    return 2;
+  };
   const pickBest = (matches: Match[]): { providerID: string; modelID: string } | undefined => {
     if (matches.length === 0) return undefined;
-    const sorted = [...matches].sort((a, b) => b.score - a.score);
-    const best = sorted[0];
-    const second = sorted[1];
-    if (second && second.score === best.score) return undefined;
-    return { providerID: best.providerID, modelID: best.modelID };
+    const sorted = [...matches].sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const rank = providerRank(a.providerSource) - providerRank(b.providerSource);
+      if (rank !== 0) return rank;
+      const providerCmp = a.providerID.localeCompare(b.providerID);
+      if (providerCmp !== 0) return providerCmp;
+      return a.modelID.localeCompare(b.modelID);
+    });
+    return { providerID: sorted[0].providerID, modelID: sorted[0].modelID };
   };
   const suggest = (matches: Array<{ providerID: string; modelID: string }>) =>
     matches.map((m) => fullModelID(m.providerID, m.modelID)).slice(0, 20);
@@ -170,7 +179,9 @@ export function resolveModelRef(
     for (const p of pool) {
       for (const [modelID, model] of Object.entries(p.models ?? {})) {
         const score = scoreMatch(parsed.modelID, p, modelID, (model as any)?.name);
-        if (typeof score === "number") matches.push({ providerID: p.id, modelID, score });
+        if (typeof score === "number") {
+          matches.push({ providerID: p.id, modelID, score, providerSource: p.source });
+        }
       }
     }
     const best = pickBest(matches);
@@ -207,27 +218,18 @@ export function resolveModelRef(
     };
   }
 
-  const matches: Array<{ providerID: string; modelID: string }> = [];
+  const matches: Array<{ providerID: string; modelID: string; score: number; providerSource: Provider["source"] }> = [];
   for (const provider of providers) {
     if (provider.models && raw in provider.models) {
-      matches.push({ providerID: provider.id, modelID: raw });
+      matches.push({ providerID: provider.id, modelID: raw, score: 50, providerSource: provider.source });
     }
   }
 
-  if (matches.length === 1) {
-    const match = matches[0];
-    return { full: fullModelID(match.providerID, match.modelID), providerID: match.providerID, modelID: match.modelID };
-  }
-  if (matches.length > 1) {
-    const configured = matches.filter((m) => providers.find((p) => p.id === m.providerID)?.source !== "api");
-    if (configured.length === 1) {
-      const match = configured[0];
-      return { full: fullModelID(match.providerID, match.modelID), providerID: match.providerID, modelID: match.modelID };
+  if (matches.length >= 1) {
+    const best = pickBest(matches);
+    if (best) {
+      return { full: fullModelID(best.providerID, best.modelID), providerID: best.providerID, modelID: best.modelID };
     }
-    return {
-      error: `Model "${raw}" exists in multiple providers. Use provider/model format.`,
-      suggestions: matches.map((m) => fullModelID(m.providerID, m.modelID)).slice(0, 20),
-    };
   }
 
   // Fuzzy match (by substring / version stripping) across all providers.
@@ -235,7 +237,9 @@ export function resolveModelRef(
   for (const provider of providers) {
     for (const [modelID, model] of Object.entries(provider.models ?? {})) {
       const score = scoreMatch(raw, provider, modelID, (model as any)?.name);
-      if (typeof score === "number") fuzzy.push({ providerID: provider.id, modelID, score });
+      if (typeof score === "number") {
+        fuzzy.push({ providerID: provider.id, modelID, score, providerSource: provider.source });
+      }
     }
   }
   const bestFuzzy = pickBest(fuzzy);
@@ -243,13 +247,8 @@ export function resolveModelRef(
     return { full: fullModelID(bestFuzzy.providerID, bestFuzzy.modelID), providerID: bestFuzzy.providerID, modelID: bestFuzzy.modelID };
   }
   if (fuzzy.length > 1) {
-    const configured = fuzzy.filter((m) => providers.find((p) => p.id === m.providerID)?.source !== "api");
-    if (configured.length === 1) {
-      const m = configured[0];
-      return { full: fullModelID(m.providerID, m.modelID), providerID: m.providerID, modelID: m.modelID };
-    }
     return {
-      error: `Model "${raw}" matches multiple configured models. Use provider/model format.`,
+      error: `Model "${raw}" matches multiple configured models. Use an exact provider/model ID.`,
       suggestions: suggest(fuzzy),
     };
   }

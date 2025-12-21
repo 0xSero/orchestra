@@ -2,11 +2,8 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { getDefaultGlobalOrchestratorConfigPath, getDefaultProjectOrchestratorConfigPath } from "../config/orchestrator";
+import { isPlainObject } from "../helpers/format";
 import type { OrchestratorConfigFile, WorkerProfile } from "../types";
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 export async function readOrchestratorConfigFile(path: string): Promise<OrchestratorConfigFile> {
   if (!existsSync(path)) return {};
@@ -59,4 +56,3 @@ export function configPathForScope(scope: "global" | "project", directory: strin
   if (scope === "global") return getDefaultGlobalOrchestratorConfigPath();
   return getDefaultProjectOrchestratorConfigPath(directory);
 }
-

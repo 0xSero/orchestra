@@ -28,7 +28,8 @@
   "dependencies": {
     "@opencode-ai/plugin": "^1.0.164",
     "@opencode-ai/sdk": "^1.0.164",
-    "neo4j-driver": "^6.0.1"
+    "neo4j-driver": "^6.0.1",
+    "posthog-node": "^5.17.4"
   },
   "devDependencies": {
     "@types/bun": "latest",

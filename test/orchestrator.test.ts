@@ -27,7 +27,7 @@ describe("config loader", () => {
 
       const { config } = await loadOrchestratorConfig({ directory: dir });
       expect(Array.isArray(config.spawn)).toBe(true);
-      expect(config.spawn.length).toBe(0);
+      expect(config.spawn).toEqual(["memory"]);
     } finally {
       process.env.XDG_CONFIG_HOME = prev;
     }
@@ -111,6 +111,64 @@ describe("model resolver", () => {
     expect("error" in res).toBe(false);
     if ("error" in res) return;
     expect(res.full).toBe("local-proxy/local-proxy:claude-opus-4-5-20251101");
+  });
+
+  test("resolveModelRef deterministically breaks ties for short IDs", () => {
+    const providers: any[] = [
+      { id: "beta", source: "api", models: { "gpt-4": { name: "GPT-4" } } },
+      { id: "alpha", source: "api", models: { "gpt-4": { name: "GPT-4" } } },
+    ];
+
+    const res = resolveModelRef("gpt-4", providers as any);
+    expect("error" in res).toBe(false);
+    if ("error" in res) return;
+    expect(res.providerID).toBe("alpha");
+  });
+
+  test("resolveModelRef prefers config over env over api on ties", () => {
+    const providers: any[] = [
+      { id: "api", source: "api", models: { "gpt-4": { name: "GPT-4" } } },
+      { id: "env", source: "env", models: { "gpt-4": { name: "GPT-4" } } },
+      { id: "config", source: "config", models: { "gpt-4": { name: "GPT-4" } } },
+    ];
+
+    const res = resolveModelRef("gpt-4", providers as any);
+    expect("error" in res).toBe(false);
+    if ("error" in res) return;
+    expect(res.providerID).toBe("config");
+  });
+
+  test("resolveModelRef returns unknown provider error for explicit provider", () => {
+    const providers: any[] = [
+      { id: "anthropic", source: "api", models: { "claude-3": { name: "Claude 3" } } },
+    ];
+    const res = resolveModelRef("openai/gpt-4", providers as any);
+    expect("error" in res).toBe(true);
+    if ("error" in res) {
+      expect(res.error).toContain("Unknown provider");
+    }
+  });
+
+  test("resolveModelRef ties in fuzzy match are deterministic", () => {
+    const providers: any[] = [
+      { id: "b-provider", source: "api", models: { "foo-1": { name: "Foo" } } },
+      { id: "a-provider", source: "api", models: { "foo-2": { name: "Foo" } } },
+    ];
+    const res = resolveModelRef("foo", providers as any);
+    expect("error" in res).toBe(false);
+    if ("error" in res) return;
+    expect(res.providerID).toBe("a-provider");
+  });
+
+  test("resolveModelRef respects explicit provider for full IDs", () => {
+    const providers: any[] = [
+      { id: "api", source: "api", models: { "x-1": { name: "X" } } },
+      { id: "config", source: "config", models: { "x-1": { name: "X" } } },
+    ];
+    const res = resolveModelRef("api/x-1", providers as any);
+    expect("error" in res).toBe(false);
+    if ("error" in res) return;
+    expect(res.providerID).toBe("api");
   });
 });
 

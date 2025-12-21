@@ -136,7 +136,7 @@ export const runWorkflowTool = tool({
         const resolved = await ensureWorker(workerId, autoSpawn);
         const instance = registry.getWorker(resolved);
         if (ctx?.sessionID && !existing && instance?.modelResolution !== "reused existing worker") {
-          registry.trackOwnership(ctx.sessionID, instance.profile.id);
+          if (instance) { registry.trackOwnership(ctx.sessionID, instance.profile.id); }
         }
         return resolved;
       },

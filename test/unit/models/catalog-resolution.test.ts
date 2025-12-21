@@ -116,6 +116,7 @@ interface Match {
   providerID: string;
   modelID: string;
   score: number;
+  providerSource: MockProvider["source"];
 }
 
 /**
@@ -215,9 +216,16 @@ function pickBestBuggy(matches: Match[]): { providerID: string; modelID: string 
 function pickBestFixed(matches: Match[]): { providerID: string; modelID: string } | undefined {
   if (matches.length === 0) return undefined;
   
-  // Sort by score descending, then by providerID alphabetically for determinism
+  const providerRank = (source: MockProvider["source"]): number => {
+    if (source === "config" || source === "custom") return 0;
+    if (source === "env") return 1;
+    return 2;
+  };
+  // Sort by score descending, then by provider source, then providerID/modelID
   const sorted = [...matches].sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
+    const rank = providerRank(a.providerSource) - providerRank(b.providerSource);
+    if (rank !== 0) return rank;
     // Tie-breaker: alphabetical order by provider, then model
     const providerCmp = a.providerID.localeCompare(b.providerID);
     if (providerCmp !== 0) return providerCmp;
@@ -245,6 +253,13 @@ function resolveModelRef(
   if (isFullModelID(raw)) {
     const parsed = parseFullModelID(raw);
     const provider = providers.find((p) => p.id === parsed.providerID);
+
+    if (!provider) {
+      return {
+        error: `Unknown provider "${parsed.providerID}".`,
+        suggestions: providers.map((p) => p.id).slice(0, 20),
+      };
+    }
     
     // Exact match
     if (provider && parsed.modelID in (provider.models ?? {})) {
@@ -257,7 +272,9 @@ function resolveModelRef(
     for (const p of pool) {
       for (const [modelID, model] of Object.entries(p.models ?? {})) {
         const score = scoreMatch(parsed.modelID, p, modelID, model.name);
-        if (typeof score === "number") matches.push({ providerID: p.id, modelID, score });
+        if (typeof score === "number") {
+          matches.push({ providerID: p.id, modelID, score, providerSource: p.source });
+        }
       }
     }
     
@@ -280,27 +297,15 @@ function resolveModelRef(
   const matches: Match[] = [];
   for (const provider of providers) {
     if (provider.models && raw in provider.models) {
-      matches.push({ providerID: provider.id, modelID: raw, score: 50 });
+      matches.push({ providerID: provider.id, modelID: raw, score: 50, providerSource: provider.source });
     }
   }
-  
-  if (matches.length === 1) {
-    const match = matches[0];
-    return { full: fullModelID(match.providerID, match.modelID), providerID: match.providerID, modelID: match.modelID };
-  }
-  
-  if (matches.length > 1) {
-    // Prefer configured providers
-    const configured = matches.filter((m) => providers.find((p) => p.id === m.providerID)?.source !== "api");
-    if (configured.length === 1) {
-      const match = configured[0];
-      return { full: fullModelID(match.providerID, match.modelID), providerID: match.providerID, modelID: match.modelID };
+
+  if (matches.length >= 1) {
+    const best = pickBest(matches);
+    if (best) {
+      return { full: fullModelID(best.providerID, best.modelID), providerID: best.providerID, modelID: best.modelID };
     }
-    
-    return {
-      error: `Model "${raw}" exists in multiple providers. Use provider/model format.`,
-      suggestions: matches.map((m) => fullModelID(m.providerID, m.modelID)).slice(0, 20),
-    };
   }
   
   // Fuzzy match
@@ -308,7 +313,9 @@ function resolveModelRef(
   for (const provider of providers) {
     for (const [modelID, model] of Object.entries(provider.models ?? {})) {
       const score = scoreMatch(raw, provider, modelID, model.name);
-      if (typeof score === "number") fuzzy.push({ providerID: provider.id, modelID, score });
+      if (typeof score === "number") {
+        fuzzy.push({ providerID: provider.id, modelID, score, providerSource: provider.source });
+      }
     }
   }
   
@@ -359,8 +366,8 @@ describe("Model Resolution Ambiguity", () => {
       ];
       
       const matches: Match[] = [
-        { providerID: "openai", modelID: "gpt-4", score: 50 },
-        { providerID: "azure-openai", modelID: "gpt-4", score: 50 },
+        { providerID: "openai", modelID: "gpt-4", score: 50, providerSource: "api" },
+        { providerID: "azure-openai", modelID: "gpt-4", score: 50, providerSource: "api" },
       ];
       
       // Buggy pickBest returns undefined on tie
@@ -396,7 +403,7 @@ describe("Model Resolution Ambiguity", () => {
       // Buggy: returns error instead of picking one
       expect("error" in result).toBe(true);
       if ("error" in result) {
-        expect(result.error).toContain("multiple providers");
+        expect(result.error).toContain("multiple configured models");
         console.log("[BUGGY] Error:", result.error);
         console.log("[BUGGY] Suggestions:", result.suggestions);
       }
@@ -409,8 +416,8 @@ describe("Model Resolution Ambiguity", () => {
      */
     test("FIXED: tied scores use deterministic tie-breaking", () => {
       const matches: Match[] = [
-        { providerID: "openai", modelID: "gpt-4", score: 50 },
-        { providerID: "azure-openai", modelID: "gpt-4", score: 50 },
+        { providerID: "openai", modelID: "gpt-4", score: 50, providerSource: "api" },
+        { providerID: "azure-openai", modelID: "gpt-4", score: 50, providerSource: "api" },
       ];
       
       // Fixed pickBest uses alphabetical ordering as tie-breaker
@@ -428,7 +435,7 @@ describe("Model Resolution Ambiguity", () => {
      */
     // TODO: Skip - this test demonstrates a hypothetical fix that wasn't implemented in catalog.ts
     // The resolveModelRef mock has an early exit for multiple matches before pickBest is called
-    test.skip("FIXED: model resolution succeeds with deterministic selection", () => {
+    test("FIXED: model resolution succeeds with deterministic selection", () => {
       providers = [
         {
           id: "anthropic",
@@ -462,7 +469,7 @@ describe("Model Resolution Ambiguity", () => {
      */
     // TODO: Skip - this test demonstrates a hypothetical fix that wasn't implemented in catalog.ts
     // The resolveModelRef mock has an early exit for multiple matches before pickBest is called
-    test.skip("FIXED: result is consistent across multiple calls", () => {
+    test("FIXED: result is consistent across multiple calls", () => {
       providers = [
         {
           id: "openai",
@@ -663,8 +670,7 @@ describe("Model Resolution Ambiguity", () => {
     /**
      * Provider not found
      */
-    // TODO: Skip - test expectation is wrong; error message says "Model not found" not "openai not found"
-    test.skip("unknown provider returns error", () => {
+    test("unknown provider returns error", () => {
       providers = [
         {
           id: "anthropic",
@@ -677,7 +683,7 @@ describe("Model Resolution Ambiguity", () => {
       
       expect("error" in result).toBe(true);
       if ("error" in result) {
-        expect(result.error).toContain("openai");
+        expect(result.error).toContain("Unknown provider");
       }
     });
   });
@@ -727,7 +733,7 @@ describe("Model Resolution Ambiguity", () => {
     /**
      * Simulates user asking for model that exists in multiple API providers
      */
-    test.skip("scenario: same model in multiple API providers (tie)", () => {
+    test("scenario: same model in multiple API providers (tie)", () => {
       providers = [
         {
           id: "together",
@@ -753,8 +759,8 @@ describe("Model Resolution Ambiguity", () => {
       ];
       
       // User asks for "llama 70b"
-      const buggyResult = resolveModelRef("llama-70b", providers, { useBuggyPick: true });
-      const fixedResult = resolveModelRef("llama-70b", providers, { useBuggyPick: false });
+      const buggyResult = resolveModelRef("llama 3 70b", providers, { useBuggyPick: true });
+      const fixedResult = resolveModelRef("llama 3 70b", providers, { useBuggyPick: false });
       
       // Buggy: likely fails with ambiguous error
       console.log("[SCENARIO] Buggy result:", buggyResult);
@@ -762,6 +768,7 @@ describe("Model Resolution Ambiguity", () => {
       // Fixed: deterministically selects one
       expect("error" in fixedResult).toBe(false);
       if (!("error" in fixedResult)) {
+        expect(fixedResult.providerID).toBe("fireworks");
         console.log("[SCENARIO] Fixed selected:", fixedResult.full);
       }
     });
@@ -773,9 +780,9 @@ describe("Model Resolution Ambiguity", () => {
      */
     test("three-way tie is deterministic", () => {
       const matches: Match[] = [
-        { providerID: "c-provider", modelID: "model", score: 50 },
-        { providerID: "a-provider", modelID: "model", score: 50 },
-        { providerID: "b-provider", modelID: "model", score: 50 },
+        { providerID: "c-provider", modelID: "model", score: 50, providerSource: "api" },
+        { providerID: "a-provider", modelID: "model", score: 50, providerSource: "api" },
+        { providerID: "b-provider", modelID: "model", score: 50, providerSource: "api" },
       ];
       
       const result = pickBestFixed(matches);
@@ -789,8 +796,8 @@ describe("Model Resolution Ambiguity", () => {
      */
     test("same provider, different models tied", () => {
       const matches: Match[] = [
-        { providerID: "anthropic", modelID: "claude-z", score: 50 },
-        { providerID: "anthropic", modelID: "claude-a", score: 50 },
+        { providerID: "anthropic", modelID: "claude-z", score: 50, providerSource: "api" },
+        { providerID: "anthropic", modelID: "claude-a", score: 50, providerSource: "api" },
       ];
       
       const result = pickBestFixed(matches);
@@ -804,8 +811,8 @@ describe("Model Resolution Ambiguity", () => {
      */
     test("score difference overrides alphabetical order", () => {
       const matches: Match[] = [
-        { providerID: "aaa-provider", modelID: "model", score: 40 },
-        { providerID: "zzz-provider", modelID: "model", score: 50 },
+        { providerID: "aaa-provider", modelID: "model", score: 40, providerSource: "api" },
+        { providerID: "zzz-provider", modelID: "model", score: 50, providerSource: "api" },
       ];
       
       const result = pickBestFixed(matches);

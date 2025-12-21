@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { registry } from "./registry";
 import { startBridgeServer, type BridgeServer } from "./bridge-server";
 import { removeWorkerEntriesByPid, upsertWorkerEntry } from "./device-registry";
-import { logger } from "./logger";
 
 export type OrchestratorRuntime = {
   instanceId: string;
@@ -18,15 +17,12 @@ export function getOrchestratorInstanceId(): string {
 
 export async function ensureRuntime(): Promise<OrchestratorRuntime> {
   if (runtime) {
-    logger.debug(`[runtime] ensureRuntime: returning existing runtime, instanceId=${runtime.instanceId}`);
     return runtime;
   }
 
-  logger.debug(`[runtime] ensureRuntime: creating NEW runtime, pid=${process.pid}`);
   const instanceId = randomUUID();
   const bridge = await startBridgeServer();
   runtime = { instanceId, bridge };
-  logger.debug(`[runtime] Runtime created: instanceId=${instanceId}, bridgeUrl=${bridge.url}`);
 
   if (!cleanupInstalled) {
     cleanupInstalled = true;

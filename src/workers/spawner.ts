@@ -13,7 +13,6 @@ import { pathToFileURL } from "node:url";
 import { ensureRuntime, registerWorkerInDeviceRegistry } from "../core/runtime";
 import { listDeviceRegistry, removeWorkerEntriesByPid, type DeviceRegistryWorkerEntry } from "../core/device-registry";
 import { withWorkerProfileLock } from "../core/profile-lock";
-import { logger } from "../core/logger";
 
 interface SpawnOptions {
   /** Base port to start from */
@@ -161,7 +160,6 @@ async function tryReuseExistingWorker(
       startedAt: existing.startedAt,
     }).catch(() => {});
 
-    logger.info(`[Orchestrator] Reusing existing worker "${profile.id}" (pid: ${existing.pid}, session: ${sessionId})`);
     return instance;
   } catch {
     // Worker is dead or unresponsive, clean up the stale entry
@@ -228,11 +226,17 @@ async function spawnOpencodeServe(options: {
       reject(err);
     };
 
+    // Discard handler to consume but ignore output after startup
+    const discard = () => {};
+
     const cleanup = () => {
       proc.stdout.off("data", onData);
       proc.stderr.off("data", onData);
       proc.off("exit", onExit);
       proc.off("error", onError);
+      // Keep consuming output to prevent it from leaking to parent stdout/stderr
+      proc.stdout.on("data", discard);
+      proc.stderr.on("data", discard);
     };
 
     proc.stdout.on("data", onData);
@@ -270,27 +274,16 @@ export async function spawnWorker(
   profile: WorkerProfile,
   options: SpawnOptions & { forceNew?: boolean }
 ): Promise<WorkerInstance> {
-  const spawnTs = Date.now();
-  logger.debug(`[spawner] spawnWorker called for "${profile.id}" at ${spawnTs}, pid=${process.pid}`);
-  
   // First, check if we already have this worker in our in-memory registry
   const existingInRegistry = registry.getWorker(profile.id);
   if (existingInRegistry && existingInRegistry.status !== "error" && existingInRegistry.status !== "stopped") {
-    logger.info(`[Orchestrator] Worker "${profile.id}" already in registry, reusing`);
-    logger.debug(`[spawner] Reusing existing worker "${profile.id}" status=${existingInRegistry.status}`);
     return existingInRegistry;
   }
 
   // De-dupe concurrent spawn requests in-process (per worker profile).
   // This enforces a hard "1 opencode session per profile" rule.
   const inFlight = inFlightSpawns.get(profile.id);
-  logger.debug(
-    `[spawner] inFlightSpawns check for "${profile.id}": exists=${!!inFlight}, mapSize=${inFlightSpawns.size}, mapKeys=[${[
-      ...inFlightSpawns.keys(),
-    ].join(",")}]`
-  );
   if (inFlight) {
-    logger.debug(`[spawner] Returning existing in-flight spawn for "${profile.id}"`);
     return inFlight;
   }
 
@@ -553,24 +546,18 @@ export async function spawnWorker(
               lastError: errorMsg,
             });
           }
-          logger.error(`[Orchestrator] Failed to spawn worker "${resolvedProfile.name}": ${errorMsg}`);
           throw error;
         }
       }
     );
   })();
 
-  logger.debug(
-    `[spawner] Setting inFlightSpawns for "${profile.id}" BEFORE async work, mapSize will be=${inFlightSpawns.size + 1}`
-  );
   inFlightSpawns.set(profile.id, spawnPromise);
   try {
     const result = await spawnPromise;
-    logger.debug(`[spawner] spawnWorker completed for "${profile.id}", status=${result.status}, pid=${result.pid}`);
     return result;
   } finally {
     if (inFlightSpawns.get(profile.id) === spawnPromise) {
-      logger.debug(`[spawner] Removing inFlightSpawns for "${profile.id}"`);
       inFlightSpawns.delete(profile.id);
     }
   }
@@ -662,8 +649,7 @@ export async function stopWorker(workerId: string): Promise<boolean> {
       await removeWorkerEntriesByPid(instance.pid).catch(() => {});
     }
     return true;
-  } catch (error) {
-    logger.error(`[Orchestrator] Error stopping worker "${workerId}": ${error instanceof Error ? error.message : String(error)}`);
+  } catch {
     return false;
   }
 }
@@ -803,13 +789,11 @@ export async function spawnWorkers(
       try {
         const instance = await spawnWorker(profile, options);
         succeeded.push(instance);
-        logger.info(`[Orchestrator] Worker "${profile.id}" spawned (${succeeded.length}/${profiles.length})`);
       } catch (err) {
         failed.push({
           profile,
           error: err instanceof Error ? err.message : String(err),
         });
-        logger.error(`[Orchestrator] Worker "${profile.id}" failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
   } else {

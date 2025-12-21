@@ -111,6 +111,22 @@ export type SecurityConfig = {
   workflows?: WorkflowSecurityConfig;
 };
 
+export type MemoryConfig = {
+  enabled?: boolean;
+  autoSpawn?: boolean;
+  autoRecord?: boolean;
+  scope?: "project" | "global";
+  maxChars?: number;
+};
+
+export type TelemetryConfig = {
+  enabled?: boolean;
+  /** PostHog API key (or set POSTHOG_API_KEY env var) */
+  apiKey?: string;
+  /** PostHog host (default: https://us.i.posthog.com) */
+  host?: string;
+};
+
 export interface OrchestratorConfig {
   /** Base port to start assigning from */
   basePort: number;
@@ -136,6 +152,8 @@ export interface OrchestratorConfig {
     defaultListFormat?: "markdown" | "json";
     /** Enable debug logging for orchestrator internals */
     debug?: boolean;
+    /** Allow logs to print to console (default: false) */
+    logToConsole?: boolean;
     /**
      * First-run demo behavior (no config file detected):
      * - true: auto-run `orchestrator.demo` once per machine/user
@@ -183,6 +201,10 @@ export interface OrchestratorConfig {
   workflows?: WorkflowsConfig;
   /** Security limits */
   security?: SecurityConfig;
+  /** Memory graph settings */
+  memory?: MemoryConfig;
+  /** Telemetry settings (PostHog) */
+  telemetry?: TelemetryConfig;
 }
 
 export type OrchestratorConfigFile = {
@@ -198,6 +220,8 @@ export type OrchestratorConfigFile = {
   pruning?: OrchestratorConfig["pruning"];
   workflows?: OrchestratorConfig["workflows"];
   security?: OrchestratorConfig["security"];
+  memory?: OrchestratorConfig["memory"];
+  telemetry?: OrchestratorConfig["telemetry"];
   /** Profiles available to spawn (overrides/custom). Strings reference built-ins. */
   profiles?: Array<string | WorkerProfile>;
   /** Profiles to auto-spawn. Strings reference profiles by id. */

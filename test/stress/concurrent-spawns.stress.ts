@@ -501,22 +501,18 @@ describe("Real Spawner Integration (if available)", () => {
    * This test would run against the real spawner if imported
    * Currently serves as documentation for manual verification
    */
-  test.skip("integration: real spawner deduplication", async () => {
-    // This test is skipped by default as it requires the full runtime
-    // To run: remove .skip and ensure opencode environment is available
-    
-    // const { spawnWorker, stopWorker } = await import("../../src/workers/spawner");
-    // const profile = createTestProfile("real-test");
-    // 
-    // const promises = Array.from({ length: 5 }, () => spawnWorker(profile, { ... }));
-    // const results = await Promise.all(promises);
-    // 
-    // // Verify single PID
-    // const pids = new Set(results.map(r => r.pid));
-    // expect(pids.size).toBe(1);
-    // 
-    // await stopWorker(profile.id);
-    
-    expect(true).toBe(true); // Placeholder
-  });
+  test("integration: real spawner deduplication", async () => {
+    const { spawnWorker, stopWorker } = await import("../../src/workers/spawner");
+    const profile = createTestProfile("real-test", { model: "opencode/gpt-5-nano" });
+
+    const promises = Array.from({ length: 5 }, () =>
+      spawnWorker(profile, { basePort: 0, timeout: 60_000, directory: process.cwd() })
+    );
+    const results = await Promise.all(promises);
+
+    const pids = new Set(results.map((r) => r.pid));
+    expect(pids.size).toBe(1);
+
+    await stopWorker(profile.id);
+  }, 180_000);
 });

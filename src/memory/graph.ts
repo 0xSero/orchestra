@@ -114,7 +114,7 @@ export async function searchMemory(input: {
   const scope = input.scope;
   const projectId = scope === "project" ? input.projectId : undefined;
   if (scope === "project" && !projectId) throw new Error("projectId is required for project scope");
-  const limit = Math.max(1, Math.min(50, input.limit ?? 10));
+  const limit = Math.floor(Math.max(1, Math.min(50, input.limit ?? 10)));
 
   return await withNeo4jSession(input.cfg, async (session) => {
     const res = await session.run(
@@ -125,7 +125,7 @@ WHERE toLower(n.key) CONTAINS toLower($q)
    OR any(t IN coalesce(n.tags, []) WHERE toLower(t) CONTAINS toLower($q))
 RETURN n
 ORDER BY n.updatedAt DESC
-LIMIT $limit
+LIMIT toInteger($limit)
       `.trim(),
       {
         scope,
@@ -147,7 +147,7 @@ export async function recentMemory(input: {
   const scope = input.scope;
   const projectId = scope === "project" ? input.projectId : undefined;
   if (scope === "project" && !projectId) throw new Error("projectId is required for project scope");
-  const limit = Math.max(1, Math.min(50, input.limit ?? 10));
+  const limit = Math.floor(Math.max(1, Math.min(50, input.limit ?? 10)));
 
   return await withNeo4jSession(input.cfg, async (session) => {
     const res = await session.run(
@@ -155,7 +155,7 @@ export async function recentMemory(input: {
 MATCH (n:Memory { scope: $scope, projectId: $projectId })
 RETURN n
 ORDER BY n.updatedAt DESC
-LIMIT $limit
+LIMIT toInteger($limit)
       `.trim(),
       {
         scope,
@@ -166,4 +166,3 @@ LIMIT $limit
     return res.records.map((r) => toNode(r as any));
   });
 }
-

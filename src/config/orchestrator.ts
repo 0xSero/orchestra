@@ -92,6 +92,7 @@ function parseOrchestratorConfigFile(raw: unknown): Partial<OrchestratorConfigFi
       ui.defaultListFormat = raw.ui.defaultListFormat;
     }
     if (typeof raw.ui.debug === "boolean") ui.debug = raw.ui.debug;
+    if (typeof raw.ui.logToConsole === "boolean") ui.logToConsole = raw.ui.logToConsole;
     if (typeof raw.ui.firstRunDemo === "boolean") ui.firstRunDemo = raw.ui.firstRunDemo;
     partial.ui = ui as OrchestratorConfig["ui"];
   }
@@ -183,6 +184,24 @@ function parseOrchestratorConfigFile(raw: unknown): Partial<OrchestratorConfigFi
     partial.security = security as OrchestratorConfig["security"];
   }
 
+  if (isPlainObject(raw.memory)) {
+    const memory: Record<string, unknown> = {};
+    if (typeof raw.memory.enabled === "boolean") memory.enabled = raw.memory.enabled;
+    if (typeof raw.memory.autoSpawn === "boolean") memory.autoSpawn = raw.memory.autoSpawn;
+    if (typeof raw.memory.autoRecord === "boolean") memory.autoRecord = raw.memory.autoRecord;
+    if (raw.memory.scope === "project" || raw.memory.scope === "global") memory.scope = raw.memory.scope;
+    if (typeof raw.memory.maxChars === "number") memory.maxChars = raw.memory.maxChars;
+    partial.memory = memory as OrchestratorConfig["memory"];
+  }
+
+  if (isPlainObject(raw.telemetry)) {
+    const telemetry: Record<string, unknown> = {};
+    if (typeof raw.telemetry.enabled === "boolean") telemetry.enabled = raw.telemetry.enabled;
+    if (typeof raw.telemetry.apiKey === "string") telemetry.apiKey = raw.telemetry.apiKey;
+    if (typeof raw.telemetry.host === "string") telemetry.host = raw.telemetry.host;
+    partial.telemetry = telemetry as OrchestratorConfig["telemetry"];
+  }
+
   return partial;
 }
 
@@ -244,6 +263,7 @@ export async function loadOrchestratorConfig(input: {
       systemContextMaxWorkers: 12,
       defaultListFormat: "markdown",
       debug: false,
+      logToConsole: false,
       firstRunDemo: true,
     },
     notifications: {
@@ -279,6 +299,16 @@ export async function loadOrchestratorConfig(input: {
         maxCarryChars: 24000,
         perStepTimeoutMs: 120_000,
       },
+    },
+    memory: {
+      enabled: true,
+      autoSpawn: true,
+      autoRecord: true,
+      scope: "project",
+      maxChars: 2000,
+    },
+    telemetry: {
+      enabled: false,
     },
     profiles: [],
     workers: [],
@@ -323,6 +353,12 @@ export async function loadOrchestratorConfig(input: {
   ) as unknown as OrchestratorConfigFile;
 
   const { profiles, spawn } = collectProfilesAndSpawn(mergedFile);
+  const spawnList = [...spawn];
+  if (mergedFile.memory?.enabled !== false && mergedFile.memory?.autoSpawn !== false) {
+    if (profiles.memory && !spawnList.includes("memory")) {
+      spawnList.push("memory");
+    }
+  }
 
   const config: OrchestratorConfig = {
     basePort: mergedFile.basePort ?? defaultsFile.basePort ?? 14096,
@@ -336,8 +372,10 @@ export async function loadOrchestratorConfig(input: {
     pruning: (mergedFile.pruning ?? defaultsFile.pruning) as OrchestratorConfig["pruning"],
     workflows: (mergedFile.workflows ?? defaultsFile.workflows) as OrchestratorConfig["workflows"],
     security: (mergedFile.security ?? defaultsFile.security) as OrchestratorConfig["security"],
+    memory: (mergedFile.memory ?? defaultsFile.memory) as OrchestratorConfig["memory"],
+    telemetry: (mergedFile.telemetry ?? defaultsFile.telemetry) as OrchestratorConfig["telemetry"],
     profiles,
-    spawn,
+    spawn: spawnList,
   };
 
   return { config, sources };

@@ -17,7 +17,8 @@
         "injectSystemContext": { "type": "boolean", "default": true },
         "systemContextMaxWorkers": { "type": "number", "default": 12 },
         "defaultListFormat": { "type": "string", "enum": ["markdown", "json"], "default": "markdown" },
-        "debug": { "type": "boolean", "default": false }
+        "debug": { "type": "boolean", "default": false },
+        "logToConsole": { "type": "boolean", "default": false }
       }
     },
     "notifications": {
@@ -114,6 +115,27 @@
             "perStepTimeoutMs": { "type": "number", "default": 120000 }
           }
         }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "autoSpawn": { "type": "boolean", "default": true },
+        "autoRecord": { "type": "boolean", "default": true },
+        "scope": { "type": "string", "enum": ["project", "global"], "default": "project" },
+        "maxChars": { "type": "number", "default": 2000 }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "PostHog telemetry settings. Set POSTHOG_API_KEY env var or provide apiKey here.",
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "apiKey": { "type": "string", "description": "PostHog API key (or use POSTHOG_API_KEY env var)" },
+        "host": { "type": "string", "description": "PostHog host (default: https://us.i.posthog.com)" }
       }
     },
     "profiles": {
