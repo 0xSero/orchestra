@@ -1,0 +1,47 @@
+# CodeRabbit Configuration
+# Docs: https://docs.coderabbit.ai/configuration
+
+language: en-US
+
+reviews:
+  # Enable high-level summary of changes
+  high_level_summary: true
+  # Enable poem in PR summary (fun touch for open source)
+  poem: true
+  # Review status shown in PR
+  review_status: true
+  # Auto-collapse walkthrough after reading
+  collapse_walkthrough: false
+  # Paths to ignore in reviews
+  path_filters:
+    - "!dist/**"
+    - "!node_modules/**"
+    - "!**/*.lock"
+    - "!**/*.min.js"
+    - "!**/*.min.css"
+  # Request changes when issues found
+  request_changes_workflow: true
+  # Tools to use for static analysis
+  tools:
+    biome: true
+    eslint:
+      enabled: true
+    shellcheck:
+      enabled: true
+
+# Chat settings for interactive reviews
+chat:
+  auto_reply: true
+
+# Early access features
+early_access: false
+
+# Knowledge base for context
+knowledge_base:
+  opt_out: false
+  learnings:
+    scope: auto
+  issues:
+    scope: auto
+  pull_requests:
+    scope: auto
