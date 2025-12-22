@@ -9,10 +9,13 @@ import { hydrateProfileModelsFromOpencode } from "../models/hydrate";
 import { buildPromptParts, extractTextFromPromptResponse, type WorkerAttachment } from "./prompt";
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
-import { pathToFileURL } from "node:url";
+import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { ensureRuntime, registerWorkerInDeviceRegistry } from "../core/runtime";
 import { listDeviceRegistry, removeWorkerEntriesByPid, type DeviceRegistryWorkerEntry } from "../core/device-registry";
+import { getUserConfigDir } from "../helpers/format";
 import { withWorkerProfileLock } from "../core/profile-lock";
+import { getRepoContextForWorker } from "../ux/repo-context";
 
 interface SpawnOptions {
   /** Base port to start from */
@@ -38,6 +41,16 @@ function parseProviderId(model: string): { providerId?: string; modelKey?: strin
 }
 
 function resolveWorkerBridgePluginSpecifier(): string | undefined {
+  const configPluginPath = join(
+    getUserConfigDir(),
+    "opencode",
+    "plugin",
+    "worker-bridge-plugin.mjs"
+  );
+  // OpenCode treats `file://...` as a local plugin. A plain absolute path can be misinterpreted
+  // as a package specifier and trigger a Bun install attempt.
+  if (existsSync(configPluginPath)) return pathToFileURL(configPluginPath).href;
+
   const candidates = [
     // When running from `dist/workers/spawner.js`
     new URL("../../src/worker-bridge-plugin.mjs", import.meta.url),
@@ -46,13 +59,33 @@ function resolveWorkerBridgePluginSpecifier(): string | undefined {
   ];
   for (const url of candidates) {
     try {
-      const path = url.pathname;
+      const path = fileURLToPath(url);
       if (existsSync(path)) return pathToFileURL(path).href;
     } catch {
       // ignore
     }
   }
   return undefined;
+}
+
+const workerBridgeToolIds = ["message_tool", "worker_inbox", "wakeup_orchestrator"] as const;
+
+async function checkWorkerBridgeTools(
+  client: ReturnType<typeof createOpencodeClient>,
+  directory: string | undefined
+): Promise<{ ok: boolean; missing: string[]; toolIds: string[] }> {
+  const result = await client.tool.ids({ query: { directory } } as any);
+  const sdkError: any = (result as any)?.error;
+  if (sdkError) {
+    const msg =
+      sdkError?.data?.message ??
+      sdkError?.message ??
+      (typeof sdkError === "string" ? sdkError : JSON.stringify(sdkError));
+    throw new Error(msg);
+  }
+  const toolIds = Array.isArray(result.data) ? (result.data as string[]) : [];
+  const missing = workerBridgeToolIds.filter((id) => !toolIds.includes(id));
+  return { ok: missing.length === 0, missing, toolIds };
 }
 
 function isProcessAlive(pid: number): boolean {
@@ -109,6 +142,13 @@ async function tryReuseExistingWorker(
     if (!sessionsResult.data) return undefined;
 
     const sessions = sessionsResult.data as Array<{ id: string }>;
+
+    const toolCheck = await checkWorkerBridgeTools(client, directory).catch(() => undefined);
+    if (toolCheck && !toolCheck.ok) {
+      await client.instance.dispose({ query: { directory } } as any).catch(() => {});
+      await removeWorkerEntriesByPid(existing.pid).catch(() => {});
+      return undefined;
+    }
 
     // Determine which session to use:
     // 1. Prefer the session stored in registry (continuity)
@@ -189,6 +229,7 @@ async function spawnOpencodeServe(options: {
     ["serve", `--hostname=${options.hostname}`, `--port=${options.port}`],
     {
       env: workerEnv as any,
+      detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
     }
   );
@@ -247,11 +288,28 @@ async function spawnOpencodeServe(options: {
 
   const close = async () => {
     if (proc.killed) return;
-    proc.kill("SIGTERM");
+    try {
+      // If detached, kill the whole process group (covers grand-children).
+      if (process.platform !== "win32" && typeof proc.pid === "number") {
+        process.kill(-proc.pid, "SIGTERM");
+      } else {
+        proc.kill("SIGTERM");
+      }
+    } catch {
+      try {
+        proc.kill("SIGTERM");
+      } catch {
+        // ignore
+      }
+    }
     await new Promise<void>((resolve) => {
       const timer = setTimeout(() => {
         try {
-          proc.kill("SIGKILL");
+          if (process.platform !== "win32" && typeof proc.pid === "number") {
+            process.kill(-proc.pid, "SIGKILL");
+          } else {
+            proc.kill("SIGKILL");
+          }
         } catch {
           // ignore
         }
@@ -359,6 +417,11 @@ export async function spawnWorker(
         try {
           const rt = await ensureRuntime();
           const pluginSpecifier = resolveWorkerBridgePluginSpecifier();
+          if (process.env.OPENCODE_ORCH_SPAWNER_DEBUG === "1") {
+            console.error(
+              `[spawner] pluginSpecifier=${pluginSpecifier}, profile=${resolvedProfile.id}, model=${resolvedProfile.model}`
+            );
+          }
 
           // Start the opencode server for this worker (port=0 => dynamic port)
           const { url, proc, close } = await spawnOpencodeServe({
@@ -380,6 +443,17 @@ export async function spawnWorker(
           });
 
           const client = createOpencodeClient({ baseUrl: url });
+          const toolCheck = await checkWorkerBridgeTools(client, options.directory).catch((error) => {
+            instance.warning = `Unable to verify worker bridge tools: ${error instanceof Error ? error.message : String(error)}`;
+            return undefined;
+          });
+          if (toolCheck && !toolCheck.ok) {
+            throw new Error(
+              `Worker bridge tools missing (${toolCheck.missing.join(", ")}). ` +
+                `Loaded tools: ${toolCheck.toolIds.join(", ")}. ` +
+                `Check worker plugin path (${pluginSpecifier ?? "none"}) and OpenCode config.`
+            );
+          }
 
           instance.client = client;
           instance.shutdown = close;
@@ -400,10 +474,14 @@ export async function spawnWorker(
           }
 
     // Preflight provider availability to avoid "ready but never responds" workers.
+    // Note: We no longer warn about "api" sourced providers because:
+    // 1. The warning is a false positive when env vars provide credentials
+    // 2. The warning gets cleared after first successful response anyway
+    // 3. If the provider truly isn't configured, the worker will fail with a clear error
     const { providerId, modelKey } = parseProviderId(resolvedProfile.model);
     if (providerId) {
       const providersRes = await client.config.providers({ query: { directory: options.directory } });
-      const providers = (providersRes.data as any)?.providers as Array<{ id: string; models?: Record<string, unknown> }> | undefined;
+      const providers = (providersRes.data as any)?.providers as Array<{ id: string; models?: Record<string, unknown>; source?: string; key?: string }> | undefined;
       const provider = providers?.find((p) => p.id === providerId) as any;
       if (!provider) {
         throw new Error(
@@ -411,13 +489,7 @@ export async function spawnWorker(
             `Update your OpenCode config/providers or override the profile model.`
         );
       }
-      // If the provider is "api" sourced, it's often present but missing credentials.
-      // We can't validate auth here, but we can warn early so users aren't surprised.
-      if (provider?.source === "api" && providerId !== "opencode") {
-        instance.warning =
-          `Provider "${providerId}" looks unconfigured (api provider). ` +
-          `If the worker doesn't respond, add credentials to your OpenCode config or set the profile to a configured provider/model.`;
-      }
+      // Only warn if model doesn't exist in provider's model catalog
       if (modelKey && provider.models && typeof provider.models === "object") {
         const modelMap = provider.models as Record<string, unknown>;
         const candidates = new Set([
@@ -428,9 +500,8 @@ export async function spawnWorker(
         ]);
         const found = [...candidates].some((k) => k in modelMap);
         if (!found) {
-          instance.warning =
-            `Model "${resolvedProfile.model}" not found in provider "${providerId}" models. ` +
-            `Worker may not respond until configured.`;
+          // Don't warn - model catalogs can be incomplete. If the model doesn't work,
+          // the worker will fail with a clear error message.
         }
       }
     }
@@ -479,6 +550,20 @@ export async function spawnWorker(
     }
 
     // Inject system context + reporting/messaging instructions.
+    // For workers with injectRepoContext: true (like docs), also inject repo context.
+    let repoContextSection = "";
+    if (resolvedProfile.injectRepoContext) {
+      const repoContext = await getRepoContextForWorker(options.directory).catch(() => undefined);
+      if (repoContext) {
+        repoContextSection = `\n\n${repoContext}\n`;
+      }
+    }
+
+    const capabilitiesJson = JSON.stringify({
+      vision: !!resolvedProfile.supportsVision,
+      web: !!resolvedProfile.supportsWeb,
+    });
+
     await client.session
       .prompt({
         path: { id: session.id },
@@ -491,14 +576,30 @@ export async function spawnWorker(
                 (resolvedProfile.systemPrompt
                   ? `<system-context>\n${resolvedProfile.systemPrompt}\n</system-context>\n\n`
                   : "") +
+                repoContextSection +
+                `<worker-identity>\n` +
+                `You are worker "${resolvedProfile.id}" (${resolvedProfile.name}).\n` +
+                `Your capabilities: ${capabilitiesJson}\n` +
+                `</worker-identity>\n\n` +
                 `<orchestrator-instructions>\n` +
-                `At the END of every task/turn, call the tool \`message_tool\` with kind="report".\n` +
-                `Include:\n` +
-                `- summary (1-3 bullets)\n` +
-                `- details (what you did, what you changed, commands run)\n` +
-                `- issues (any problems/uncertainties)\n` +
-                `The tool call should contain the full final report text in the \`text\` field.\n` +
-                `If you need to communicate with another worker, call \`message_tool\` with kind="message" and a \`to\` worker id.\n` +
+                `## Communication Tools Available\n\n` +
+                `You have these tools for communicating with the orchestrator and other workers:\n\n` +
+                `1. **message_tool** - Send reports or messages\n` +
+                `   - kind="report": Use at END of every task. Include summary, details, issues.\n` +
+                `   - kind="message": Send to another worker or the orchestrator. Set "to" field.\n\n` +
+                `2. **worker_inbox** - Check for messages from other workers or the orchestrator\n` +
+                `   - Call this if you need to check for incoming messages\n` +
+                `   - Use "after" param to get only new messages\n\n` +
+                `3. **wakeup_orchestrator** - CRITICAL for async jobs!\n` +
+                `   - Call this when you complete an async job (reason="result_ready")\n` +
+                `   - Call this if you need attention (reason="needs_attention")\n` +
+                `   - Call this on errors (reason="error")\n` +
+                `   - Include the jobId if one was provided\n\n` +
+                `## Required Behavior\n\n` +
+                `1. At the END of every task, call message_tool with kind="report"\n` +
+                `2. If you received a jobId in <orchestrator-job>, include it in your report AND call wakeup_orchestrator\n` +
+                `3. If you need to communicate with another worker, use message_tool with kind="message"\n` +
+                `4. Check worker_inbox if you're waiting for responses from other agents\n` +
                 `</orchestrator-instructions>`,
             },
           ],
@@ -526,6 +627,7 @@ export async function spawnWorker(
           return instance;
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : String(error);
+          console.error(`[spawner] ERROR spawning ${resolvedProfile.id}: ${errorMsg}`);
           try {
             await instance.shutdown?.();
           } catch {
@@ -664,6 +766,8 @@ export async function sendToWorker(
     attachments?: WorkerAttachment[];
     timeout?: number;
     jobId?: string;
+    /** Source worker ID (for worker-to-worker communication) */
+    from?: string;
   }
 ): Promise<{ success: boolean; response?: string; error?: string }> {
   const instance = registry.getWorker(workerId);
@@ -686,10 +790,18 @@ export async function sendToWorker(
 
   try {
     const startedAt = Date.now();
-    const taskText =
-      options?.jobId
-        ? `${message}\n\n<orchestrator-job id="${options.jobId}">Include this jobId when calling message_tool kind=\"report\".</orchestrator-job>`
-        : message;
+    
+    // Build source identification for the message
+    const sourceFrom = options?.from ?? "orchestrator";
+    const jobIdStr = options?.jobId ?? "none";
+    const sourceInfo = `<message-source from="${sourceFrom}" jobId="${jobIdStr}">\nThis message was sent by ${sourceFrom === "orchestrator" ? "the orchestrator" : `worker "${sourceFrom}"`}.\n</message-source>\n\n`;
+    
+    // Build the full task text with source info and job instructions
+    let taskText = sourceInfo + message;
+    if (options?.jobId) {
+      taskText += `\n\n<orchestrator-job id="${options.jobId}">IMPORTANT: When done, call wakeup_orchestrator with reason="result_ready" and this jobId, then call message_tool with kind="report".</orchestrator-job>`;
+    }
+    
     const parts = await buildPromptParts({ message: taskText, attachments: options?.attachments });
 
     const abort = new AbortController();

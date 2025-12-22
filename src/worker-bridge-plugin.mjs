@@ -86,13 +86,44 @@ export const WorkerBridgePlugin = async () => {
     },
   });
 
+  const wakeupTool = tool({
+    description: `Wake up the orchestrator to notify it that this worker needs attention or has results ready.
+Use this when:
+- You have completed an async task and want to notify the orchestrator
+- You need input or clarification from the orchestrator
+- You encountered an error that requires orchestrator attention
+- You want to report progress on a long-running task`,
+    args: {
+      reason: tool.schema
+        .enum(["result_ready", "needs_attention", "error", "progress", "custom"])
+        .describe("Why you're waking up the orchestrator"),
+      jobId: tool.schema.string().optional().describe("Optional job ID if this is related to an async job"),
+      summary: tool.schema.string().optional().describe("Brief summary of why you're waking up the orchestrator"),
+      data: tool.schema.object({}).optional().describe("Optional structured data to include"),
+    },
+    async execute(args) {
+      const { workerId } = getBridgeConfig();
+      if (!workerId) return "Missing OPENCODE_ORCH_WORKER_ID; cannot send wakeup.";
+
+      const res = await postJson("/v1/wakeup", {
+        workerId,
+        reason: args.reason,
+        jobId: args.jobId,
+        summary: args.summary,
+        data: args.data,
+      });
+
+      return `Wakeup sent to orchestrator (id: ${res.id ?? "unknown"}, timestamp: ${res.timestamp ?? Date.now()})`;
+    },
+  });
+
   return {
     tool: {
       message_tool: messageTool,
       worker_inbox: inboxTool,
+      wakeup_orchestrator: wakeupTool,
     },
   };
 };
 
 export default WorkerBridgePlugin;
-

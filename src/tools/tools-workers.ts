@@ -106,6 +106,7 @@ Available workers depend on what's been spawned. Common workers:
       .optional()
       .describe("Optional attachments array (preferred when called from OpenCode with attachments)"),
     timeoutMs: tool.schema.number().optional().describe("Timeout in ms for the worker response (default: 10 minutes)"),
+    from: tool.schema.string().optional().describe("Source worker ID (for worker-to-worker communication)"),
   },
   async execute(args) {
     const { workerId, message, imageBase64 } = args;
@@ -117,7 +118,11 @@ Available workers depend on what's been spawned. Common workers:
           ? [{ type: "image" as const, base64: imageBase64 }]
           : undefined;
 
-    const result = await sendToWorker(workerId, message, { attachments, timeout: args.timeoutMs ?? 600_000 });
+    const result = await sendToWorker(workerId, message, { 
+      attachments, 
+      timeout: args.timeoutMs ?? 600_000,
+      from: args.from,
+    });
 
     if (!result.success) {
       return `Error communicating with worker "${workerId}": ${result.error}`;
@@ -145,6 +150,7 @@ export const askWorkerAsync = tool({
       .optional()
       .describe("Optional attachments to forward (e.g., images for vision tasks)"),
     timeoutMs: tool.schema.number().optional().describe("Timeout in ms (default: 10 minutes)"),
+    from: tool.schema.string().optional().describe("Source worker ID (for worker-to-worker communication)"),
   },
   async execute(args) {
     const job = workerJobs.create({ workerId: args.workerId, message: args.message });
@@ -154,6 +160,7 @@ export const askWorkerAsync = tool({
         attachments: args.attachments,
         timeout: args.timeoutMs ?? 600_000,
         jobId: job.id,
+        from: args.from,
       });
       if (res.success && res.response) workerJobs.setResult(job.id, { responseText: res.response });
       else workerJobs.setError(job.id, { error: res.error ?? "unknown_error" });

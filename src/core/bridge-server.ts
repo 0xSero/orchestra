@@ -100,6 +100,53 @@ export async function startBridgeServer(): Promise<BridgeServer> {
       return writeJson(res, 200, { ok: true, messages: msgs });
     }
 
+    // Wakeup endpoint - allows workers to notify orchestrator they need attention
+    if (url.pathname === "/v1/wakeup") {
+      if (req.method !== "POST") return methodNotAllowed(res);
+      const body = (await readJson(req)) as {
+        workerId?: string;
+        jobId?: string;
+        reason?: "result_ready" | "needs_attention" | "error" | "progress" | "custom";
+        summary?: string;
+        data?: Record<string, unknown>;
+      };
+
+      if (!body.workerId) return writeJson(res, 400, { error: "missing_workerId" });
+      if (!body.reason) return writeJson(res, 400, { error: "missing_reason" });
+
+      // Update worker's last activity
+      const instance = registry.getWorker(body.workerId);
+      if (instance) {
+        instance.lastActivity = new Date();
+      }
+
+      // Emit wakeup event through the message bus
+      const event = messageBus.wakeup({
+        workerId: body.workerId,
+        jobId: body.jobId,
+        reason: body.reason,
+        summary: body.summary,
+        data: body.data,
+        timestamp: Date.now(),
+      });
+
+      return writeJson(res, 200, { ok: true, id: event.id, timestamp: event.timestamp });
+    }
+
+    // Get wakeup history endpoint
+    if (url.pathname === "/v1/wakeup/history") {
+      if (req.method !== "GET") return methodNotAllowed(res);
+      const workerId = url.searchParams.get("workerId") ?? undefined;
+      const after = Number(url.searchParams.get("after") ?? "0");
+      const limit = Number(url.searchParams.get("limit") ?? "50");
+      const events = messageBus.getWakeupHistory({
+        workerId,
+        after: Number.isFinite(after) ? after : undefined,
+        limit: Number.isFinite(limit) ? limit : 50,
+      });
+      return writeJson(res, 200, { ok: true, events });
+    }
+
     return writeJson(res, 404, { error: "not_found" });
   });
 

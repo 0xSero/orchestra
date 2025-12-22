@@ -18,7 +18,12 @@
         "systemContextMaxWorkers": { "type": "number", "default": 12 },
         "defaultListFormat": { "type": "string", "enum": ["markdown", "json"], "default": "markdown" },
         "debug": { "type": "boolean", "default": false },
-        "logToConsole": { "type": "boolean", "default": false }
+        "logToConsole": { "type": "boolean", "default": false },
+        "wakeupInjection": { 
+          "type": "boolean", 
+          "default": true,
+          "description": "When workers call wakeup_orchestrator(), inject a prompt into the orchestrator session to resume it. Enables true async worker wakeups."
+        }
       }
     },
     "notifications": {

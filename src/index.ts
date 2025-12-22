@@ -26,6 +26,7 @@ import { setLoggerConfig } from "./core/logger";
 import { loadWorkflows } from "./workflows";
 import { recordMessageMemory } from "./memory/auto";
 import { initTelemetry, flushTelemetry, trackSpawn } from "./core/telemetry";
+import { messageBus } from "./core/message-bus";
 
 export const OrchestratorPlugin: Plugin = async (ctx) => {
   // CRITICAL: Prevent recursive spawning - if this is a worker process, skip orchestrator initialization
@@ -88,6 +89,47 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
   registry.on("registered", onWorkerUpdate);
   registry.on("updated", onWorkerUpdate);
   registry.on("unregistered", onWorkerRemove);
+
+  // Track the current orchestrator session for wakeup injection
+  let currentOrchestratorSessionId: string | undefined;
+  let lastWakeupInjection = 0;
+  const WAKEUP_INJECTION_COOLDOWN_MS = 2000; // Prevent rapid-fire injections
+
+  // Listen for wakeup events from workers and optionally inject prompt to resume orchestrator
+  const unsubscribeWakeup = messageBus.onWakeup(async (event) => {
+    const reasonLabels: Record<string, { message: string; variant: "success" | "info" | "warning" | "error" }> = {
+      result_ready: { message: `Worker "${event.workerId}" completed: ${event.summary ?? "results ready"}`, variant: "success" },
+      needs_attention: { message: `Worker "${event.workerId}" needs attention: ${event.summary ?? "check orchestrator_wakeups"}`, variant: "warning" },
+      error: { message: `Worker "${event.workerId}" error: ${event.summary ?? "check orchestrator_wakeups"}`, variant: "error" },
+      progress: { message: `Worker "${event.workerId}": ${event.summary ?? "progress update"}`, variant: "info" },
+      custom: { message: `Worker "${event.workerId}": ${event.summary ?? "notification"}`, variant: "info" },
+    };
+    const info = reasonLabels[event.reason] ?? { message: `Worker "${event.workerId}" wakeup`, variant: "info" as const };
+    void showToast(info.message, info.variant);
+
+    // Inject a prompt into the orchestrator session to wake it up
+    // Only do this for actionable wakeups (result_ready, needs_attention, error) and if we have a session
+    const shouldInject = 
+      config.ui?.wakeupInjection !== false &&
+      currentOrchestratorSessionId &&
+      (event.reason === "result_ready" || event.reason === "needs_attention" || event.reason === "error") &&
+      Date.now() - lastWakeupInjection > WAKEUP_INJECTION_COOLDOWN_MS;
+
+    if (shouldInject) {
+      lastWakeupInjection = Date.now();
+      const wakeupMessage = `[WORKER WAKEUP] Worker "${event.workerId}" signaled: ${event.reason}${event.summary ? ` - ${event.summary}` : ""}${event.jobId ? ` (jobId: ${event.jobId})` : ""}. Check orchestrator_wakeups() or await_worker_job() for details.`;
+      
+      try {
+        await (ctx.client.session as any).promptAsync({
+          sessionID: currentOrchestratorSessionId,
+          directory: ctx.directory,
+          parts: [{ type: "text", text: wakeupMessage }],
+        });
+      } catch {
+        // Silently ignore injection failures (session may have ended, etc.)
+      }
+    }
+  });
 
   const configMsg = sources.project
     ? `Orchestrator loaded (project config)`
@@ -273,7 +315,11 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
     },
     "experimental.chat.messages.transform": pruneTransform,
     "chat.message": async (input, _output) => {
-      if (input.agent === orchestratorAgentName) orchestratorSessionIds.add(input.sessionID);
+      if (input.agent === orchestratorAgentName) {
+        orchestratorSessionIds.add(input.sessionID);
+        // Track the most recent orchestrator session for wakeup injection
+        currentOrchestratorSessionId = input.sessionID;
+      }
 
       if (config.memory?.enabled !== false && config.memory?.autoRecord !== false) {
         const extractText = (msg: any): string => {
@@ -308,6 +354,7 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
         registry.off("registered", onWorkerUpdate);
         registry.off("updated", onWorkerUpdate);
         registry.off("unregistered", onWorkerRemove);
+        unsubscribeWakeup(); // Clean up wakeup listener
         await shutdownAllWorkers().catch(() => {});
         await flushTelemetry().catch(() => {});
       }

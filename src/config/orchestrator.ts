@@ -94,6 +94,7 @@ function parseOrchestratorConfigFile(raw: unknown): Partial<OrchestratorConfigFi
     if (typeof raw.ui.debug === "boolean") ui.debug = raw.ui.debug;
     if (typeof raw.ui.logToConsole === "boolean") ui.logToConsole = raw.ui.logToConsole;
     if (typeof raw.ui.firstRunDemo === "boolean") ui.firstRunDemo = raw.ui.firstRunDemo;
+    if (typeof raw.ui.wakeupInjection === "boolean") ui.wakeupInjection = raw.ui.wakeupInjection;
     partial.ui = ui as OrchestratorConfig["ui"];
   }
 

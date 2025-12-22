@@ -43,6 +43,7 @@ export {
 } from "./tools-profiles";
 export { memoryLink, memoryPut, memoryRecentTool, memorySearchTool } from "./tools-memory";
 export {
+  clearWakeups,
   enableDocsPassthrough,
   macosKeybindsFix,
   orchestratorDashboard,
@@ -53,6 +54,7 @@ export {
   orchestratorResults,
   orchestratorStart,
   orchestratorTodoView,
+  orchestratorWakeups,
 } from "./tools-ux";
 export { orchestratorDiagnostics } from "./tools-diagnostics";
 export { listWorkflowsTool, runWorkflowTool } from "./tools-workflows";
@@ -84,6 +86,7 @@ import {
 } from "./tools-profiles";
 import { memoryLink, memoryPut, memoryRecentTool, memorySearchTool } from "./tools-memory";
 import {
+  clearWakeups,
   enableDocsPassthrough,
   macosKeybindsFix,
   orchestratorDashboard,
@@ -94,6 +97,7 @@ import {
   orchestratorResults,
   orchestratorStart,
   orchestratorTodoView,
+  orchestratorWakeups,
 } from "./tools-ux";
 import { orchestratorDiagnostics } from "./tools-diagnostics";
 import { listWorkflowsTool, runWorkflowTool } from "./tools-workflows";
@@ -123,6 +127,7 @@ export const coreOrchestratorTools = {
   // Observability (useful for orchestration + debugging)
   orchestrator_results: orchestratorResults,
   orchestrator_messages: orchestratorMessages,
+  orchestrator_wakeups: orchestratorWakeups,
   orchestrator_device_registry: orchestratorDeviceRegistry,
   orchestrator_diagnostics: orchestratorDiagnostics,
 };
@@ -159,6 +164,10 @@ export const pluginTools = {
   ensure_workers: ensureWorkers,
   find_worker: findWorker,
   autofill_profile_models: autofillProfileModels,
+  
+  // Wakeup tools
+  orchestrator_wakeups: orchestratorWakeups,
+  clear_wakeups: clearWakeups,
 };
 
 export const orchestratorTools = {

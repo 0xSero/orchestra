@@ -31,6 +31,8 @@ export interface WorkerProfile {
   temperature?: number;
   /** Optional keywords/tags to improve matching */
   tags?: string[];
+  /** Whether to inject repo context on auto-launch (for docs worker) */
+  injectRepoContext?: boolean;
 }
 
 export interface WorkerInstance {
@@ -160,6 +162,13 @@ export interface OrchestratorConfig {
      * - false: only show a toast tip
      */
     firstRunDemo?: boolean;
+    /**
+     * Inject a prompt into the orchestrator session when workers send wakeups.
+     * This allows async workers to actually "wake up" the orchestrator instead of
+     * just storing events to poll.
+     * Default: true
+     */
+    wakeupInjection?: boolean;
   };
   /** Optional idle notifications */
   notifications?: {
@@ -251,6 +260,22 @@ export interface WorkerResponse {
   duration?: number;
 }
 
+/** Payload sent by workers to wake up the orchestrator */
+export interface WakeupPayload {
+  /** Worker ID that triggered the wakeup */
+  workerId: string;
+  /** Optional job ID if related to an async job */
+  jobId?: string;
+  /** Reason for the wakeup */
+  reason: "result_ready" | "needs_attention" | "error" | "progress" | "custom";
+  /** Optional summary or message */
+  summary?: string;
+  /** Optional structured data */
+  data?: Record<string, unknown>;
+  /** Timestamp when the wakeup was triggered */
+  timestamp: number;
+}
+
 export interface OrchestratorEvents {
   "worker:spawned": { worker: WorkerInstance };
   "worker:ready": { worker: WorkerInstance };
@@ -258,5 +283,6 @@ export interface OrchestratorEvents {
   "worker:error": { worker: WorkerInstance; error: string };
   "worker:stopped": { worker: WorkerInstance };
   "worker:response": { worker: WorkerInstance; response: WorkerResponse };
+  "worker:wakeup": { payload: WakeupPayload };
   "registry:updated": { registry: Registry };
 }

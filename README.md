@@ -45,6 +45,49 @@
 
 **Open Orchestra** is a multi-agent orchestration plugin for [OpenCode](https://opencode.ai) that enables you to spawn, manage, and coordinate specialized AI workers. It implements a **hub-and-spoke architecture** where a central orchestrator coordinates multiple specialized workers, each optimized for specific tasks.
 
+### Why Multiple AI Workers?
+
+Instead of asking one AI to do everything, Open Orchestra lets you use specialized workers:
+
+| Worker | Best For | Example |
+|--------|----------|---------|
+| **Vision** | Analyzing screenshots, images, UI mockups | "What error is shown in this screenshot?" |
+| **Docs** | Researching APIs, finding examples | "How do I use React's useEffect hook?" |
+| **Coder** | Writing and modifying code | "Implement this feature" |
+| **Architect** | System design, planning (read-only) | "Review this architecture" |
+
+This specialization means better results, clearer reasoning, and the ability to run tasks in parallel.
+
+## Prerequisites
+
+Before installing Open Orchestra, verify you have:
+
+| Requirement | Check Command | Expected |
+|-------------|---------------|----------|
+| Bun runtime | `bun --version` | 1.0.0 or higher |
+| OpenCode CLI | `opencode --version` | Any recent version |
+| AI Provider | `list_models` (in OpenCode) | At least one model listed |
+
+**Quick verification:**
+
+```bash
+bun --version && opencode --version
+```
+
+**Need to configure a provider?** Add to `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "provider": {
+    "anthropic": {
+      "apiKey": "sk-ant-your-key-here"
+    }
+  }
+}
+```
+
+See the [Quickstart Guide](./docs/quickstart.md) for detailed setup instructions.
+
 ### Key Features
 
 - **6 Built-in Worker Profiles** - Vision, Docs, Coder, Architect, Explorer, Memory
@@ -209,8 +252,17 @@ stateDiagram-v2
 
 ## Documentation
 
-- [Guide](./docs/guide.md) - Configuration, profiles, and examples
-- [Tool Reference](./docs/reference.md) - Tool index and descriptions
+### Getting Started
+- [Quickstart](./docs/quickstart.md) - Your first worker in 5 minutes
+- [Examples](./docs/examples.md) - Real-world use cases and workflows
+- [Troubleshooting](./docs/troubleshooting.md) - Common issues and fixes
+
+### Reference
+- [Configuration](./docs/configuration.md) - Complete configuration reference
+- [Guide](./docs/guide.md) - Profiles, workflows, and advanced features
+- [Tool Reference](./docs/reference.md) - All tools with examples
+
+### Deep Dive
 - [Architecture](./docs/architecture.md) - System design and patterns
 - [CHANGELOG](./CHANGELOG.md) - Version history and changes
 

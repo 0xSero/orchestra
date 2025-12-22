@@ -51,7 +51,8 @@ export async function listOpencodeServeProcesses(): Promise<ProcessInfo[]> {
     const rssKb = Number(parts[1]);
     const args = parts.slice(2).join(" ");
     if (!Number.isFinite(pid) || pid <= 0) continue;
-    if (!args.includes("opencode") || !args.includes("serve")) continue;
+    // Match "opencode serve" but not tsserver or other node processes that happen to have similar strings
+    if (!args.includes("opencode serve --hostname")) continue;
     out.push({
       pid,
       rssBytes: Number.isFinite(rssKb) ? rssKb * 1024 : undefined,

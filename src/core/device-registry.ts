@@ -8,6 +8,8 @@ import { isProcessAlive } from "../helpers/process";
 export type DeviceRegistryWorkerEntry = {
   kind: "worker";
   orchestratorInstanceId: string;
+  /** PID of the orchestrator process that spawned this worker (for orphan cleanup) */
+  hostPid?: number;
   workerId: string;
   pid: number;
   url?: string;

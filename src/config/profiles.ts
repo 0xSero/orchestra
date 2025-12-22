@@ -36,6 +36,7 @@ Be precise and detailed in your descriptions. Focus on what's relevant to the qu
     whenToUse:
       "When you need to look up official documentation, find code examples, understand library APIs, or research best practices",
     supportsWeb: true,
+    injectRepoContext: true, // Docs worker gets repo context on auto-launch
     tools: {
       write: false,
       edit: false,

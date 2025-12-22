@@ -484,3 +484,75 @@ export const macosKeybindsFix = tool({
     return `Saved macOS keybind fix in ${cfgPath}`;
   },
 });
+
+export const orchestratorWakeups = tool({
+  description: `List recent wakeup events from workers. Workers can call wakeup_orchestrator to notify you when they:
+- Have completed an async task (result_ready)
+- Need input or clarification (needs_attention)  
+- Encountered an error (error)
+- Want to report progress (progress)`,
+  args: {
+    workerId: tool.schema.string().optional().describe("Filter by worker ID"),
+    limit: tool.schema.number().optional().describe("Max events to return (default: 20)"),
+    after: tool.schema.number().optional().describe("Only events after this unix-ms timestamp"),
+    format: tool.schema.enum(["markdown", "json"]).optional().describe("Output format (default: markdown)"),
+    clear: tool.schema.boolean().optional().describe("Clear wakeup history after reading (default: false)"),
+  },
+  async execute(args) {
+    const events = messageBus.getWakeupHistory({
+      workerId: args.workerId,
+      limit: args.limit ?? 20,
+      after: args.after,
+    });
+
+    if (args.clear) {
+      messageBus.clearWakeupHistory(args.workerId);
+    }
+
+    const format: "markdown" | "json" = args.format ?? getDefaultListFormat();
+    if (format === "json") return JSON.stringify(events, null, 2);
+
+    if (events.length === 0) {
+      return args.workerId
+        ? `No wakeup events from worker "${args.workerId}".`
+        : "No wakeup events. Workers can call `wakeup_orchestrator` to notify you.";
+    }
+
+    const reasonEmoji: Record<string, string> = {
+      result_ready: "✅",
+      needs_attention: "👋",
+      error: "❌",
+      progress: "⏳",
+      custom: "📌",
+    };
+
+    const rows = events.map((e) => [
+      new Date(e.timestamp).toISOString(),
+      e.workerId,
+      `${reasonEmoji[e.reason] ?? "?"} ${e.reason}`,
+      e.jobId ?? "",
+      e.summary?.slice(0, 80) ?? "",
+    ]);
+
+    return [
+      "# Worker Wakeups",
+      "",
+      renderMarkdownTable(["Time", "Worker", "Reason", "Job", "Summary"], rows),
+      "",
+      args.clear ? "(History cleared)" : "Tip: Use `clear: true` to clear history after reading.",
+    ].join("\n");
+  },
+});
+
+export const clearWakeups = tool({
+  description: "Clear wakeup history, optionally for a specific worker.",
+  args: {
+    workerId: tool.schema.string().optional().describe("Clear only for this worker ID (default: all)"),
+  },
+  async execute(args) {
+    const count = messageBus.clearWakeupHistory(args.workerId);
+    return args.workerId
+      ? `Cleared ${count} wakeup event(s) for worker "${args.workerId}".`
+      : `Cleared ${count} wakeup event(s).`;
+  },
+});
