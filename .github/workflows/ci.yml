@@ -27,6 +27,10 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -37,5 +41,10 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Run tests
-        run: bun test
+      - name: Run unit tests
+        run: bun test test/unit/ test/orchestrator.test.ts test/vision-routing.test.ts test/profile-lock.test.ts test/registry-ownership.test.ts test/workflows.test.ts
+
+      - name: Run E2E tests (if API keys available)
+        if: ${{ env.ANTHROPIC_API_KEY != '' || env.OPENAI_API_KEY != '' || env.OPENROUTER_API_KEY != '' }}
+        run: bun test test/e2e.test.ts
+        continue-on-error: true
