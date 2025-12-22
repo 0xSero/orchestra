@@ -32,8 +32,20 @@ export async function hydrateProfileModelsFromOpencode(input: {
   ]);
 
   const providersAll = providersRes.providers;
+  // For auto-selection (node:vision, node:fast, etc.), prefer configured providers.
+  // But allow ALL providers for explicit model references since the user chose them.
   const providersUsable = providersAll.filter((p) => p.id === "opencode" || p.source !== "api");
   const catalog = flattenProviders(providersUsable);
+
+  // Collect provider IDs explicitly referenced in profile models (user intent = use them)
+  const explicitlyReferencedProviders = new Set<string>();
+  for (const profile of Object.values(input.profiles)) {
+    const model = profile.model.trim();
+    if (model.includes("/") && !model.startsWith("auto") && !model.startsWith("node")) {
+      const providerID = model.split("/")[0];
+      explicitlyReferencedProviders.add(providerID);
+    }
+  }
 
   const fallbackCandidate =
     cfg?.model ||
@@ -87,6 +99,7 @@ export async function hydrateProfileModelsFromOpencode(input: {
       desired = resolved.model;
       reason = resolved.reason;
     } else {
+      // User explicitly specified a model - trust their choice and use ALL providers
       const resolved = resolveModelRef(profile.model, providersAll);
       if ("error" in resolved) {
         const suffix = resolved.suggestions?.length ? `\nSuggestions:\n- ${resolved.suggestions.join("\n- ")}` : "";

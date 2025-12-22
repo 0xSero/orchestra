@@ -18,6 +18,7 @@ import type { WorkerInstance } from "./types";
 import type { Config } from "@opencode-ai/sdk";
 import { createIdleNotifier } from "./ux/idle-notification";
 import { createPruningTransform } from "./ux/pruning";
+import { hasImages, analyzeImages } from "./ux/vision-router";
 
 import { resolveModelRef } from "./models/catalog";
 import { ensureRuntime, shutdownAllWorkers } from "./core/runtime";
@@ -314,11 +315,82 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
       output.system.push(registry.getSummary({ maxWorkers: config.ui?.systemContextMaxWorkers ?? 12 }));
     },
     "experimental.chat.messages.transform": pruneTransform,
-    "chat.message": async (input, _output) => {
+    "chat.message": async (input, output) => {
       if (input.agent === orchestratorAgentName) {
         orchestratorSessionIds.add(input.sessionID);
         // Track the most recent orchestrator session for wakeup injection
         currentOrchestratorSessionId = input.sessionID;
+      }
+
+      // Vision auto-routing: if message has images, send to vision worker
+      const originalParts = Array.isArray(output.parts) ? output.parts : [];
+      const containsImages = hasImages(originalParts);
+
+      if (containsImages) {
+        const agentProfile = (config.profiles as any)?.[input.agent as any] as any | undefined;
+        const agentSupportsVision = Boolean(agentProfile?.supportsVision) || input.agent === "vision";
+
+        // Prevent non-vision models from receiving image parts (some providers error on any image input).
+        if (!agentSupportsVision && Array.isArray(output.parts)) {
+          const withoutImages = output.parts.filter((p: any) => {
+            if (!p || typeof p !== "object") return true;
+            if (p.type === "image") return false;
+            if (p.type === "file" && typeof p.mime === "string" && p.mime.startsWith("image/")) return false;
+            if (typeof p.url === "string" && (p.url.startsWith("data:image/") || p.url === "clipboard" || p.url.startsWith("clipboard:")))
+              return false;
+            return true;
+          });
+          if (withoutImages.length !== output.parts.length) {
+            const hint = "\n\n[Image attachment routed to vision worker; vision analysis will follow.]\n";
+            let appended = false;
+            for (let i = withoutImages.length - 1; i >= 0; i--) {
+              const p: any = withoutImages[i];
+              if (p?.type === "text" && typeof p.text === "string") {
+                p.text += hint;
+                appended = true;
+                break;
+              }
+            }
+
+            if (!appended) {
+              withoutImages.push({
+                type: "text",
+                text: hint.trim(),
+                id: `${String((input as any).messageID ?? "msg")}-vision-hint`,
+                sessionID: String(input.sessionID),
+                messageID: String((input as any).messageID ?? ""),
+              } as any);
+            }
+            output.parts = withoutImages;
+          }
+        }
+
+        void (async () => {
+          const result = await analyzeImages(originalParts, {
+            spawnIfNeeded: true,
+            directory: ctx.directory,
+            client: ctx.client,
+            basePort: config.basePort,
+            timeout: 60000,
+            profiles: config.profiles,
+            showToast,
+          });
+          
+          if (result.success && result.analysis) {
+            // Inject analysis back into conversation
+            try {
+              await (ctx.client.session as any).promptAsync({
+                sessionID: input.sessionID,
+                directory: ctx.directory,
+                parts: [{ type: "text", text: `[VISION ANALYSIS]\n${result.analysis}` }],
+              });
+            } catch {
+              // Ignore injection errors
+            }
+          } else if (!result.success && result.error && result.error !== "Vision worker is already processing an image") {
+            void showToast(`Vision analysis failed: ${result.error}`, "warning");
+          }
+        })();
       }
 
       if (config.memory?.enabled !== false && config.memory?.autoRecord !== false) {

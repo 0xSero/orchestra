@@ -9,7 +9,7 @@ export interface WorkerProfile {
   id: string;
   /** Human-readable name */
   name: string;
-  /** Model to use (e.g., "zhipuai/glm-4.6v", "anthropic/claude-sonnet-4") */
+  /** Model to use (e.g., "openrouter/meta-llama/llama-3.2-11b-vision-instruct", "anthropic/claude-sonnet-4") */
   model: string;
   /** Provider ID */
   providerID?: string;

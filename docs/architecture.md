@@ -451,7 +451,7 @@ When enabled, the registry summary is injected into the chat system prompt:
 
 ### Vision Analyst (vision)
 - **Status**: available
-- **Model**: zhipuai/glm-4.6v
+- **Model**: openrouter/meta-llama/llama-3.2-11b-vision-instruct
 - **Purpose**: Analyze images, screenshots, diagrams
 - **When to use**: When you need to understand visual content
 - **Supports Vision**: Yes

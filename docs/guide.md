@@ -84,7 +84,7 @@ Custom profiles mixed with built-ins:
     {
       "id": "vision",
       "name": "Vision Analyst",
-      "model": "zhipuai/glm-4.6v",
+      "model": "openrouter/meta-llama/llama-3.2-11b-vision-instruct",
       "purpose": "Analyze images, screenshots, diagrams, and visual content",
       "whenToUse": "When you need to understand visual content",
       "supportsVision": true

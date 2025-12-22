@@ -12,7 +12,7 @@ export const builtInProfiles: Record<string, WorkerProfile> = {
   vision: {
     id: "vision",
     name: "Vision Analyst",
-    model: "node:vision", // resolved from user's available OpenCode models
+    model: "openrouter/meta-llama/llama-3.2-11b-vision-instruct", // Llama 3.2 11B Vision - available vision model
     purpose: "Analyze images, screenshots, diagrams, and visual content",
     whenToUse:
       "When you need to understand visual content like screenshots, architecture diagrams, UI mockups, error screenshots, or any image-based information",
