@@ -10,6 +10,41 @@ export type OrchestratorRuntime = {
 
 let runtime: OrchestratorRuntime | undefined;
 let cleanupInstalled = false;
+let shutdownPromise: Promise<void> | undefined;
+let shutdownRequested = false;
+
+const SHUTDOWN_TIMEOUT_MS = 6000;
+
+async function runShutdown(_reason: string): Promise<void> {
+  if (shutdownPromise) return shutdownPromise;
+  shutdownRequested = true;
+  shutdownPromise = (async () => {
+    const workers = [...registry.workers.values()];
+    const finished = await Promise.race([
+      shutdownAllWorkers().then(() => true),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), SHUTDOWN_TIMEOUT_MS)),
+    ]);
+
+    if (!finished) {
+      for (const worker of workers) {
+        if (worker.shutdown && typeof worker.pid === "number") {
+          try {
+            process.kill(worker.pid, "SIGKILL");
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }
+
+    try {
+      await runtime?.bridge.close();
+    } catch {
+      // ignore
+    }
+  })();
+  return shutdownPromise;
+}
 
 export function getOrchestratorInstanceId(): string {
   return runtime?.instanceId ?? "uninitialized";
@@ -26,18 +61,21 @@ export async function ensureRuntime(): Promise<OrchestratorRuntime> {
 
   if (!cleanupInstalled) {
     cleanupInstalled = true;
-    const shutdown = () => {
-      void shutdownAllWorkers().catch(() => {});
+    const handleSignal = (signal: string, code: number) => {
+      if (shutdownRequested) {
+        process.exit(code);
+        return;
+      }
+      void (async () => {
+        await runShutdown(signal);
+        process.exit(code);
+      })();
     };
-    process.once("exit", shutdown);
-    process.once("SIGINT", () => {
-      shutdown();
-      process.exit(130);
+    process.once("beforeExit", () => {
+      void runShutdown("beforeExit");
     });
-    process.once("SIGTERM", () => {
-      shutdown();
-      process.exit(143);
-    });
+    process.once("SIGINT", () => handleSignal("SIGINT", 130));
+    process.once("SIGTERM", () => handleSignal("SIGTERM", 143));
   }
 
   return runtime;
