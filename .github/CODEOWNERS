@@ -1,0 +1,5 @@
+# Default owners for everything in the repo
+* @0xSero
+
+# Release branches require owner approval
+/release/ @0xSero
