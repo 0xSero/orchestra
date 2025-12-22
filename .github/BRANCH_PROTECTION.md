@@ -76,7 +76,7 @@ Go to **Settings → Branches → Add branch protection rule** for each branch p
 
 ## Workflow Summary
 
-```
+```text
 feature/* ──────┐
                 ├──► release/vX.X.X ──► main (tag vX.X.X)
 fix/*     ──────┘

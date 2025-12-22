@@ -74,13 +74,13 @@ Optionally, create a project-specific orchestrator config:
 
 Start OpenCode and run:
 
-```
+```javascript
 list_profiles
 ```
 
 **Expected output:**
 
-```
+```text
 Available Profiles:
 - vision: Vision Analyst - Analyze images, screenshots, diagrams
 - docs: Documentation Librarian - Research documentation, find examples
@@ -98,13 +98,13 @@ If you see this list, the plugin is working.
 
 Let's spawn a documentation research worker:
 
-```
+```javascript
 spawn_worker({ profileId: "docs" })
 ```
 
 **Expected output:**
 
-```
+```text
 Worker 'docs' spawned successfully
 - Port: 14097
 - Model: anthropic/claude-sonnet-4-5 (or your default)
@@ -117,7 +117,7 @@ Worker 'docs' spawned successfully
 
 Send a message to the docs worker:
 
-```
+```javascript
 ask_worker({ 
   workerId: "docs", 
   message: "What is the React useEffect hook and when should I use it?" 
@@ -138,7 +138,7 @@ The worker will respond with a detailed explanation of React's useEffect hook, i
 
 Instead of manually choosing a worker, let the orchestrator pick the best one:
 
-```
+```javascript
 delegate_task({ 
   task: "Explain the difference between var, let, and const in JavaScript" 
 })
@@ -165,14 +165,14 @@ You've successfully:
 
 ### Try Different Workers
 
-```
-# Spawn a vision worker for image analysis
+```javascript
+// Spawn a vision worker for image analysis
 spawn_worker({ profileId: "vision" })
 
-# Spawn an architect for system design
+// Spawn an architect for system design
 spawn_worker({ profileId: "architect" })
 
-# See all running workers
+// See all running workers
 list_workers
 ```
 
@@ -192,7 +192,7 @@ Have workers start automatically when OpenCode loads:
 
 Run the built-in RooCode Boomerang workflow for plan-implement-review cycles:
 
-```
+```javascript
 run_workflow({ 
   workflowId: "roocode-boomerang", 
   task: "Add input validation to the user registration form" 
@@ -223,7 +223,7 @@ You need to configure at least one AI provider. See [Configuration](./configurat
 ### "Worker failed to spawn"
 
 Check that your provider credentials are valid:
-```
+```javascript
 list_models
 ```
 
@@ -232,7 +232,7 @@ If no models appear, your provider isn't configured correctly.
 ### "Connection timeout"
 
 The worker may have crashed. Try:
-```
+```javascript
 stop_worker({ workerId: "docs" })
 spawn_worker({ profileId: "docs" })
 ```

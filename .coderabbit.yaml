@@ -23,7 +23,8 @@ reviews:
   request_changes_workflow: true
   # Tools to use for static analysis
   tools:
-    biome: true
+    biome:
+      enabled: true
     eslint:
       enabled: true
     shellcheck:

@@ -334,7 +334,7 @@ Add to `.opencode/orchestrator.json`:
 
 ### Step 2: Use the Custom Worker
 
-```
+```javascript
 spawn_worker({ profileId: "ethers-expert" })
 
 ask_worker({ 
