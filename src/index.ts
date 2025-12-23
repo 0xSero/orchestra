@@ -1,6 +1,6 @@
 import type { Plugin } from "@opencode-ai/plugin";
 import { loadOrchestratorConfig } from "./config/orchestrator";
-import { registry } from "./core/registry";
+import { workerPool, removeSessionEntry, upsertSessionEntry } from "./core/worker-pool";
 import {
   coreOrchestratorTools,
   setClient,
@@ -22,12 +22,10 @@ import { hasImages, analyzeImages, formatVisionAnalysis, replaceImagesWithAnalys
 
 import { resolveModelRef } from "./models/catalog";
 import { ensureRuntime, shutdownAllWorkers } from "./core/runtime";
-import { removeSessionEntry, upsertSessionEntry } from "./core/device-registry";
 import { setLoggerConfig } from "./core/logger";
 import { loadWorkflows } from "./workflows";
 import { recordMessageMemory } from "./memory/auto";
 import { initTelemetry, flushTelemetry, trackSpawn } from "./core/telemetry";
-import { messageBus } from "./core/message-bus";
 import { orchestratorPrompt } from "../prompts/orchestrator";
 import { workerJobs } from "./core/jobs";
 import { buildPassthroughSystemPrompt, clearPassthrough, getPassthrough, isPassthroughExitMessage } from "./core/passthrough";
@@ -39,7 +37,7 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
     return {}; // Return empty plugin - workers don't need orchestrator capabilities
   }
 
-  const { config, sources } = await loadOrchestratorConfig({
+  const { config } = await loadOrchestratorConfig({
     directory: ctx.directory,
     worktree: ctx.worktree || undefined,
   });
@@ -84,12 +82,12 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
     lastStatus.set(id, status);
 
     if (status === "ready") {
-      // Only toast when a worker comes online, not after every request.
+      // Track but don't toast individual workers - we toast once at the end
       if (prev === "starting") {
-        void showToast(`Worker "${instance.profile.name}" ready`, "success");
         trackSpawn(id, "ready", { model: instance.profile.model });
       }
     } else if (status === "error") {
+      // Only toast errors - these are important
       void showToast(`Worker "${instance.profile.name}" error: ${instance.error ?? "unknown"}`, "error");
       trackSpawn(id, "error", { error: instance.error });
     }
@@ -97,87 +95,26 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
   const onWorkerRemove = (instance: WorkerInstance) => {
     lastStatus.delete(instance.profile.id);
   };
-  registry.on("registered", onWorkerUpdate);
-  registry.on("updated", onWorkerUpdate);
-  registry.on("unregistered", onWorkerRemove);
+  workerPool.on("update", onWorkerUpdate);
+  workerPool.on("spawn", onWorkerUpdate);
+  workerPool.on("stop", onWorkerRemove);
 
-  // Track the current orchestrator session for wakeup injection
-  let currentOrchestratorSessionId: string | undefined;
-  const lastWakeupInjectionBySession = new Map<string, number>();
-  const WAKEUP_INJECTION_COOLDOWN_MS = 2000; // Prevent rapid-fire injections
-
-  const resolveWakeupTargetSessionId = (event: any): string | undefined => {
-    const dataSessionId = (event?.data as any)?.sessionId;
-    if (typeof dataSessionId === "string" && dataSessionId) return dataSessionId;
-    if (event?.jobId) {
-      const job = workerJobs.get(String(event.jobId));
-      if (job?.sessionId) return job.sessionId;
+  const injectOrchestratorNotice = async (sessionId: string | undefined, text: string): Promise<void> => {
+    if (!sessionId || config.ui?.wakeupInjection === false) return;
+    try {
+      await ctx.client.session.prompt({
+        path: { id: sessionId },
+        body: { noReply: true, parts: [{ type: "text", text }] as any },
+        query: { directory: ctx.directory },
+      } as any);
+    } catch {
+      // Ignore injection failures (session may have ended, etc.)
     }
-    return currentOrchestratorSessionId;
   };
 
-  // Listen for wakeup events from workers and optionally inject prompt to resume orchestrator
-  const unsubscribeWakeup = messageBus.onWakeup(async (event) => {
-    const reasonLabels: Record<string, { message: string; variant: "success" | "info" | "warning" | "error" }> = {
-      result_ready: { message: `Worker "${event.workerId}" completed: ${event.summary ?? "results ready"}`, variant: "success" },
-      needs_attention: { message: `Worker "${event.workerId}" needs attention: ${event.summary ?? "check orchestrator_wakeups"}`, variant: "warning" },
-      error: { message: `Worker "${event.workerId}" error: ${event.summary ?? "check orchestrator_wakeups"}`, variant: "error" },
-      progress: { message: `Worker "${event.workerId}": ${event.summary ?? "progress update"}`, variant: "info" },
-      custom: { message: `Worker "${event.workerId}": ${event.summary ?? "notification"}`, variant: "info" },
-    };
-    const info = reasonLabels[event.reason] ?? { message: `Worker "${event.workerId}" wakeup`, variant: "info" as const };
-    void showToast(info.message, info.variant);
-
-    const targetSessionId = resolveWakeupTargetSessionId(event);
-
-    // Inject a prompt into the orchestrator session to wake it up
-    // Only do this for actionable wakeups (result_ready, needs_attention, error) and if we have a session
-    const shouldInject = 
-      config.ui?.wakeupInjection !== false &&
-      targetSessionId &&
-      (event.reason === "result_ready" || event.reason === "needs_attention" || event.reason === "error") &&
-      Date.now() - (lastWakeupInjectionBySession.get(targetSessionId) ?? 0) > WAKEUP_INJECTION_COOLDOWN_MS;
-
-    if (shouldInject) {
-      lastWakeupInjectionBySession.set(targetSessionId, Date.now());
-
-      const hint =
-        event.reason === "needs_attention" && (event.data as any)?.kind === "message"
-          ? `Check orchestrator_messages({ to: "orchestrator" }) for details.`
-          : `Check orchestrator_wakeups()${event.jobId ? " or await_worker_job()" : ""} for details.`;
-
-      const wakeupMessage =
-        `<orchestrator-internal kind="wakeup" workerId="${event.workerId}" reason="${event.reason}"${event.jobId ? ` jobId="${event.jobId}"` : ""}>\n` +
-        `[WORKER WAKEUP] Worker "${event.workerId}" signaled: ${event.reason}${event.summary ? ` - ${event.summary}` : ""}${event.jobId ? ` (jobId: ${event.jobId})` : ""}.\n` +
-        `${hint}\n` +
-        `</orchestrator-internal>`;
-      
-      try {
-        await (ctx.client.session as any).promptAsync({
-          sessionID: targetSessionId,
-          directory: ctx.directory,
-          parts: [{ type: "text", text: wakeupMessage }],
-        });
-      } catch {
-        // Silently ignore injection failures (session may have ended, etc.)
-      }
-    }
-  });
-
-  const configMsg = sources.project
-    ? `Orchestrator loaded (project config)`
-    : sources.global
-      ? `Orchestrator loaded (global config)`
-      : `Orchestrator loaded (defaults)`;
-  void showToast(configMsg, "success");
-
-  if (!sources.global && !sources.project) {
-    void showToast("Tip: open commands and run `orchestrator.spawn.coder` (or any profile)", "info");
-  }
-
+  // Auto-spawn workers if configured - single toast at the end
   if (config.autoSpawn && config.spawn.length > 0) {
     void (async () => {
-      void showToast(`Spawning ${config.spawn.length} worker(s)…`, "info");
       const profilesToSpawn = config.spawn.map((id) => config.profiles[id]).filter(Boolean);
       const { succeeded, failed } = await spawnWorkers(profilesToSpawn, {
         basePort: config.basePort,
@@ -233,7 +170,6 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
     }
   };
   const orchestratorAgentName = config.agent?.name ?? "orchestrator";
-  const orchestratorSessionIds = new Set<string>();
 
   return {
     tool: coreOrchestratorTools,
@@ -320,7 +256,7 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
             template: "Call orchestrator_status({ format: 'markdown' }).",
           },
           [`${prefix}output`]: {
-            description: "Show unified orchestrator output (wakeups, messages, jobs, logs)",
+            description: "Show unified orchestrator output (jobs + logs)",
             template: "Call orchestrator_output({ format: 'markdown' }).",
           },
           [`${prefix}models`]: {
@@ -384,19 +320,14 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
       }
 
       if (config.ui?.injectSystemContext === false) return;
-      if (registry.workers.size === 0) return;
-      output.system.push(registry.getSummary({ maxWorkers: config.ui?.systemContextMaxWorkers ?? 12 }));
+      if (workerPool.workers.size === 0) return;
+      output.system.push(workerPool.getSummary({ maxWorkers: config.ui?.systemContextMaxWorkers ?? 12 }));
     },
     "experimental.chat.messages.transform": async (input, output) => {
       await visionMessageTransform(input as any, output as any);
       await pruneTransform(input as any, output as any);
     },
     "chat.message": async (input, output) => {
-      if (input.agent === orchestratorAgentName) {
-        orchestratorSessionIds.add(input.sessionID);
-        // Track the most recent orchestrator session for wakeup injection
-        currentOrchestratorSessionId = input.sessionID;
-      }
 
       // Passthrough auto-exit (server-side): if the user issues an exit command, disable passthrough for this session.
       const role = typeof (input as any)?.role === "string" ? String((input as any).role) : undefined;
@@ -437,14 +368,23 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
             const visionWorkerName = visionProfile?.name ?? "Vision Worker";
             const visionModel = visionProfile?.model ?? "vision model";
 
+            // Build ASCII box with dynamic width - use FULL job ID so orchestrator can await it
+            const workerInfo = `${visionWorkerName} (${visionModel})`;
+            const awaitCall = `await_worker_job({ jobId: "${job.id}" })`;
+            const boxWidth = Math.max(60, workerInfo.length + 12, job.id.length + 12, awaitCall.length + 4);
+            const hr = "─".repeat(boxWidth - 2);
+            const pad = (s: string) => s.padEnd(boxWidth - 4);
+
             const placeholder = [
-              `[VISION ANALYSIS PENDING]`,
-              `Worker: ${visionWorkerName} (${visionModel})`,
-              `Job: ${job.id}`,
-              ``,
-              `⏳ Analyzing image content...`,
-              `The vision worker will describe what's in the image.`,
-              `Call await_worker_job({ jobId: "${job.id}" }) to get the result.`,
+              `┌${hr}┐`,
+              `│ 🖼  [VISION ANALYSIS PENDING]${" ".repeat(boxWidth - 34)}│`,
+              `├${hr}┤`,
+              `│ Worker: ${pad(workerInfo)}│`,
+              `│ Job ID: ${pad(job.id)}│`,
+              `├${hr}┤`,
+              `│ ${pad("⏳ Analyzing image content...")}│`,
+              `│ ${pad(awaitCall)}│`,
+              `└${hr}┘`,
             ].join("\n");
 
             output.parts = replaceImagesWithAnalysis(originalParts, placeholder, {
@@ -474,22 +414,14 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
                 workerJobs.setError(job.id, { error: result.error ?? "Vision analysis failed" });
               }
 
-              // Emit a message + wakeup so the orchestrator session can resume and/or inspect details.
-              const msg = messageBus.send({
-                from: "vision",
-                to: "orchestrator",
-                topic: "vision_analysis",
-                jobId: job.id,
-                text: analysisText,
-              });
-              messageBus.wakeup({
-                workerId: "vision",
-                jobId: job.id,
-                reason: result.success ? "result_ready" : "error",
-                summary: result.success ? "vision analysis complete" : (result.error ?? "vision analysis failed"),
-                data: { kind: "vision", messageId: msg.id, sessionId: input.sessionID },
-                timestamp: Date.now(),
-              });
+              const reason = result.success ? "result_ready" : "error";
+              const summary = result.success ? "vision analysis complete" : (result.error ?? "vision analysis failed");
+              const wakeupMessage =
+                `<orchestrator-internal kind="wakeup" workerId="vision" reason="${reason}" jobId="${job.id}">\n` +
+                `[VISION ANALYSIS] ${summary} (jobId: ${job.id}).\n` +
+                `Check await_worker_job({ jobId: "${job.id}" }) for details.\n` +
+                `</orchestrator-internal>`;
+              void injectOrchestratorNotice(input.sessionID, wakeupMessage);
 
               if (!result.success && result.error) {
                 void showToast(`Vision analysis failed: ${result.error}`, "warning");
@@ -497,14 +429,12 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
             })().catch((err) => {
               const msg = err instanceof Error ? err.message : String(err);
               workerJobs.setError(job.id, { error: msg });
-              messageBus.wakeup({
-                workerId: "vision",
-                jobId: job.id,
-                reason: "error",
-                summary: msg,
-                data: { kind: "vision", sessionId: input.sessionID },
-                timestamp: Date.now(),
-              });
+              const wakeupMessage =
+                `<orchestrator-internal kind="wakeup" workerId="vision" reason="error" jobId="${job.id}">\n` +
+                `[VISION ANALYSIS] ${msg} (jobId: ${job.id}).\n` +
+                `Check await_worker_job({ jobId: "${job.id}" }) for details.\n` +
+                `</orchestrator-internal>`;
+              void injectOrchestratorNotice(input.sessionID, wakeupMessage);
               void showToast(`Vision analysis crashed: ${msg}`, "error");
             });
           }
@@ -543,10 +473,9 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
     },
     event: async ({ event }) => {
       if (event.type === "server.instance.disposed") {
-        registry.off("registered", onWorkerUpdate);
-        registry.off("updated", onWorkerUpdate);
-        registry.off("unregistered", onWorkerRemove);
-        unsubscribeWakeup(); // Clean up wakeup listener
+        workerPool.off("update", onWorkerUpdate);
+        workerPool.off("spawn", onWorkerUpdate);
+        workerPool.off("stop", onWorkerRemove);
         await shutdownAllWorkers().catch(() => {});
         await flushTelemetry().catch(() => {});
       }
@@ -567,12 +496,11 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
         if (sessionId) await removeSessionEntry(sessionId, process.pid).catch(() => {});
         if (sessionId) {
           clearPassthrough(sessionId);
-          const owned = registry.getWorkersForSession(sessionId);
+          const owned = workerPool.getWorkersForSession(sessionId);
           for (const workerId of owned) {
             await stopWorker(workerId).catch(() => {});
           }
-          registry.clearSessionOwnership(sessionId);
-          orchestratorSessionIds.delete(sessionId);
+          workerPool.clearSessionOwnership(sessionId);
         }
       }
       await idleNotifier({ event });
@@ -581,3 +509,6 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
 };
 
 export default OrchestratorPlugin;
+
+// Re-export types for external consumers (runtime values exported separately to avoid bundler issues)
+export type { StreamChunk } from "./core/bridge-server";

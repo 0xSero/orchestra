@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { registry } from "./registry";
+import { workerPool, listDeviceRegistry, removeWorkerEntriesByPid, upsertWorkerEntry, pruneDeadEntries } from "./worker-pool";
 import { startBridgeServer, type BridgeServer } from "./bridge-server";
-import { listDeviceRegistry, removeWorkerEntriesByPid, upsertWorkerEntry } from "./device-registry";
 import { isProcessAlive } from "../helpers/process";
 
 export type OrchestratorRuntime = {
@@ -20,7 +19,7 @@ async function runShutdown(_reason: string): Promise<void> {
   if (shutdownPromise) return shutdownPromise;
   shutdownRequested = true;
   shutdownPromise = (async () => {
-    const workers = [...registry.workers.values()];
+    const workers = [...workerPool.workers.values()];
     const finished = await Promise.race([
       shutdownAllWorkers().then(() => true),
       new Promise<boolean>((resolve) => setTimeout(() => resolve(false), SHUTDOWN_TIMEOUT_MS)),
@@ -61,6 +60,7 @@ export async function ensureRuntime(): Promise<OrchestratorRuntime> {
   const instanceId = randomUUID();
   const bridge = await startBridgeServer();
   runtime = { instanceId, bridge };
+  workerPool.setInstanceId(instanceId);
   
   // Cleanup orphaned workers and sessions from previous crashes/terminations
   void cleanupOrphanedWorkers().catch(() => {});
@@ -83,7 +83,7 @@ export async function ensureRuntime(): Promise<OrchestratorRuntime> {
     });
     process.once("exit", () => {
       if (shutdownRequested) return;
-      const workers = [...registry.workers.values()];
+      const workers = [...workerPool.workers.values()];
       for (const worker of workers) {
         if (typeof worker.pid === "number") {
           try {
@@ -241,12 +241,11 @@ async function cleanupOrphanedSessions(): Promise<void> {
 }
 
 async function removeSessionEntryByHostPid(_hostPid: number): Promise<void> {
-  const { pruneDeadEntries } = await import("./device-registry");
   await pruneDeadEntries();
 }
 
 export async function shutdownAllWorkers(): Promise<void> {
-  const workers = [...registry.workers.values()];
+  const workers = [...workerPool.workers.values()];
   await Promise.allSettled(
     workers.map(async (w) => {
       try {
@@ -257,7 +256,7 @@ export async function shutdownAllWorkers(): Promise<void> {
     })
   );
   for (const w of workers) {
-    registry.unregister(w.profile.id);
+    workerPool.unregister(w.profile.id);
   }
 }
 

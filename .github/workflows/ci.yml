@@ -40,6 +40,9 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Install OpenCode CLI (required for E2E tests)
+        run: bun add -g opencode-ai@latest
+
       - name: Run unit tests
         run: bun test test/unit/ test/orchestrator.test.ts test/vision-routing.test.ts test/profile-lock.test.ts test/registry-ownership.test.ts test/workflows.test.ts
 

@@ -7,16 +7,17 @@
 
 import { createOpencodeClient } from "@opencode-ai/sdk";
 import type { WorkerProfile, WorkerInstance } from "../types";
-import { registry } from "../core/registry";
+import { workerPool, listDeviceRegistry, removeWorkerEntriesByPid, type DeviceRegistryWorkerEntry } from "../core/worker-pool";
 import { hydrateProfileModelsFromOpencode } from "../models/hydrate";
-import { buildPromptParts, extractTextFromPromptResponse, type WorkerAttachment } from "./prompt";
+import { buildPromptParts, extractTextFromPromptResponse, normalizeBase64Image, type WorkerAttachment } from "./prompt";
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { copyFile, mkdir, unlink, writeFile } from "node:fs/promises";
+import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ensureRuntime, registerWorkerInDeviceRegistry } from "../core/runtime";
-import { listDeviceRegistry, removeWorkerEntriesByPid, type DeviceRegistryWorkerEntry } from "../core/device-registry";
 import { getUserConfigDir } from "../helpers/format";
+import { mergeOpenCodeConfig } from "../config/opencode";
 import { getRepoContextForWorker } from "../ux/repo-context";
 
 interface SpawnOptions {
@@ -37,11 +38,12 @@ function isValidPort(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 65535;
 }
 
-function parseProviderId(model: string): { providerId?: string; modelKey?: string } {
-  const slash = model.indexOf("/");
-  if (slash > 0) return { providerId: model.slice(0, slash), modelKey: model.slice(slash + 1) };
-  return {};
-}
+// Provider parsing moved inline where needed; keeping function for potential future use
+// function parseProviderId(model: string): { providerId?: string; modelKey?: string } {
+//   const slash = model.indexOf("/");
+//   if (slash > 0) return { providerId: model.slice(0, slash), modelKey: model.slice(slash + 1) };
+//   return {};
+// }
 
 function resolveWorkerBridgePluginSpecifier(): string | undefined {
   const configPluginPath = join(
@@ -71,7 +73,95 @@ function resolveWorkerBridgePluginSpecifier(): string | undefined {
   return undefined;
 }
 
-const workerBridgeToolIds = ["message_tool", "worker_inbox", "wakeup_orchestrator"] as const;
+function isPathInside(baseDir: string, targetPath: string): boolean {
+  const base = resolve(baseDir);
+  const target = resolve(targetPath);
+  const rel = relative(base, target);
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
+
+async function prepareWorkerAttachments(input: {
+  attachments?: WorkerAttachment[];
+  baseDir: string;
+  workerId: string;
+}): Promise<{ attachments?: WorkerAttachment[]; cleanup: () => Promise<void> }> {
+  if (!input.attachments || input.attachments.length === 0) {
+    return { attachments: input.attachments, cleanup: async () => {} };
+  }
+
+  const tempDir = join(input.baseDir, ".opencode", "attachments");
+  const created: string[] = [];
+  const normalized: WorkerAttachment[] = [];
+
+  const ensureTempDir = async () => {
+    await mkdir(tempDir, { recursive: true });
+  };
+
+  const extForMime = (mimeType?: string, fallbackPath?: string): string => {
+    if (fallbackPath) {
+      const ext = extname(fallbackPath);
+      if (ext) return ext;
+    }
+    if (!mimeType) return ".png";
+    if (mimeType.includes("png")) return ".png";
+    if (mimeType.includes("jpeg") || mimeType.includes("jpg")) return ".jpg";
+    if (mimeType.includes("webp")) return ".webp";
+    if (mimeType.includes("gif")) return ".gif";
+    return ".bin";
+  };
+
+  let counter = 0;
+  for (const attachment of input.attachments) {
+    if (attachment.type !== "image") {
+      normalized.push(attachment);
+      continue;
+    }
+
+    if (attachment.path) {
+      if (isPathInside(input.baseDir, attachment.path)) {
+        normalized.push(attachment);
+        continue;
+      }
+      await ensureTempDir();
+      const ext = extForMime(attachment.mimeType, attachment.path);
+      const dest = join(tempDir, `${input.workerId}-${Date.now()}-${counter++}${ext}`);
+      await copyFile(attachment.path, dest);
+      created.push(dest);
+      normalized.push({ ...attachment, path: dest, base64: undefined });
+      continue;
+    }
+
+    if (attachment.base64) {
+      await ensureTempDir();
+      const ext = extForMime(attachment.mimeType);
+      const dest = join(tempDir, `${input.workerId}-${Date.now()}-${counter++}${ext}`);
+      const decoded = Buffer.from(normalizeBase64Image(attachment.base64), "base64");
+      await writeFile(dest, decoded);
+      created.push(dest);
+      normalized.push({ type: "image", path: dest, mimeType: attachment.mimeType });
+      continue;
+    }
+
+    normalized.push(attachment);
+  }
+
+  return {
+    attachments: normalized,
+    cleanup: async () => {
+      await Promise.all(
+        created.map(async (path) => {
+          try {
+            await unlink(path);
+          } catch {
+            // ignore
+          }
+        })
+      );
+    },
+  };
+}
+
+const workerBridgeToolIds = ["stream_chunk"] as const;
 
 async function checkWorkerBridgeTools(
   client: ReturnType<typeof createOpencodeClient>,
@@ -110,12 +200,13 @@ async function spawnOpencodeServe(options: {
   config: Record<string, unknown>;
   env: Record<string, string | undefined>;
 }): Promise<{ url: string; proc: ChildProcess; close: () => Promise<void> }> {
+  const mergedConfig = await mergeOpenCodeConfig(options.config ?? {}, { dropOrchestratorPlugin: true });
   // CRITICAL: Mark this as a worker process to prevent recursive spawning.
   // Workers should NOT load the orchestrator plugin or spawn more workers.
   const workerEnv = {
     ...process.env,
     ...options.env,
-    OPENCODE_CONFIG_CONTENT: JSON.stringify(options.config ?? {}),
+    OPENCODE_CONFIG_CONTENT: JSON.stringify(mergedConfig ?? options.config ?? {}),
     OPENCODE_ORCHESTRATOR_WORKER: "1", // Signal that this is a worker, not the orchestrator
   };
 
@@ -230,12 +321,18 @@ export async function spawnWorker(
   profile: WorkerProfile,
   options: SpawnOptions & { forceNew?: boolean }
 ): Promise<WorkerInstance> {
-  // Check if already in registry (quick check, not authoritative)
-  const existingInRegistry = registry.getWorker(profile.id);
-  if (existingInRegistry && existingInRegistry.status !== "error" && existingInRegistry.status !== "stopped") {
-    return existingInRegistry;
-  }
+  // Use workerPool.getOrSpawn for proper deduplication (prevents duplicate spawns)
+  return workerPool.getOrSpawn(profile, options, _spawnWorkerCore);
+}
 
+/**
+ * Core spawn implementation - called via workerPool.getOrSpawn() for deduplication.
+ * Do not call directly - use spawnWorker() instead.
+ */
+async function _spawnWorkerCore(
+  profile: WorkerProfile,
+  options: SpawnOptions & { forceNew?: boolean }
+): Promise<WorkerInstance> {
   // Resolve profile model if needed
   const resolvedProfile = await (async (): Promise<WorkerProfile> => {
     const modelSpec = profile.model.trim();
@@ -290,7 +387,7 @@ export async function spawnWorker(
   };
 
   // Register immediately so TUI can show it
-  registry.register(instance);
+  workerPool.register(instance);
 
   try {
     const rt = await ensureRuntime();
@@ -320,6 +417,11 @@ export async function spawnWorker(
       },
     });
 
+    // Assign shutdown immediately so cleanup works if validation fails
+    instance.shutdown = close;
+    instance.pid = proc.pid ?? undefined;
+    instance.serverUrl = url;
+
     const client = createOpencodeClient({ baseUrl: url });
     const toolCheck = await checkWorkerBridgeTools(client, options.directory).catch((error) => {
       instance.warning = `Unable to verify worker bridge tools: ${error instanceof Error ? error.message : String(error)}`;
@@ -334,9 +436,6 @@ export async function spawnWorker(
     }
 
     instance.client = client;
-    instance.shutdown = close;
-    instance.pid = proc.pid ?? undefined;
-    instance.serverUrl = url;
 
     // Record the process early so other orchestrator instances can reuse rather than spawn.
     if (typeof instance.pid === "number") {
@@ -351,19 +450,9 @@ export async function spawnWorker(
       });
     }
 
-    // Preflight provider availability to avoid "ready but never responds" workers.
-    const { providerId } = parseProviderId(resolvedProfile.model);
-    if (providerId) {
-      const providersRes = await client.config.providers({ query: { directory: options.directory } });
-      const providers = (providersRes.data as any)?.providers as Array<{ id: string; models?: Record<string, unknown>; source?: string; key?: string }> | undefined;
-      const provider = providers?.find((p) => p.id === providerId) as any;
-      if (!provider) {
-        throw new Error(
-          `Provider "${providerId}" is not configured for this worker (model: "${resolvedProfile.model}"). ` +
-            `Update your OpenCode config/providers or override the profile model.`
-        );
-      }
-    }
+    // Note: We skip provider preflight checks here because OpenCode has built-in providers
+    // that aren't visible via client.config.providers(). The spawn will fail naturally
+    // if the provider/model is unavailable.
 
     // If we used a dynamic port, update the instance.port to the actual one.
     if (!fixedPort) {
@@ -372,7 +461,7 @@ export async function spawnWorker(
         const actualPort = Number(u.port);
         if (Number.isFinite(actualPort) && actualPort > 0) {
           instance.port = actualPort;
-          registry.updateStatus(resolvedProfile.id, "starting");
+          workerPool.updateStatus(resolvedProfile.id, "starting");
         }
       } catch {
         // ignore
@@ -442,24 +531,18 @@ export async function spawnWorker(
                 `</worker-identity>\n\n` +
                 `<orchestrator-instructions>\n` +
                 `## Communication Tools Available\n\n` +
-                `You have these tools for communicating with the orchestrator and other workers:\n\n` +
-                `1. **message_tool** - Send reports or messages\n` +
-                `   - kind="report": Use for orchestrator jobs (when a jobId is provided) or when explicitly requested.\n` +
-                `   - kind="message": Send to another worker or the orchestrator. Set "to" field.\n\n` +
-                `2. **worker_inbox** - Check for messages from other workers or the orchestrator\n` +
-                `   - Call this if you need to check for incoming messages\n` +
-                `   - Use "after" param to get only new messages\n\n` +
-                `3. **wakeup_orchestrator** - Notifications (optional)\n` +
-                `   - Optional: call this when you complete an async job (reason="result_ready")\n` +
-                `   - Call this if you need attention (reason="needs_attention")\n` +
-                `   - Call this on errors (reason="error")\n` +
-                `   - Include the jobId if one was provided\n\n` +
+                `You have these tools for communicating with the orchestrator:\n\n` +
+                `1. **stream_chunk** - Real-time streaming (RECOMMENDED for long responses)\n` +
+                `   - Call multiple times during your response to stream output progressively\n` +
+                `   - Each chunk is immediately shown to the user as you work\n` +
+                `   - Set final=true on the last chunk to indicate completion\n` +
+                `   - Include jobId if one was provided\n` +
+                `   - Example: stream_chunk({ chunk: "Analyzing the image...", jobId: "abc123" })\n\n` +
                 `## Required Behavior\n\n` +
                 `1. Always return a direct plain-text answer to the prompt.\n` +
-                `2. If you received a jobId in <orchestrator-job>, call message_tool with kind="report" and include that jobId (required).\n` +
-                `3. If bridge tools fail/unavailable, still return your answer in plain text.\n` +
-                `4. If you need to communicate with another worker, use message_tool with kind="message"\n` +
-                `5. Check worker_inbox if you're waiting for responses from other agents\n` +
+                `2. For long tasks, use stream_chunk to show progress (the user can see output in real-time).\n` +
+                `3. If you received a jobId in <orchestrator-job>, include it when streaming chunks.\n` +
+                `4. If bridge tools fail/unavailable, still return your answer in plain text.\n` +
                 `</orchestrator-instructions>`,
             },
           ],
@@ -471,7 +554,7 @@ export async function spawnWorker(
     // Mark as ready
     instance.status = "ready";
     instance.lastActivity = new Date();
-    registry.updateStatus(resolvedProfile.id, "ready");
+    workerPool.updateStatus(resolvedProfile.id, "ready");
     if (typeof instance.pid === "number") {
       await registerWorkerInDeviceRegistry({
         workerId: resolvedProfile.id,
@@ -495,7 +578,7 @@ export async function spawnWorker(
     }
     instance.status = "error";
     instance.error = errorMsg;
-    registry.updateStatus(resolvedProfile.id, "error", errorMsg);
+    workerPool.updateStatus(resolvedProfile.id, "error", errorMsg);
     if (typeof instance.pid === "number") {
       await registerWorkerInDeviceRegistry({
         workerId: resolvedProfile.id,
@@ -529,7 +612,7 @@ export async function connectToWorker(
     modelResolution: "connected to existing worker",
   };
 
-  registry.register(instance);
+  workerPool.register(instance);
 
   try {
     const client = createOpencodeClient({
@@ -559,13 +642,13 @@ export async function connectToWorker(
       instance.sessionId = session.id;
     }
 
-    registry.updateStatus(profile.id, "ready");
+    workerPool.updateStatus(profile.id, "ready");
     return instance;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     instance.status = "error";
     instance.error = errorMsg;
-    registry.updateStatus(profile.id, "error", errorMsg);
+    workerPool.updateStatus(profile.id, "error", errorMsg);
     throw error;
   }
 }
@@ -574,7 +657,7 @@ export async function connectToWorker(
  * Stop a worker
  */
 export async function stopWorker(workerId: string): Promise<boolean> {
-  const instance = registry.getWorker(workerId);
+  const instance = workerPool.get(workerId);
   if (!instance) {
     return false;
   }
@@ -583,8 +666,8 @@ export async function stopWorker(workerId: string): Promise<boolean> {
     // The SDK doesn't expose a direct shutdown, but we can mark it stopped
     await instance.shutdown?.();
     instance.status = "stopped";
-    registry.updateStatus(workerId, "stopped");
-    registry.unregister(workerId);
+    workerPool.updateStatus(workerId, "stopped");
+    workerPool.unregister(workerId);
     if (typeof instance.pid === "number") {
       await registerWorkerInDeviceRegistry({
         workerId,
@@ -617,7 +700,24 @@ export async function sendToWorker(
     from?: string;
   }
 ): Promise<{ success: boolean; response?: string; error?: string }> {
-  const instance = registry.getWorker(workerId);
+  const extractStreamChunks = (value: any): string => {
+    const parts = Array.isArray(value?.parts)
+      ? value.parts
+      : Array.isArray(value?.message?.parts)
+        ? value.message.parts
+        : [];
+    if (!Array.isArray(parts) || parts.length === 0) return "";
+    const chunks = parts
+      .filter((part: any) => part?.type === "tool" && part?.tool === "stream_chunk")
+      .map((part: any) => {
+        const input = part?.state?.input;
+        return typeof input?.chunk === "string" ? input.chunk : "";
+      })
+      .filter((chunk: string) => chunk.length > 0);
+    return chunks.join("");
+  };
+
+  const instance = workerPool.get(workerId);
 
   if (!instance) {
     return { success: false, error: `Worker "${workerId}" not found` };
@@ -632,9 +732,10 @@ export async function sendToWorker(
   }
 
   // Mark as busy
-  registry.updateStatus(workerId, "busy");
+  workerPool.updateStatus(workerId, "busy");
   instance.currentTask = message.slice(0, 140);
 
+  let cleanupAttachments: (() => Promise<void>) | undefined;
   try {
     const startedAt = Date.now();
     
@@ -650,20 +751,24 @@ export async function sendToWorker(
         `\n\n<orchestrator-job id="${options.jobId}">\n` +
         `IMPORTANT:\n` +
         `- Include your full result as plain text in your assistant response.\n` +
-        `- When done, call message_tool with kind="report" and include this jobId.\n` +
-        `- If message_tool fails/unavailable, still return your full result in plain text and mention the error.\n` +
-        `wakeup_orchestrator is optional (use it for attention/errors/progress).\n` +
+        `- For long tasks, stream progress with stream_chunk and include this jobId.\n` +
         `</orchestrator-job>`;
     } else {
       taskText +=
         `\n\n<orchestrator-sync>\n` +
         `IMPORTANT: Reply with your final answer as plain text in your assistant response.\n` +
-        `Do not call message_tool for this request unless explicitly asked.\n` +
+        `Stream with stream_chunk if the response is long or incremental.\n` +
         `If you do call any tools, still include the full answer as plain text.\n` +
         `</orchestrator-sync>`;
     }
     
-    const parts = await buildPromptParts({ message: taskText, attachments: options?.attachments });
+    const prepared = await prepareWorkerAttachments({
+      attachments: options?.attachments,
+      baseDir: instance.directory ?? process.cwd(),
+      workerId,
+    });
+    cleanupAttachments = prepared.cleanup;
+    const parts = await buildPromptParts({ message: taskText, attachments: prepared.attachments });
 
     const abort = new AbortController();
     const timeoutMs = options?.timeout ?? 600_000;
@@ -691,16 +796,82 @@ export async function sendToWorker(
       throw new Error(msg);
     }
 
-    const extracted = extractTextFromPromptResponse(result.data);
+    const promptData = result.data as any;
+    const extracted = extractTextFromPromptResponse(promptData);
     let responseText = extracted.text.trim();
     if (responseText.length === 0) {
       // Fallback: some providers emit only reasoning parts.
-      const data: any = result.data as any;
-      const parts = Array.isArray(data?.parts) ? data.parts : [];
+      const parts = Array.isArray(promptData?.parts) ? promptData.parts : [];
       const reasoning = parts.filter((p: any) => p?.type === "reasoning" && typeof p.text === "string").map((p: any) => p.text).join("\n");
       responseText = reasoning.trim();
     }
     if (responseText.length === 0) {
+      const streamed = extractStreamChunks(promptData).trim();
+      if (streamed.length > 0) responseText = streamed;
+    }
+    if (responseText.length === 0) {
+      const messageId = promptData?.info?.id ?? promptData?.message?.info?.id;
+      if (messageId) {
+        // Fallback: fetch the prompt message by id (sometimes parts arrive after the prompt response).
+        for (let attempt = 0; attempt < 3 && responseText.length === 0; attempt += 1) {
+          const messageRes = await instance.client.session.message({
+            path: { id: instance.sessionId, messageID: messageId },
+            query: { directory: instance.directory ?? process.cwd() },
+          });
+          const messageData = (messageRes as any)?.data ?? messageRes;
+          const extractedMessage = extractTextFromPromptResponse(messageData);
+          responseText = extractedMessage.text.trim();
+          if (responseText.length === 0) {
+            const streamed = extractStreamChunks(messageData).trim();
+            if (streamed.length > 0) responseText = streamed;
+          }
+          if (responseText.length > 0) break;
+          await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
+        }
+      }
+    }
+    if (responseText.length === 0) {
+      // Fallback: poll for the latest assistant message (prompt may return before output is stored).
+      const pollDeadline = Date.now() + Math.min(10_000, timeoutMs);
+      while (responseText.length === 0 && Date.now() < pollDeadline) {
+        const messagesRes = await instance.client.session.messages({
+          path: { id: instance.sessionId },
+          query: { directory: instance.directory ?? process.cwd(), limit: 10 },
+        });
+        const messages = Array.isArray((messagesRes as any)?.data) ? (messagesRes as any).data : Array.isArray(messagesRes) ? messagesRes : [];
+        const assistant = [...messages].reverse().find((m: any) => m?.info?.role === "assistant");
+        if (assistant) {
+          const extractedMessage = extractTextFromPromptResponse(assistant);
+          responseText = extractedMessage.text.trim();
+          if (responseText.length === 0) {
+            const streamed = extractStreamChunks(assistant).trim();
+            if (streamed.length > 0) responseText = streamed;
+          }
+        }
+        if (responseText.length > 0) break;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+    if (responseText.length === 0) {
+      if (process.env.OPENCODE_ORCH_SPAWNER_DEBUG === "1") {
+        try {
+          const messagesRes = await instance.client.session.messages({
+            path: { id: instance.sessionId },
+            query: { directory: instance.directory ?? process.cwd(), limit: 20 },
+          });
+          const messages = Array.isArray((messagesRes as any)?.data) ? (messagesRes as any).data : Array.isArray(messagesRes) ? messagesRes : [];
+          const summary = messages.map((m: any) => ({
+            role: m?.info?.role,
+            id: m?.info?.id,
+            finish: m?.info?.finish,
+            error: m?.info?.error,
+            parts: Array.isArray(m?.parts) ? m.parts.map((p: any) => p?.type).filter(Boolean) : [],
+          }));
+          console.error(`[spawner] empty response summary`, JSON.stringify(summary, null, 2));
+        } catch (error) {
+          console.error(`[spawner] empty response debug failed`, error);
+        }
+      }
       throw new Error(
         `Worker returned no text output (${extracted.debug ?? "unknown"}). ` +
           `This usually means the worker model/provider is misconfigured or unavailable.`
@@ -708,7 +879,7 @@ export async function sendToWorker(
     }
 
     // Mark as ready again
-    registry.updateStatus(workerId, "ready");
+    workerPool.updateStatus(workerId, "ready");
     instance.lastActivity = new Date();
     instance.currentTask = undefined;
     instance.warning = undefined;
@@ -735,10 +906,14 @@ export async function sendToWorker(
     return { success: true, response: responseText };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    registry.updateStatus(workerId, "ready"); // Reset to ready so it can be used again
+    workerPool.updateStatus(workerId, "ready"); // Reset to ready so it can be used again
     instance.currentTask = undefined;
     instance.warning = instance.warning ?? `Last request failed: ${errorMsg}`;
     return { success: false, error: errorMsg };
+  } finally {
+    if (cleanupAttachments) {
+      await cleanupAttachments();
+    }
   }
 }
 
@@ -795,7 +970,7 @@ export async function spawnWorkers(
  */
 export async function listReusableWorkers(): Promise<DeviceRegistryWorkerEntry[]> {
   const entries = await listDeviceRegistry();
-  const inRegistry = new Set([...registry.workers.keys()]);
+  const inRegistry = new Set([...workerPool.workers.keys()]);
 
   return entries.filter(
     (e): e is DeviceRegistryWorkerEntry =>

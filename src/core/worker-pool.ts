@@ -49,7 +49,7 @@ export interface SendResult {
 }
 
 // Device registry types (for cross-session persistence)
-type DeviceRegistryWorkerEntry = {
+export type DeviceRegistryWorkerEntry = {
   kind: "worker";
   orchestratorInstanceId: string;
   hostPid?: number;
@@ -64,7 +64,7 @@ type DeviceRegistryWorkerEntry = {
   lastError?: string;
 };
 
-type DeviceRegistrySessionEntry = {
+export type DeviceRegistrySessionEntry = {
   kind: "session";
   hostPid: number;
   sessionId: string;
@@ -74,7 +74,7 @@ type DeviceRegistrySessionEntry = {
   updatedAt: number;
 };
 
-type DeviceRegistryEntry = DeviceRegistryWorkerEntry | DeviceRegistrySessionEntry;
+export type DeviceRegistryEntry = DeviceRegistryWorkerEntry | DeviceRegistrySessionEntry;
 
 type DeviceRegistryFile = {
   version: 1;
@@ -86,7 +86,7 @@ type DeviceRegistryFile = {
 // Device Registry (file-based persistence for cross-session reuse)
 // =============================================================================
 
-function getDeviceRegistryPath(): string {
+export function getDeviceRegistryPath(): string {
   return join(getUserConfigDir(), "opencode", "orchestrator-device-registry.json");
 }
 
@@ -111,7 +111,7 @@ async function writeRegistryFile(path: string, file: DeviceRegistryFile): Promis
   await writeJsonAtomic(path, file, { tmpPrefix: "opencode-orch-registry" });
 }
 
-async function pruneDeadEntries(path = getDeviceRegistryPath()): Promise<void> {
+export async function pruneDeadEntries(path = getDeviceRegistryPath()): Promise<void> {
   const file = await readRegistryFile(path);
   const alive = file.entries.filter((e) => {
     if (e.kind === "worker") return isProcessAlive(e.pid);
@@ -120,6 +120,64 @@ async function pruneDeadEntries(path = getDeviceRegistryPath()): Promise<void> {
   });
   if (alive.length === file.entries.length) return;
   await writeRegistryFile(path, { version: 1, updatedAt: Date.now(), entries: alive });
+}
+
+export async function upsertWorkerEntry(
+  entry: Omit<DeviceRegistryWorkerEntry, "kind" | "updatedAt">,
+  path = getDeviceRegistryPath()
+): Promise<void> {
+  const file = await readRegistryFile(path);
+  const now = Date.now();
+  const next: DeviceRegistryWorkerEntry = { kind: "worker", updatedAt: now, ...entry };
+  const idx = file.entries.findIndex(
+    (e) =>
+      e.kind === "worker" &&
+      e.orchestratorInstanceId === entry.orchestratorInstanceId &&
+      e.workerId === entry.workerId &&
+      e.pid === entry.pid
+  );
+  const entries = [...file.entries];
+  if (idx >= 0) entries[idx] = next;
+  else entries.push(next);
+  await writeRegistryFile(path, { version: 1, updatedAt: now, entries });
+}
+
+export async function removeWorkerEntriesByPid(pid: number, path = getDeviceRegistryPath()): Promise<void> {
+  const file = await readRegistryFile(path);
+  const entries = file.entries.filter((e) => !(e.kind === "worker" && e.pid === pid));
+  if (entries.length === file.entries.length) return;
+  await writeRegistryFile(path, { version: 1, updatedAt: Date.now(), entries });
+}
+
+export async function upsertSessionEntry(
+  entry: Omit<DeviceRegistrySessionEntry, "kind" | "updatedAt">,
+  path = getDeviceRegistryPath()
+): Promise<void> {
+  const file = await readRegistryFile(path);
+  const now = Date.now();
+  const next: DeviceRegistrySessionEntry = { kind: "session", updatedAt: now, ...entry };
+  const idx = file.entries.findIndex(
+    (e) => e.kind === "session" && e.hostPid === entry.hostPid && e.sessionId === entry.sessionId
+  );
+  const entries = [...file.entries];
+  if (idx >= 0) entries[idx] = next;
+  else entries.push(next);
+  await writeRegistryFile(path, { version: 1, updatedAt: now, entries });
+}
+
+export async function removeSessionEntry(sessionId: string, hostPid: number, path = getDeviceRegistryPath()): Promise<void> {
+  const file = await readRegistryFile(path);
+  const entries = file.entries.filter(
+    (e) => !(e.kind === "session" && e.hostPid === hostPid && e.sessionId === sessionId)
+  );
+  if (entries.length === file.entries.length) return;
+  await writeRegistryFile(path, { version: 1, updatedAt: Date.now(), entries });
+}
+
+export async function listDeviceRegistry(path = getDeviceRegistryPath()): Promise<DeviceRegistryEntry[]> {
+  await pruneDeadEntries(path).catch(() => {});
+  const file = await readRegistryFile(path);
+  return file.entries;
 }
 
 // =============================================================================
@@ -171,14 +229,19 @@ export class WorkerPool {
       return inFlight;
     }
 
-    // Try to reuse from device registry
-    const reused = await this.tryReuseFromDeviceRegistry(profile, options);
-    if (reused) {
-      return reused;
-    }
+    // Create the spawn promise BEFORE any async work to prevent race conditions
+    // Wrap the entire flow (reuse check + spawn) in a single promise
+    const spawnPromise = (async (): Promise<WorkerInstance> => {
+      // Try to reuse from device registry
+      const reused = await this.tryReuseFromDeviceRegistry(profile, options);
+      if (reused) {
+        return reused;
+      }
 
-    // Spawn new worker with deduplication
-    const spawnPromise = spawnFn(profile, options);
+      // Spawn new worker
+      return spawnFn(profile, options);
+    })();
+
     this.inFlightSpawns.set(profile.id, spawnPromise);
 
     try {

@@ -22,7 +22,7 @@
         "wakeupInjection": { 
           "type": "boolean", 
           "default": true,
-          "description": "When workers call wakeup_orchestrator(), inject a prompt into the orchestrator session to resume it. Enables true async worker wakeups."
+          "description": "When async worker jobs or vision analysis complete, inject a prompt into the orchestrator session to resume it."
         }
       }
     },

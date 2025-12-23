@@ -1,7 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { registry } from "../src/core/registry";
-import { messageBus } from "../src/core/message-bus";
-import { listDeviceRegistry, pruneDeadEntries } from "../src/core/device-registry";
+import { workerPool, listDeviceRegistry, pruneDeadEntries } from "../src/core/worker-pool";
 import { shutdownAllWorkers } from "../src/core/runtime";
 import { workerJobs } from "../src/core/jobs";
 import { spawnWorker, stopWorker, sendToWorker } from "../src/workers/spawner";
@@ -22,8 +20,7 @@ const profileA: WorkerProfile = {
   whenToUse: "Used in tests",
   systemPrompt:
     "You are a test agent. You MUST follow tool instructions exactly.\n" +
-    "When asked to send a message, call message_tool(kind='message', to=..., text=...).\n" +
-    "When asked for a final report, call message_tool(kind='report', text=..., summary=..., details=..., issues=[...]).",
+    "Always reply with exactly the requested text.",
 };
 
 const profileB: WorkerProfile = {
@@ -34,8 +31,7 @@ const profileB: WorkerProfile = {
   whenToUse: "Used in tests",
   systemPrompt:
     "You are a test agent. You MUST follow tool instructions exactly.\n" +
-    "To read messages, call worker_inbox() and parse the returned JSON.\n" +
-    "When asked for a final report, call message_tool(kind='report', text=..., summary=..., details=..., issues=[...]).",
+    "Always reply with exactly the requested text.",
 };
 
 describe("e2e (multiagent)", () => {
@@ -58,8 +54,8 @@ describe("e2e (multiagent)", () => {
     test(
       "workers are registered, tracked in device registry, and have bridge tools",
       async () => {
-        const a = registry.getWorker("workerA");
-        const b = registry.getWorker("workerB");
+        const a = workerPool.get("workerA");
+        const b = workerPool.get("workerB");
         expect(a?.status).toBe("ready");
         expect(b?.status).toBe("ready");
         expect(typeof a?.pid).toBe("number");
@@ -74,8 +70,7 @@ describe("e2e (multiagent)", () => {
 
         const idsA = await a!.client!.tool.ids({} as any);
         expect(Array.isArray(idsA.data)).toBe(true);
-        expect((idsA.data as any[]).includes("message_tool")).toBe(true);
-        expect((idsA.data as any[]).includes("worker_inbox")).toBe(true);
+        expect((idsA.data as any[]).includes("stream_chunk")).toBe(true);
       },
       120_000
     );
@@ -83,16 +78,16 @@ describe("e2e (multiagent)", () => {
     test(
       "shutdown kills all spawned worker servers",
       async () => {
-        const a = registry.getWorker("workerA");
-        const b = registry.getWorker("workerB");
+        const a = workerPool.get("workerA");
+        const b = workerPool.get("workerB");
         expect(a).toBeTruthy();
         expect(b).toBeTruthy();
 
         await stopWorker("workerA");
         await stopWorker("workerB");
 
-        expect(registry.getWorker("workerA")).toBeUndefined();
-        expect(registry.getWorker("workerB")).toBeUndefined();
+        expect(workerPool.get("workerA")).toBeUndefined();
+        expect(workerPool.get("workerB")).toBeUndefined();
 
         await pruneDeadEntries();
         const entries = await listDeviceRegistry();
@@ -105,45 +100,13 @@ describe("e2e (multiagent)", () => {
     );
   });
 
-  describe("async jobs + inter-agent messaging", () => {
+  describe("async jobs", () => {
     test(
-      "workers can exchange messages via message_tool + worker_inbox and async jobs record timing/issues",
+      "async jobs record timing/issues",
       async () => {
         // Respawn clean workers for this test.
         await spawnWorker(profileA, { basePort: 0, timeout: 60_000, directory });
         await spawnWorker(profileB, { basePort: 0, timeout: 60_000, directory });
-
-        // Worker A sends a message to Worker B.
-        const aSend = await sendToWorker(
-          "workerA",
-          [
-            "Task:",
-            "1) Call message_tool with kind='message', to='workerB', topic='handoff', text='CODE:1234'.",
-            "2) Reply with exactly: SENT",
-          ].join("\n"),
-          { timeout: 60_000 }
-        );
-        expect(aSend.success).toBe(true);
-        expect(aSend.response?.includes("SENT")).toBe(true);
-
-        // Worker B fetches inbox and confirms it saw the message.
-        const bRecv = await sendToWorker(
-          "workerB",
-          [
-            "Task:",
-            "1) Call worker_inbox() exactly once.",
-            "2) From the JSON, find the latest message with topic='handoff' and extract the text.",
-            "3) Reply with exactly: RECEIVED:<text>",
-            "4) Then call message_tool kind='report' with issues list (include 'None' if no issues).",
-          ].join("\n"),
-          { timeout: 90_000 }
-        );
-        expect(bRecv.success).toBe(true);
-        expect(bRecv.response?.startsWith("RECEIVED:")).toBe(true);
-
-        // The orchestrator inbox should be empty (message was to workerB), but bus should contain it in workerB's queue.
-        const inboxB = messageBus.list("workerB", { limit: 10 });
-        expect(inboxB.some((m) => m.topic === "handoff" && m.text.includes("CODE:1234"))).toBe(true);
 
         // Async job: run a background worker request and await it.
         const mockContext = { agent: "test", sessionID: "test-session", messageID: "test-msg", abort: new AbortController().signal };
@@ -170,10 +133,10 @@ describe("e2e (multiagent)", () => {
 
   describe("real-world launches", () => {
     const ensureWorkers = async () => {
-      if (!registry.getWorker("workerA")) {
+      if (!workerPool.get("workerA")) {
         await spawnWorker(profileA, { basePort: 0, timeout: 60_000, directory });
       }
-      if (!registry.getWorker("workerB")) {
+      if (!workerPool.get("workerB")) {
         await spawnWorker(profileB, { basePort: 0, timeout: 60_000, directory });
       }
     };
@@ -182,7 +145,7 @@ describe("e2e (multiagent)", () => {
       "re-spawning a registered worker reuses the same instance",
       async () => {
         await ensureWorkers();
-        const existing = registry.getWorker("workerA");
+        const existing = workerPool.get("workerA");
         const reused = await spawnWorker(profileA, { basePort: 0, timeout: 60_000, directory });
         expect(existing?.pid).toBe(reused.pid);
         expect(existing?.serverUrl).toBe(reused.serverUrl);
@@ -262,25 +225,5 @@ describe("e2e (multiagent)", () => {
       120_000
     );
 
-    test(
-      "worker inbox stays empty without messages",
-      async () => {
-        await ensureWorkers();
-        messageBus.clear("workerB");
-        const res = await sendToWorker(
-          "workerB",
-          [
-            "Task:",
-            "1) Call worker_inbox() exactly once.",
-            "2) If no messages, reply with exactly: INBOX_EMPTY",
-          ].join("\n"),
-          { timeout: 60_000 }
-        );
-        expect(res.success).toBe(true);
-        const reply = res.response?.trim() ?? "";
-        expect(reply === "INBOX_EMPTY" || reply.startsWith("RECEIVED:")).toBe(true);
-      },
-      120_000
-    );
   });
 });

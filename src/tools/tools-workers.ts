@@ -1,7 +1,6 @@
 import { tool } from "@opencode-ai/plugin";
-import { registry } from "../core/registry";
+import { workerPool } from "../core/worker-pool";
 import { workerJobs } from "../core/jobs";
-import { messageBus } from "../core/message-bus";
 import { getProfile } from "../config/profiles";
 import type { WorkerProfile } from "../types";
 import { sendToWorker, spawnWorker, spawnWorkers, stopWorker } from "../workers/spawner";
@@ -19,7 +18,7 @@ export const listWorkers = tool({
     const format: "markdown" | "json" = args.format ?? getDefaultListFormat();
 
     if (args.workerId) {
-      const instance = registry.getWorker(args.workerId);
+      const instance = workerPool.get(args.workerId);
       if (!instance) {
         return `Worker "${args.workerId}" not found. Use list_workers() to see available workers.`;
       }
@@ -60,7 +59,7 @@ export const listWorkers = tool({
       ].join("\n");
     }
 
-    const workers = registry.toJSON() as Array<Record<string, any>>;
+    const workers = workerPool.toJSON() as Array<Record<string, any>>;
     if (workers.length === 0) {
       return "No workers are currently registered. Use spawn_worker to create workers.";
     }
@@ -171,21 +170,24 @@ export const askWorkerAsync = tool({
       if (res.success && res.response) workerJobs.setResult(job.id, { responseText: res.response });
       else workerJobs.setError(job.id, { error: res.error ?? "unknown_error" });
 
-      // Fallback wakeup: if the worker doesn't call wakeup_orchestrator / message_tool, still notify the owning session.
       const sessionId = ctx?.sessionID;
-      if (!sessionId) return;
+      const client = getClient();
+      if (!sessionId || !client) return;
       const reason = res.success ? "result_ready" : "error";
-      setTimeout(() => {
-        if (messageBus.hasWakeup({ jobId: job.id, reason })) return;
-        messageBus.wakeup({
-          workerId: args.workerId,
-          jobId: job.id,
-          reason,
-          summary: res.success ? "async job complete" : (res.error ?? "async job failed"),
-          data: { source: "orchestrator", sessionId },
-          timestamp: Date.now(),
-        });
-      }, 250);
+      const summary = res.success ? "async job complete" : (res.error ?? "async job failed");
+      const wakeupMessage =
+        `<orchestrator-internal kind="wakeup" workerId="${args.workerId}" reason="${reason}" jobId="${job.id}">\n` +
+        `[WORKER WAKEUP] Worker "${args.workerId}" ${res.success ? "completed" : "failed"} async job ${job.id}.` +
+        `${summary ? ` ${summary}` : ""}\n` +
+        `Check await_worker_job({ jobId: "${job.id}" }) for details.\n` +
+        `</orchestrator-internal>`;
+      void client.session
+        .prompt({
+          path: { id: sessionId },
+          body: { noReply: true, parts: [{ type: "text", text: wakeupMessage }] as any },
+          query: { directory: getDirectory() },
+        } as any)
+        .catch(() => {});
     })().catch((e) => workerJobs.setError(job.id, { error: e instanceof Error ? e.message : String(e) }));
 
     return JSON.stringify({ jobId: job.id, workerId: job.workerId, startedAt: job.startedAt }, null, 2);
@@ -264,7 +266,7 @@ export const getWorkerInfo = tool({
     format: tool.schema.enum(["markdown", "json"]).optional().describe("Output format (default: markdown)"),
   },
   async execute(args) {
-    const instance = registry.getWorker(args.workerId);
+    const instance = workerPool.get(args.workerId);
     if (!instance) {
       return `Worker "${args.workerId}" not found. Use list_workers to see available workers.`;
     }
@@ -345,7 +347,7 @@ You can also provide custom configuration to override defaults.`,
           .catch(() => {});
       }
       const { basePort, timeout } = getSpawnDefaults();
-      const existing = registry.getWorker(profile.id);
+      const existing = workerPool.get(profile.id);
       const instance = await spawnWorker(profile, {
         basePort,
         timeout,
@@ -353,7 +355,7 @@ You can also provide custom configuration to override defaults.`,
         client,
       });
       if (ctx?.sessionID && !existing && instance.modelResolution !== "reused existing worker") {
-        registry.trackOwnership(ctx.sessionID, instance.profile.id);
+        workerPool.trackOwnership(ctx.sessionID, instance.profile.id);
       }
 
       const warning = instance.warning ? `\nWarning: ${instance.warning}` : "";
@@ -374,7 +376,7 @@ export const ensureWorkers = tool({
     const uniqueIds = [...new Set(args.profileIds)];
     const toSpawn: WorkerProfile[] = [];
     for (const id of uniqueIds) {
-      if (registry.getWorker(id)) continue;
+      if (workerPool.get(id)) continue;
       const profile = getProfile(id, profiles);
       if (!profile) return `Unknown profile "${id}". Run list_profiles({}) to see available profiles.`;
       toSpawn.push(profile);
@@ -392,7 +394,7 @@ export const ensureWorkers = tool({
     if (ctx?.sessionID) {
       for (const instance of succeeded) {
         if (instance.modelResolution === "reused existing worker") continue;
-        registry.trackOwnership(ctx.sessionID, instance.profile.id);
+        workerPool.trackOwnership(ctx.sessionID, instance.profile.id);
       }
     }
 
@@ -446,11 +448,11 @@ export const delegateTask = tool({
     let targetId = args.workerId;
     if (!targetId) {
       if (requiresVision) {
-        const vision = registry.getVisionWorkers();
+        const vision = workerPool.getVisionWorkers();
         targetId = vision[0]?.profile.id;
       } else {
-        const matches = registry.getWorkersByCapability(args.task);
-        const active = registry.getActiveWorkers();
+        const matches = workerPool.getWorkersByCapability(args.task);
+        const active = workerPool.getActiveWorkers();
         targetId = matches[0]?.profile.id ?? active[0]?.profile.id;
       }
     }
@@ -476,7 +478,7 @@ export const delegateTask = tool({
       });
       targetId = instance.profile.id;
       if (ctx?.sessionID && instance.modelResolution !== "reused existing worker") {
-        registry.trackOwnership(ctx.sessionID, instance.profile.id);
+        workerPool.trackOwnership(ctx.sessionID, instance.profile.id);
       }
     }
 
@@ -501,7 +503,7 @@ export const findWorker = tool({
     const { task, requiresVision } = args;
 
     if (requiresVision) {
-      const visionWorkers = registry.getVisionWorkers();
+      const visionWorkers = workerPool.getVisionWorkers();
       if (visionWorkers.length === 0) {
         return "No vision-capable workers available. Spawn a vision worker first.";
       }
@@ -514,9 +516,9 @@ export const findWorker = tool({
       });
     }
 
-    const matches = registry.getWorkersByCapability(task);
+    const matches = workerPool.getWorkersByCapability(task);
     if (matches.length === 0) {
-      const all = registry.getActiveWorkers();
+      const all = workerPool.getActiveWorkers();
       if (all.length === 0) {
         return "No workers available. Spawn workers first.";
       }
@@ -548,7 +550,7 @@ export const workerTrace = tool({
     format: tool.schema.enum(["markdown", "json"]).optional().describe("Output format (default: markdown)"),
   },
   async execute(args) {
-    const instance = registry.getWorker(args.workerId);
+    const instance = workerPool.get(args.workerId);
     if (!instance) return `Worker "${args.workerId}" not found.`;
     if (!instance.client || !instance.sessionId) return `Worker "${args.workerId}" not initialized.`;
 

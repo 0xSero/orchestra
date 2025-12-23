@@ -11,7 +11,7 @@ import {
   getWorkflowsConfig,
 } from "./state";
 import { spawnWorker, sendToWorker } from "../workers/spawner";
-import { registry } from "../core/registry";
+import { workerPool } from "../core/worker-pool";
 import type { WorkflowRunInput, WorkflowSecurityLimits } from "../workflows/types";
 
 const defaultLimits: WorkflowSecurityLimits = {
@@ -46,7 +46,7 @@ function getEffectiveLimits(workflowId: string): WorkflowSecurityLimits {
 }
 
 async function ensureWorker(workerId: string, autoSpawn: boolean): Promise<string> {
-  const existing = registry.getWorker(workerId);
+  const existing = workerPool.get(workerId);
   if (existing && existing.status !== "error" && existing.status !== "stopped") {
     return existing.profile.id;
   }
@@ -132,11 +132,11 @@ export const runWorkflowTool = tool({
 
     const result = await runWorkflow(input, {
       resolveWorker: async (workerId, autoSpawn) => {
-        const existing = registry.getWorker(workerId);
+        const existing = workerPool.get(workerId);
         const resolved = await ensureWorker(workerId, autoSpawn);
-        const instance = registry.getWorker(resolved);
+        const instance = workerPool.get(resolved);
         if (ctx?.sessionID && !existing && instance?.modelResolution !== "reused existing worker") {
-          if (instance) { registry.trackOwnership(ctx.sessionID, instance.profile.id); }
+          if (instance) { workerPool.trackOwnership(ctx.sessionID, instance.profile.id); }
         }
         return resolved;
       },

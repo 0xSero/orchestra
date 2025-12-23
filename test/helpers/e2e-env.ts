@@ -5,7 +5,8 @@
  * metrics collection integration, worker lifecycle hooks, and cleanup handling.
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { createMetricsCollector, type MetricsCollector } from "./metrics";
@@ -113,6 +114,35 @@ export interface TimingData {
   endedAt: number;
 }
 
+async function copyOpenCodeConfig(sourceConfigHome: string | undefined, targetConfigHome: string) {
+  const base = sourceConfigHome ?? join(homedir(), ".config");
+  const sourceDir = join(base, "opencode");
+  if (!existsSync(sourceDir)) return;
+  const targetDir = join(targetConfigHome, "opencode");
+  await mkdir(targetDir, { recursive: true });
+  const opencodePath = join(sourceDir, "opencode.json");
+  if (existsSync(opencodePath)) {
+    try {
+      const raw = await readFile(opencodePath, "utf8");
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      if (parsed && typeof parsed === "object" && Array.isArray(parsed.plugin)) {
+        parsed.plugin = parsed.plugin.filter(
+          (entry) => typeof entry === "string" && !entry.includes("orchestrator.")
+        );
+      }
+      await writeFile(join(targetDir, "opencode.json"), JSON.stringify(parsed, null, 2));
+    } catch {
+      await copyFile(opencodePath, join(targetDir, "opencode.json"));
+    }
+  }
+  const files = ["orchestrator.json", "config.json"];
+  for (const filename of files) {
+    const source = join(sourceDir, filename);
+    if (!existsSync(source)) continue;
+    await copyFile(source, join(targetDir, filename));
+  }
+}
+
 /**
  * Original setupE2eEnv function for backwards compatibility
  */
@@ -144,6 +174,7 @@ export async function setupE2eEnv() {
   process.env.XDG_DATA_HOME = dataDir;
   process.env.XDG_STATE_HOME = stateDir;
   process.env.XDG_CACHE_HOME = cacheDir;
+  await copyOpenCodeConfig(snapshot.XDG_CONFIG_HOME, configDir);
 
   return {
     root,
@@ -233,6 +264,7 @@ export async function createE2eEnv(options?: E2eEnvOptions): Promise<E2eEnv> {
   process.env.XDG_DATA_HOME = dataDir;
   process.env.XDG_STATE_HOME = stateDir;
   process.env.XDG_CACHE_HOME = cacheDir;
+  await copyOpenCodeConfig(snapshot.XDG_CONFIG_HOME, configDir);
 
   // Initialize helpers
   const cleanup = createCleanupManager();

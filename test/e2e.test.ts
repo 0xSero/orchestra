@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createOpencode } from "@opencode-ai/sdk";
 import { extractTextFromPromptResponse } from "../src/workers/prompt";
+import { mergeOpenCodeConfig } from "../src/config/opencode";
 import { setupE2eEnv } from "./helpers/e2e-env";
 
 describe("e2e", () => {
@@ -16,13 +17,14 @@ describe("e2e", () => {
   });
 
   test("can prompt a spawned opencode server and get text", async () => {
-    const model = process.env.OPENCODE_ORCH_E2E_MODEL ?? "opencode/gpt-5-nano";
+    const model = "opencode/gpt-5-nano";
 
+    const config = await mergeOpenCodeConfig({ model }, { dropOrchestratorPlugin: true });
     const { client, server } = await createOpencode({
       hostname: "127.0.0.1",
       port: 0,
       timeout: 60_000,
-      config: { model },
+      config,
     });
 
     try {

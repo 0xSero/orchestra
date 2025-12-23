@@ -7,7 +7,7 @@
  * This file provides the same API for backwards compatibility.
  */
 
-import { registry } from "../core/registry";
+import { workerPool } from "../core/worker-pool";
 import { builtInProfiles } from "../config/profiles";
 import { spawnWorker, sendToWorker } from "../workers/spawner";
 import { createVisionProgress, type ToastFn } from "../core/progress";
@@ -81,8 +81,8 @@ export async function analyzeImages(
   }
 
   // Find or spawn vision worker
-  let visionWorker = registry.getVisionWorkers().find((w) => w.status === "ready")
-    ?? registry.getVisionWorkers()[0];
+  let visionWorker = workerPool.getVisionWorkers().find((w) => w.status === "ready")
+    ?? workerPool.getVisionWorkers()[0];
 
   const visionProfile = options.profiles?.vision ?? builtInProfiles.vision;
 
@@ -152,7 +152,7 @@ export async function analyzeImages(
 // =============================================================================
 
 async function waitForWorkerReady(workerId: string, timeoutMs: number): Promise<boolean> {
-  const existing = registry.getWorker(workerId);
+  const existing = workerPool.get(workerId);
   if (existing?.status === "ready") return true;
 
   return new Promise<boolean>((resolve) => {
@@ -161,7 +161,7 @@ async function waitForWorkerReady(workerId: string, timeoutMs: number): Promise<
       if (done) return;
       done = true;
       clearTimeout(timer);
-      registry.off("updated", onUpdate);
+      workerPool.off("update", onUpdate);
       resolve(ok);
     };
 
@@ -171,7 +171,7 @@ async function waitForWorkerReady(workerId: string, timeoutMs: number): Promise<
     };
 
     const timer = setTimeout(() => finish(false), timeoutMs);
-    registry.on("updated", onUpdate);
+    workerPool.on("update", onUpdate);
   });
 }
 
@@ -180,7 +180,7 @@ async function waitForWorkerReady(workerId: string, timeoutMs: number): Promise<
 // =============================================================================
 
 export function getVisionDiagnostics(): Record<string, unknown> {
-  const visionWorkers = registry.getVisionWorkers();
+  const visionWorkers = workerPool.getVisionWorkers();
 
   return {
     queueDepth: 0, // No longer used

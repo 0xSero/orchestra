@@ -2,11 +2,9 @@ import { tool } from "@opencode-ai/plugin";
 import { readFile, writeFile } from "node:fs/promises";
 import { getDefaultGlobalOpenCodeConfigPath } from "../config/orchestrator";
 import { getProfile } from "../config/profiles";
-import { registry } from "../core/registry";
-import { messageBus } from "../core/message-bus";
+import { workerPool, listDeviceRegistry } from "../core/worker-pool";
 import { workerJobs } from "../core/jobs";
 import { clearPassthrough, setPassthrough } from "../core/passthrough";
-import { listDeviceRegistry } from "../core/device-registry";
 import { getLogBuffer } from "../core/logger";
 import { getHandbookMarkdown } from "../ux/handbook";
 import { getRepoDocsBundle } from "../ux/repo-docs";
@@ -40,7 +38,7 @@ export const enableDocsPassthrough = tool({
     const autoSpawn = args.autoSpawn ?? true;
     const showToast = args.showToast ?? true;
 
-    if (autoSpawn && (!registry.getWorker(workerId) || registry.getWorker(workerId)?.status === "stopped")) {
+    if (autoSpawn && (!workerPool.get(workerId) || workerPool.get(workerId)?.status === "stopped")) {
       const profile = getProfile(workerId, getProfiles());
       if (profile) {
         const { basePort, timeout } = getSpawnDefaults();
@@ -77,7 +75,7 @@ export const setPassthroughMode = tool({
     const autoSpawn = args.autoSpawn ?? true;
     const showToast = args.showToast ?? true;
 
-    if (autoSpawn && (!registry.getWorker(workerId) || registry.getWorker(workerId)?.status === "stopped")) {
+    if (autoSpawn && (!workerPool.get(workerId) || workerPool.get(workerId)?.status === "stopped")) {
       const profile = getProfile(workerId, getProfiles());
       if (!profile) return `Worker "${workerId}" is not running and no profile "${workerId}" exists to spawn.`;
       const { basePort, timeout } = getSpawnDefaults();
@@ -145,7 +143,7 @@ export const orchestratorStart = tool({
       void client.tui.showToast({ body: { message: "Starting docs worker…", variant: "info" } }).catch(() => {});
     }
 
-    let instance = registry.getWorker("docs");
+    let instance = workerPool.get("docs");
     if (instance?.status !== "ready" || !instance.client || !instance.sessionId) instance = undefined;
 
     let chosenPersistModel: string | undefined;
@@ -195,7 +193,7 @@ export const orchestratorStart = tool({
     }
 
     if (spawned && ctx?.sessionID && instance?.modelResolution !== "reused existing worker") {
-      registry.trackOwnership(ctx.sessionID, instance.profile.id);
+      workerPool.trackOwnership(ctx.sessionID, instance.profile.id);
     }
 
     if (seedDocs) {
@@ -245,7 +243,7 @@ export const orchestratorDashboard = tool({
     format: tool.schema.enum(["markdown", "json"]).optional().describe("Output format (default: markdown)"),
   },
   async execute(args) {
-    const workers = registry.toJSON() as Array<Record<string, any>>;
+    const workers = workerPool.toJSON() as Array<Record<string, any>>;
     const format: "markdown" | "json" = args.format ?? getDefaultListFormat();
     if (format === "json") return JSON.stringify(workers, null, 2);
 
@@ -286,7 +284,7 @@ export const orchestratorDashboard = tool({
 
 export const orchestratorOutput = tool({
   description:
-    "Unified view of orchestrator activity: wakeups, inter-agent messages, recent jobs, and internal logs (including vision router logs).",
+    "Unified view of orchestrator activity: recent jobs and internal logs (including vision router logs).",
   args: {
     limit: tool.schema.number().optional().describe("Max items per section (default: 20)"),
     after: tool.schema.number().optional().describe("Only include events after this unix-ms timestamp"),
@@ -297,31 +295,15 @@ export const orchestratorOutput = tool({
     const after = typeof args.after === "number" && Number.isFinite(args.after) ? args.after : 0;
     const format: "markdown" | "json" = args.format ?? getDefaultListFormat();
 
-    const wakeups = messageBus.getWakeupHistory({ limit, after });
-    const msgs = messageBus.list("orchestrator", { limit, after });
     const jobs = workerJobs
       .list({ limit: Math.max(limit, 50) })
       .filter((j) => (after ? j.startedAt > after || (j.finishedAt ?? 0) > after : true))
       .slice(0, limit);
     const logs = getLogBuffer(Math.max(limit * 2, 50)).filter((l) => (after ? l.at > after : true));
 
-    const payload = { wakeups, messages: msgs, jobs, logs };
+    const payload = { jobs, logs };
     if (format === "json") return JSON.stringify(payload, null, 2);
 
-    const wakeupRows = wakeups.map((e) => [
-      new Date(e.timestamp).toISOString(),
-      e.workerId,
-      e.reason,
-      e.jobId ?? "",
-      e.summary?.slice(0, 80) ?? "",
-    ]);
-    const msgRows = msgs.map((m) => [
-      new Date(m.createdAt).toISOString(),
-      m.from,
-      m.topic ?? "",
-      m.jobId ?? "",
-      m.text.replace(/\s+/g, " ").slice(0, 120),
-    ]);
     const jobRows = jobs.map((j) => [
       j.id,
       j.workerId,
@@ -340,12 +322,6 @@ export const orchestratorOutput = tool({
     return [
       "# Orchestrator Output",
       "",
-      "## Wakeups",
-      wakeupRows.length ? renderMarkdownTable(["Time", "Worker", "Reason", "Job", "Summary"], wakeupRows) : "(none)",
-      "",
-      "## Messages (to orchestrator)",
-      msgRows.length ? renderMarkdownTable(["Time", "From", "Topic", "Job", "Text"], msgRows) : "(none)",
-      "",
       "## Jobs",
       jobRows.length ? renderMarkdownTable(["Job", "Worker", "Status", "Started", "ms", "Message"], jobRows) : "(none)",
       "",
@@ -362,7 +338,7 @@ export const orchestratorResults = tool({
   },
   async execute(args) {
     const format: "markdown" | "json" = args.format ?? getDefaultListFormat();
-    const workers = [...registry.workers.values()].sort((a, b) => a.profile.id.localeCompare(b.profile.id));
+    const workers = [...workerPool.workers.values()].sort((a, b) => a.profile.id.localeCompare(b.profile.id));
     const data = workers.map((w) => ({
       id: w.profile.id,
       name: w.profile.name,
@@ -398,33 +374,6 @@ export const orchestratorResults = tool({
       lines.push("");
     }
     return lines.join("\n");
-  },
-});
-
-export const orchestratorMessages = tool({
-  description: "List orchestrator message-bus inbox entries (inter-agent communication).",
-  args: {
-    to: tool.schema.string().optional().describe("Inbox recipient to view (default: orchestrator)"),
-    after: tool.schema.number().optional().describe("Only messages after this unix-ms timestamp"),
-    limit: tool.schema.number().optional().describe("Max messages (default: 50)"),
-    format: tool.schema.enum(["markdown", "json"]).optional().describe("Output format (default: markdown)"),
-  },
-  async execute(args) {
-    const to = args.to ?? "orchestrator";
-    const after = typeof args.after === "number" ? args.after : 0;
-    const limit = typeof args.limit === "number" ? args.limit : 50;
-    const msgs = messageBus.list(to, { after, limit });
-    const format: "markdown" | "json" = args.format ?? getDefaultListFormat();
-    if (format === "json") return JSON.stringify(msgs, null, 2);
-    if (msgs.length === 0) return `No messages for "${to}".`;
-    const rows = msgs.map((m) => [
-      new Date(m.createdAt).toISOString(),
-      m.from,
-      m.to,
-      m.topic ?? "",
-      m.text.replace(/\s+/g, " ").slice(0, 120),
-    ]);
-    return renderMarkdownTable(["Time", "From", "To", "Topic", "Text"], rows);
   },
 });
 
@@ -608,77 +557,5 @@ export const macosKeybindsFix = tool({
 
     await writeFile(cfgPath, JSON.stringify(existing, null, 2) + "\n", "utf8");
     return `Saved macOS keybind fix in ${cfgPath}`;
-  },
-});
-
-export const orchestratorWakeups = tool({
-  description: `List recent wakeup events from workers. Workers can call wakeup_orchestrator to notify you when they:
-- Have completed an async task (result_ready)
-- Need input or clarification (needs_attention)  
-- Encountered an error (error)
-- Want to report progress (progress)`,
-  args: {
-    workerId: tool.schema.string().optional().describe("Filter by worker ID"),
-    limit: tool.schema.number().optional().describe("Max events to return (default: 20)"),
-    after: tool.schema.number().optional().describe("Only events after this unix-ms timestamp"),
-    format: tool.schema.enum(["markdown", "json"]).optional().describe("Output format (default: markdown)"),
-    clear: tool.schema.boolean().optional().describe("Clear wakeup history after reading (default: false)"),
-  },
-  async execute(args) {
-    const events = messageBus.getWakeupHistory({
-      workerId: args.workerId,
-      limit: args.limit ?? 20,
-      after: args.after,
-    });
-
-    if (args.clear) {
-      messageBus.clearWakeupHistory(args.workerId);
-    }
-
-    const format: "markdown" | "json" = args.format ?? getDefaultListFormat();
-    if (format === "json") return JSON.stringify(events, null, 2);
-
-    if (events.length === 0) {
-      return args.workerId
-        ? `No wakeup events from worker "${args.workerId}".`
-        : "No wakeup events. Workers can call `wakeup_orchestrator` to notify you.";
-    }
-
-    const reasonEmoji: Record<string, string> = {
-      result_ready: "✅",
-      needs_attention: "👋",
-      error: "❌",
-      progress: "⏳",
-      custom: "📌",
-    };
-
-    const rows = events.map((e) => [
-      new Date(e.timestamp).toISOString(),
-      e.workerId,
-      `${reasonEmoji[e.reason] ?? "?"} ${e.reason}`,
-      e.jobId ?? "",
-      e.summary?.slice(0, 80) ?? "",
-    ]);
-
-    return [
-      "# Worker Wakeups",
-      "",
-      renderMarkdownTable(["Time", "Worker", "Reason", "Job", "Summary"], rows),
-      "",
-      args.clear ? "(History cleared)" : "Tip: Use `clear: true` to clear history after reading.",
-    ].join("\n");
-  },
-});
-
-export const clearWakeups = tool({
-  description: "Clear wakeup history, optionally for a specific worker.",
-  args: {
-    workerId: tool.schema.string().optional().describe("Clear only for this worker ID (default: all)"),
-  },
-  async execute(args) {
-    const count = messageBus.clearWakeupHistory(args.workerId);
-    return args.workerId
-      ? `Cleared ${count} wakeup event(s) for worker "${args.workerId}".`
-      : `Cleared ${count} wakeup event(s).`;
   },
 });

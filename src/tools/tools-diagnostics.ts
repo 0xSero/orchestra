@@ -1,6 +1,5 @@
 import { tool } from "@opencode-ai/plugin";
-import { registry } from "../core/registry";
-import { listDeviceRegistry } from "../core/device-registry";
+import { workerPool, listDeviceRegistry } from "../core/worker-pool";
 import { formatBytes, listOpencodeServeProcesses } from "../core/process-metrics";
 import { renderMarkdownTable } from "./markdown";
 import { getDefaultListFormat } from "./state";
@@ -17,7 +16,7 @@ export const orchestratorDiagnostics = tool({
     const device = await listDeviceRegistry().catch(() => []);
     const opencode = await listOpencodeServeProcesses().catch(() => []);
 
-    const workers = [...registry.workers.values()].sort((a, b) => a.profile.id.localeCompare(b.profile.id));
+    const workers = [...workerPool.workers.values()].sort((a, b) => a.profile.id.localeCompare(b.profile.id));
     const workerRows = workers.map((w) => {
       const pid = typeof w.pid === "number" ? w.pid : undefined;
       const rss = pid ? opencode.find((p) => p.pid === pid)?.rssBytes : undefined;

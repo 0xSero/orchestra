@@ -21,8 +21,8 @@ Worker lifecycle and routing:
 Orchestrator visibility:
 
 - `orchestrator_status` - Show config and worker mappings
+- `orchestrator_output` - Jobs + log tail for recent activity
 - `orchestrator_results` - Inspect last worker outputs
-- `orchestrator_messages` - Inter-agent inbox
 - `orchestrator_device_registry` - Device registry status
 - `orchestrator_diagnostics` - Process and memory diagnostics
 - `list_workflows` - List registered workflows
