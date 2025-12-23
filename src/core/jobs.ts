@@ -13,6 +13,8 @@ export type WorkerJob = {
   id: string;
   workerId: string;
   message: string;
+  sessionId?: string;
+  requestedBy?: string;
   status: WorkerJobStatus;
   startedAt: number;
   finishedAt?: number;
@@ -29,9 +31,17 @@ export class WorkerJobRegistry {
   private jobs = new Map<string, WorkerJob>();
   private waiters = new Map<string, Set<(job: WorkerJob) => void>>();
 
-  create(input: { workerId: string; message: string }): WorkerJob {
+  create(input: { workerId: string; message: string; sessionId?: string; requestedBy?: string }): WorkerJob {
     const id = randomUUID();
-    const job: WorkerJob = { id, workerId: input.workerId, message: input.message, status: "running", startedAt: Date.now() };
+    const job: WorkerJob = {
+      id,
+      workerId: input.workerId,
+      message: input.message,
+      ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+      ...(input.requestedBy ? { requestedBy: input.requestedBy } : {}),
+      status: "running",
+      startedAt: Date.now(),
+    };
     this.jobs.set(id, job);
     this.prune();
     return job;

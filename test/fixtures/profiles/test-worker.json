@@ -1,7 +1,7 @@
 {
   "id": "test-worker",
   "name": "Test Worker",
-  "model": "test-model",
+  "model": "opencode/gpt-5-nano",
   "purpose": "General purpose test worker for unit and integration tests",
   "whenToUse": "Use this worker for basic functionality testing",
   "systemPrompt": "You are a test worker. Respond concisely and predictably for testing purposes.",

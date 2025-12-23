@@ -75,7 +75,7 @@ export const DEFAULT_TEST_CONFIG: OrchestratorConfig = {
 export const DEFAULT_TEST_PROFILE: WorkerProfile = {
   id: "test-worker",
   name: "Test Worker",
-  model: "test-model",
+  model: "opencode/gpt-5-nano",
   purpose: "Testing purposes",
   whenToUse: "Use for tests only",
   temperature: 0.5,

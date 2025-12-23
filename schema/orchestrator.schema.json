@@ -129,8 +129,41 @@
         "enabled": { "type": "boolean", "default": true },
         "autoSpawn": { "type": "boolean", "default": true },
         "autoRecord": { "type": "boolean", "default": true },
+        "autoInject": { "type": "boolean", "default": true },
         "scope": { "type": "string", "enum": ["project", "global"], "default": "project" },
-        "maxChars": { "type": "number", "default": 2000 }
+        "maxChars": { "type": "number", "default": 2000 },
+        "summaries": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "sessionMaxChars": { "type": "number", "default": 2000 },
+            "projectMaxChars": { "type": "number", "default": 2000 }
+          }
+        },
+        "trim": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxMessagesPerSession": { "type": "number", "default": 60 },
+            "maxMessagesPerProject": { "type": "number", "default": 400 },
+            "maxMessagesGlobal": { "type": "number", "default": 2000 },
+            "maxProjectsGlobal": { "type": "number", "default": 25 }
+          }
+        },
+        "inject": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxChars": { "type": "number", "default": 2000 },
+            "maxEntries": { "type": "number", "default": 8 },
+            "includeMessages": { "type": "boolean", "default": false },
+            "includeSessionSummary": { "type": "boolean", "default": true },
+            "includeProjectSummary": { "type": "boolean", "default": true },
+            "includeGlobal": { "type": "boolean", "default": true },
+            "maxGlobalEntries": { "type": "number", "default": 3 }
+          }
+        }
       }
     },
     "telemetry": {

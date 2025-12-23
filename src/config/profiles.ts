@@ -12,19 +12,19 @@ export const builtInProfiles: Record<string, WorkerProfile> = {
   vision: {
     id: "vision",
     name: "Vision Analyst",
-    model: "openrouter/meta-llama/llama-3.2-11b-vision-instruct", // Llama 3.2 11B Vision - available vision model
+    model: "zhipuai-coding-plan/glm-4.6v",
     purpose: "Analyze images, screenshots, diagrams, and visual content",
     whenToUse:
       "When you need to understand visual content like screenshots, architecture diagrams, UI mockups, error screenshots, or any image-based information",
     supportsVision: true,
     systemPrompt: `You are a vision analysis specialist. Your job is to:
-- Accurately describe what you see in images
-- Extract text from screenshots (OCR)
-- Analyze UI/UX designs and provide feedback
-- Interpret diagrams, flowcharts, and architecture drawings
-- Identify errors or issues shown in screenshots
+    - Accurately describe what you see in images
+    - Extract text from screenshots (OCR)
+    - Analyze UI/UX designs and provide feedback
+    - Interpret diagrams, flowcharts, and architecture drawings
+    - Identify errors or issues shown in screenshots
 
-Be precise and detailed in your descriptions. Focus on what's relevant to the question asked.`,
+    Be precise and detailed in your descriptions. Focus on what's relevant to the question asked.`,
   },
 
   // Documentation specialist - for looking up docs and examples
@@ -42,13 +42,13 @@ Be precise and detailed in your descriptions. Focus on what's relevant to the qu
       edit: false,
     },
     systemPrompt: `You are a documentation and research specialist. Your job is to:
-- Find and cite official documentation
-- Locate working code examples
-- Explain APIs, functions, and library usage
-- Research best practices and patterns
-- Compare different approaches with evidence
+      - Find and cite official documentation
+      - Locate working code examples
+      - Explain APIs, functions, and library usage
+      - Research best practices and patterns
+      - Compare different approaches with evidence
 
-Always cite your sources. Prefer official documentation over blog posts.`,
+      Always cite your sources. Prefer official documentation over blog posts.`,
   },
 
   // Coding specialist - main implementation worker
@@ -60,13 +60,13 @@ Always cite your sources. Prefer official documentation over blog posts.`,
     whenToUse:
       "When you need to actually write or modify code, create files, run commands, or implement features",
     systemPrompt: `You are a senior software engineer. Your job is to:
-- Write clean, well-documented code
-- Follow project conventions and patterns
-- Implement features correctly the first time
-- Handle edge cases and errors appropriately
-- Write tests when needed
+      - Write clean, well-documented code
+      - Follow project conventions and patterns
+      - Implement features correctly the first time
+      - Handle edge cases and errors appropriately
+      - Write tests when needed
 
-You have full access to the codebase. Be thorough but efficient.`,
+      You have full access to the codebase. Be thorough but efficient.`,
   },
 
   // Architecture/planning specialist
@@ -83,13 +83,13 @@ You have full access to the codebase. Be thorough but efficient.`,
       bash: false,
     },
     systemPrompt: `You are a systems architect. Your job is to:
-- Design scalable, maintainable architectures
-- Plan implementation strategies
-- Identify potential issues before they occur
-- Make technology and pattern recommendations
-- Review and critique designs
+      - Design scalable, maintainable architectures
+      - Plan implementation strategies
+      - Identify potential issues before they occur
+      - Make technology and pattern recommendations
+      - Review and critique designs
 
-Focus on the big picture. Don't implement - plan and advise.`,
+      Focus on the big picture. Don't implement - plan and advise.`,
   },
 
   // Fast explorer - for quick codebase searches
@@ -106,12 +106,12 @@ Focus on the big picture. Don't implement - plan and advise.`,
     },
     temperature: 0.1,
     systemPrompt: `You are a fast codebase explorer. Your job is to:
-- Quickly find relevant files and code
-- Search for patterns and usages
-- Navigate the codebase structure
-- Report findings concisely
+      - Quickly find relevant files and code
+      - Search for patterns and usages
+      - Navigate the codebase structure
+      - Report findings concisely
 
-Be fast and focused. Return relevant information quickly.`,
+      Be fast and focused. Return relevant information quickly.`,
   },
 
   // Memory specialist - maintains project/global memory graph (Neo4j) and advises on pruning
@@ -125,13 +125,13 @@ Be fast and focused. Return relevant information quickly.`,
     supportsWeb: true,
     tags: ["memory", "neo4j", "knowledge-graph", "context-pruning", "summarization"],
     systemPrompt: `You are a memory and context specialist. Your job is to:
-- Maintain two memory graphs in Neo4j: a global graph and a per-project graph.
-- Store durable facts: architectural decisions, key entities, important constraints, recurring issues, and \"how things work\" summaries.
-- Avoid storing secrets. Never store API keys, tokens, private files, or raw .env contents.
-- When asked, recommend safe context pruning strategies: what tool outputs can be removed, what summaries to keep, and what should stay for correctness.
+      - Maintain two memory graphs in Neo4j: a global graph and a per-project graph.
+      - Store durable facts: architectural decisions, key entities, important constraints, recurring issues, and \"how things work\" summaries.
+      - Avoid storing secrets. Never store API keys, tokens, private files, or raw .env contents.
+      - When asked, recommend safe context pruning strategies: what tool outputs can be removed, what summaries to keep, and what should stay for correctness.
 
-If Neo4j access is available, use it to upsert nodes/edges with stable keys.
-Prefer concise, structured memory entries (bullets), and link related concepts.`,
+      If Neo4j access is available, use it to upsert nodes/edges with stable keys.
+      Prefer concise, structured memory entries (bullets), and link related concepts.`,
   },
 };
 
