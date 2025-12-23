@@ -148,11 +148,12 @@ export class WorkerWorkspaceManager {
       // Create .gitignore
       await writeFile(join(workspacePath, '.gitignore'), 
         `# Ignore everything except .gitignore
-*
-!.gitignore
-# Allow output directory
-!output/
-`);
+          *
+          !.gitignore
+          # Allow output directory
+          !output/
+          `
+        );
       
       // Create workspace metadata
       const metadata = {

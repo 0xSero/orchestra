@@ -14,7 +14,7 @@ import { createOpencode } from "@opencode-ai/sdk";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { hasImages, analyzeImages } from "../src/ux/vision-router";
+import { hasImages, analyzeImages, formatVisionAnalysis, replaceImagesWithAnalysis } from "../src/ux/vision-router";
 import { spawnWorker, sendToWorker, stopWorker } from "../src/workers/spawner";
 import { registry } from "../src/core/registry";
 import { buildPromptParts } from "../src/workers/prompt";
@@ -27,6 +27,53 @@ const TEST_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
 const TEST_PNG_BUFFER = Buffer.from(TEST_PNG_BASE64, "base64");
 
 describe("Vision Routing", () => {
+  describe("formatVisionAnalysis", () => {
+    test("formats successful analysis with header", () => {
+      const out = formatVisionAnalysis({ success: true, analysis: "Detected text here." });
+      expect(out).toBe("[VISION ANALYSIS]\nDetected text here.");
+    });
+
+    test("trims empty analysis", () => {
+      const out = formatVisionAnalysis({ success: true, analysis: "   " });
+      expect(out).toBeUndefined();
+    });
+
+    test("formats error output", () => {
+      const out = formatVisionAnalysis({ success: false, error: "Vision worker unavailable" });
+      expect(out).toBe("[VISION ANALYSIS FAILED]\nVision worker unavailable");
+    });
+  });
+
+  describe("replaceImagesWithAnalysis", () => {
+    test("removes image parts and appends analysis to text", () => {
+      const parts = [
+        { type: "text", text: "Please read this image." },
+        { type: "file", mime: "image/png", url: "clipboard" },
+      ];
+      const out = replaceImagesWithAnalysis(parts, "[VISION ANALYSIS]\nFound text");
+      expect(out.length).toBe(1);
+      expect(out[0].type).toBe("text");
+      expect(out[0].text).toContain("Please read this image.");
+      expect(out[0].text).toContain("[VISION ANALYSIS]");
+    });
+
+    test("creates a new text part when no text exists", () => {
+      const parts = [
+        { type: "file", mime: "image/png", url: "clipboard" },
+      ];
+      const out = replaceImagesWithAnalysis(parts, "[VISION ANALYSIS]\nFound text", { sessionID: "s", messageID: "m" });
+      expect(out.length).toBe(1);
+      expect(out[0].type).toBe("text");
+      expect(out[0].text).toBe("[VISION ANALYSIS]\nFound text");
+    });
+
+    test("returns original parts when no images exist", () => {
+      const parts = [{ type: "text", text: "No images here." }];
+      const out = replaceImagesWithAnalysis(parts, "[VISION ANALYSIS]\nIgnored");
+      expect(out).toBe(parts);
+    });
+  });
+
   describe("hasImages - Image Detection", () => {
     test("detects type='image' parts", () => {
       const parts = [
@@ -412,30 +459,42 @@ describe("Vision Routing", () => {
       expect(result.error).toContain("No valid image attachments");
     });
 
-    test("handles concurrent calls with lock", async () => {
+    test("serializes concurrent calls instead of failing fast", async () => {
       // Start two analyze calls simultaneously
       const parts = [
         { type: "file", mime: "image/png", url: `data:image/png;base64,${TEST_PNG_BASE64}` },
       ];
-
-      // Clear any existing lock state by waiting a bit
-      await new Promise((r) => setTimeout(r, 100));
 
       const [result1, result2] = await Promise.all([
         analyzeImages(parts, { spawnIfNeeded: false }),
         analyzeImages(parts, { spawnIfNeeded: false }),
       ]);
 
-      // One should succeed (or fail normally), one should be blocked
-      const blocked = [result1, result2].filter(
-        (r) => !r.success && r.error?.includes("already processing")
-      );
-      
-      // At least one should report already processing OR both should get normal error
-      // (depends on timing)
-      expect(result1.success || result2.success || blocked.length > 0 || 
-             result1.error?.includes("No vision worker") || 
-             result2.error?.includes("No vision worker")).toBe(true);
+      // With no vision worker available, both should fail normally (not with a transient busy error).
+      expect(result1.success).toBe(false);
+      expect(result2.success).toBe(false);
+      expect(result1.error).toContain("No vision worker");
+      expect(result2.error).toContain("No vision worker");
+      expect(result1.error?.toLowerCase().includes("already processing")).toBe(false);
+      expect(result2.error?.toLowerCase().includes("already processing")).toBe(false);
+    });
+
+    test("handles concurrent calls gracefully", async () => {
+      // Note: Deduplication now happens at the plugin level via message ID tracking.
+      // The analyzeImages function no longer deduplicates at the API level.
+      const parts = [
+        { type: "file", mime: "image/png", url: `data:image/png;base64,${TEST_PNG_BASE64}` },
+      ];
+
+      const [result1, result2] = await Promise.all([
+        analyzeImages(parts, { spawnIfNeeded: false, requestKey: "session:message" }),
+        analyzeImages(parts, { spawnIfNeeded: false, requestKey: "session:message" }),
+      ]);
+
+      // Both calls complete with equivalent results
+      expect(result1).toEqual(result2);
+      expect(result1.success).toBe(false);
+      expect(result1.error).toContain("No vision worker");
     });
   });
 });

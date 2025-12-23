@@ -79,14 +79,47 @@ export async function startBridgeServer(): Promise<BridgeServer> {
       if (body.jobId && body.report) workerJobs.attachReport(body.jobId, body.report);
       if (body.jobId && body.final && typeof body.final === "string") workerJobs.setResult(body.jobId, { responseText: body.final });
 
+      // Reports for async jobs should wake the orchestrator even if the worker forgets to call wakeup_orchestrator.
+      if (body.jobId) {
+        const job = workerJobs.get(body.jobId);
+        messageBus.wakeup({
+          workerId: body.workerId,
+          jobId: body.jobId,
+          reason: "result_ready",
+          summary: body.report?.summary ?? (typeof body.final === "string" ? body.final.slice(0, 120) : "report received"),
+          data: {
+            kind: "report",
+            ...(job?.sessionId ? { sessionId: job.sessionId } : {}),
+          },
+          timestamp: Date.now(),
+        });
+      }
+
       return writeJson(res, 200, { ok: true });
     }
 
     if (url.pathname === "/v1/message") {
       if (req.method !== "POST") return methodNotAllowed(res);
-      const body = (await readJson(req)) as { from?: string; to?: string; topic?: string; text?: string };
+      const body = (await readJson(req)) as { from?: string; to?: string; topic?: string; jobId?: string; text?: string };
       if (!body.from || !body.to || !body.text) return writeJson(res, 400, { error: "missing_fields" });
-      const msg = messageBus.send({ from: body.from, to: body.to, topic: body.topic, text: body.text });
+      const msg = messageBus.send({ from: body.from, to: body.to, topic: body.topic, jobId: body.jobId, text: body.text });
+
+      // Messages addressed to the orchestrator are treated as actionable and should wake it.
+      if (body.to === "orchestrator") {
+        const job = body.jobId ? workerJobs.get(body.jobId) : undefined;
+        messageBus.wakeup({
+          workerId: body.from,
+          jobId: body.jobId,
+          reason: "needs_attention",
+          summary: body.topic ? `message: ${body.topic}` : "message",
+          data: {
+            kind: "message",
+            messageId: msg.id,
+            ...(job?.sessionId ? { sessionId: job.sessionId } : {}),
+          },
+          timestamp: Date.now(),
+        });
+      }
       return writeJson(res, 200, { ok: true, id: msg.id, createdAt: msg.createdAt });
     }
 

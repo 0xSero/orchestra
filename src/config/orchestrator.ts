@@ -190,8 +190,38 @@ function parseOrchestratorConfigFile(raw: unknown): Partial<OrchestratorConfigFi
     if (typeof raw.memory.enabled === "boolean") memory.enabled = raw.memory.enabled;
     if (typeof raw.memory.autoSpawn === "boolean") memory.autoSpawn = raw.memory.autoSpawn;
     if (typeof raw.memory.autoRecord === "boolean") memory.autoRecord = raw.memory.autoRecord;
+    if (typeof raw.memory.autoInject === "boolean") memory.autoInject = raw.memory.autoInject;
     if (raw.memory.scope === "project" || raw.memory.scope === "global") memory.scope = raw.memory.scope;
     if (typeof raw.memory.maxChars === "number") memory.maxChars = raw.memory.maxChars;
+
+    if (isPlainObject(raw.memory.summaries)) {
+      const summaries: Record<string, unknown> = {};
+      if (typeof raw.memory.summaries.enabled === "boolean") summaries.enabled = raw.memory.summaries.enabled;
+      if (typeof raw.memory.summaries.sessionMaxChars === "number") summaries.sessionMaxChars = raw.memory.summaries.sessionMaxChars;
+      if (typeof raw.memory.summaries.projectMaxChars === "number") summaries.projectMaxChars = raw.memory.summaries.projectMaxChars;
+      memory.summaries = summaries;
+    }
+
+    if (isPlainObject(raw.memory.trim)) {
+      const trim: Record<string, unknown> = {};
+      if (typeof raw.memory.trim.maxMessagesPerSession === "number") trim.maxMessagesPerSession = raw.memory.trim.maxMessagesPerSession;
+      if (typeof raw.memory.trim.maxMessagesPerProject === "number") trim.maxMessagesPerProject = raw.memory.trim.maxMessagesPerProject;
+      if (typeof raw.memory.trim.maxMessagesGlobal === "number") trim.maxMessagesGlobal = raw.memory.trim.maxMessagesGlobal;
+      if (typeof raw.memory.trim.maxProjectsGlobal === "number") trim.maxProjectsGlobal = raw.memory.trim.maxProjectsGlobal;
+      memory.trim = trim;
+    }
+
+    if (isPlainObject(raw.memory.inject)) {
+      const inject: Record<string, unknown> = {};
+      if (typeof raw.memory.inject.maxChars === "number") inject.maxChars = raw.memory.inject.maxChars;
+      if (typeof raw.memory.inject.maxEntries === "number") inject.maxEntries = raw.memory.inject.maxEntries;
+      if (typeof raw.memory.inject.includeMessages === "boolean") inject.includeMessages = raw.memory.inject.includeMessages;
+      if (typeof raw.memory.inject.includeSessionSummary === "boolean") inject.includeSessionSummary = raw.memory.inject.includeSessionSummary;
+      if (typeof raw.memory.inject.includeProjectSummary === "boolean") inject.includeProjectSummary = raw.memory.inject.includeProjectSummary;
+      if (typeof raw.memory.inject.includeGlobal === "boolean") inject.includeGlobal = raw.memory.inject.includeGlobal;
+      if (typeof raw.memory.inject.maxGlobalEntries === "number") inject.maxGlobalEntries = raw.memory.inject.maxGlobalEntries;
+      memory.inject = inject;
+    }
     partial.memory = memory as OrchestratorConfig["memory"];
   }
 
@@ -305,8 +335,29 @@ export async function loadOrchestratorConfig(input: {
       enabled: true,
       autoSpawn: true,
       autoRecord: true,
+      autoInject: true,
       scope: "project",
       maxChars: 2000,
+      summaries: {
+        enabled: true,
+        sessionMaxChars: 2000,
+        projectMaxChars: 2000,
+      },
+      trim: {
+        maxMessagesPerSession: 60,
+        maxMessagesPerProject: 400,
+        maxMessagesGlobal: 2000,
+        maxProjectsGlobal: 25,
+      },
+      inject: {
+        maxChars: 2000,
+        maxEntries: 8,
+        includeMessages: false,
+        includeSessionSummary: true,
+        includeProjectSummary: true,
+        includeGlobal: true,
+        maxGlobalEntries: 3,
+      },
     },
     telemetry: {
       enabled: false,

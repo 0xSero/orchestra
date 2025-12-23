@@ -1,6 +1,7 @@
 import { tool } from "@opencode-ai/plugin";
 import { registry } from "../core/registry";
 import { workerJobs } from "../core/jobs";
+import { messageBus } from "../core/message-bus";
 import { getProfile } from "../config/profiles";
 import type { WorkerProfile } from "../types";
 import { sendToWorker, spawnWorker, spawnWorkers, stopWorker } from "../workers/spawner";
@@ -152,8 +153,13 @@ export const askWorkerAsync = tool({
     timeoutMs: tool.schema.number().optional().describe("Timeout in ms (default: 10 minutes)"),
     from: tool.schema.string().optional().describe("Source worker ID (for worker-to-worker communication)"),
   },
-  async execute(args) {
-    const job = workerJobs.create({ workerId: args.workerId, message: args.message });
+  async execute(args, ctx: ToolContext) {
+    const job = workerJobs.create({
+      workerId: args.workerId,
+      message: args.message,
+      sessionId: ctx?.sessionID,
+      requestedBy: ctx?.agent,
+    });
 
     void (async () => {
       const res = await sendToWorker(args.workerId, args.message, {
@@ -164,6 +170,22 @@ export const askWorkerAsync = tool({
       });
       if (res.success && res.response) workerJobs.setResult(job.id, { responseText: res.response });
       else workerJobs.setError(job.id, { error: res.error ?? "unknown_error" });
+
+      // Fallback wakeup: if the worker doesn't call wakeup_orchestrator / message_tool, still notify the owning session.
+      const sessionId = ctx?.sessionID;
+      if (!sessionId) return;
+      const reason = res.success ? "result_ready" : "error";
+      setTimeout(() => {
+        if (messageBus.hasWakeup({ jobId: job.id, reason })) return;
+        messageBus.wakeup({
+          workerId: args.workerId,
+          jobId: job.id,
+          reason,
+          summary: res.success ? "async job complete" : (res.error ?? "async job failed"),
+          data: { source: "orchestrator", sessionId },
+          timestamp: Date.now(),
+        });
+      }, 250);
     })().catch((e) => workerJobs.setError(job.id, { error: e instanceof Error ? e.message : String(e) }));
 
     return JSON.stringify({ jobId: job.id, workerId: job.workerId, startedAt: job.startedAt }, null, 2);

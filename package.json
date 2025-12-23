@@ -23,7 +23,8 @@
     "build": "bun build ./src/index.ts --outdir ./dist --target node --external @opencode-ai/sdk --external @opencode-ai/plugin --external zod && tsc --emitDeclarationOnly --declaration --outDir dist",
     "dev": "bun --watch src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "bench": "bun test ./test/performance/*.bench.ts"
   },
   "dependencies": {
     "@opencode-ai/plugin": "^1.0.164",

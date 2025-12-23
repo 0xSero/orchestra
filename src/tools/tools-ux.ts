@@ -4,7 +4,10 @@ import { getDefaultGlobalOpenCodeConfigPath } from "../config/orchestrator";
 import { getProfile } from "../config/profiles";
 import { registry } from "../core/registry";
 import { messageBus } from "../core/message-bus";
+import { workerJobs } from "../core/jobs";
+import { clearPassthrough, setPassthrough } from "../core/passthrough";
 import { listDeviceRegistry } from "../core/device-registry";
+import { getLogBuffer } from "../core/logger";
 import { getHandbookMarkdown } from "../ux/handbook";
 import { getRepoDocsBundle } from "../ux/repo-docs";
 import { sendToWorker, spawnWorker } from "../workers/spawner";
@@ -22,9 +25,10 @@ export const orchestratorHelp = tool({
 
 export const enableDocsPassthrough = tool({
   description:
-    "Enable 'docs passthrough' mode: the orchestrator relays future user messages to the docs worker until you say 'exit docs mode'.",
+    "Enable 'docs passthrough' mode: the orchestrator relays future user messages to the docs worker until you say 'exit passthrough' (or 'exit docs mode').",
   args: {
     workerId: tool.schema.string().optional().describe("Docs worker ID (default: 'docs')"),
+    autoSpawn: tool.schema.boolean().optional().describe("Spawn the worker if missing (default: true)"),
     showToast: tool.schema.boolean().optional().describe("Show a toast (default: true)"),
   },
   async execute(args, _ctx: ToolContext) {
@@ -33,26 +37,18 @@ export const enableDocsPassthrough = tool({
     if (!_ctx?.sessionID) return "Missing sessionID; run this inside an active OpenCode session.";
 
     const workerId = args.workerId ?? "docs";
+    const autoSpawn = args.autoSpawn ?? true;
     const showToast = args.showToast ?? true;
 
-    const text =
-      `<docs-passthrough enabled="true" worker="${workerId}">\n` +
-      `You are now in DOCS PASSTHROUGH mode.\n\n` +
-      `For every new user message:\n` +
-      `- Treat it as a request to the docs worker.\n` +
-      `- Call ask_worker({ workerId: '${workerId}', message: <include the user message + any minimal needed context> }).\n` +
-      `- Return ONLY the docs worker's answer.\n\n` +
-      `Do NOT run other tools or spawn other workers unless the user explicitly asks.\n` +
-      `If the user says "exit docs mode", "stop docs", or "back", disable passthrough and respond normally.\n` +
-      `</docs-passthrough>`;
+    if (autoSpawn && (!registry.getWorker(workerId) || registry.getWorker(workerId)?.status === "stopped")) {
+      const profile = getProfile(workerId, getProfiles());
+      if (profile) {
+        const { basePort, timeout } = getSpawnDefaults();
+        await spawnWorker(profile, { basePort, timeout, directory: getDirectory(), client }).catch(() => {});
+      }
+    }
 
-    await client.session
-      .prompt({
-        path: { id: _ctx.sessionID },
-        body: { noReply: true, parts: [{ type: "text", text }] as any },
-        query: { directory: getDirectory() },
-      } as any)
-      .catch(() => {});
+    setPassthrough(_ctx.sessionID, workerId);
 
     if (showToast) {
       void client.tui
@@ -60,7 +56,66 @@ export const enableDocsPassthrough = tool({
         .catch(() => {});
     }
 
-    return `Docs passthrough enabled. Ask questions normally; say "exit docs mode" to stop.`;
+    return `Docs passthrough enabled. Ask questions normally; say "exit passthrough" to stop.`;
+  },
+});
+
+export const setPassthroughMode = tool({
+  description:
+    "Enable passthrough mode for the current session: relay user messages to a target worker until disabled.",
+  args: {
+    workerId: tool.schema.string().describe("Worker ID to relay to (e.g. 'docs', 'coder', 'vision')"),
+    autoSpawn: tool.schema.boolean().optional().describe("Spawn the worker if missing (default: true)"),
+    showToast: tool.schema.boolean().optional().describe("Show a toast (default: true)"),
+  },
+  async execute(args, ctx: ToolContext) {
+    const client = getClient();
+    if (!client) return "OpenCode client not available; restart OpenCode.";
+    if (!ctx?.sessionID) return "Missing sessionID; run this inside an active OpenCode session.";
+
+    const workerId = args.workerId;
+    const autoSpawn = args.autoSpawn ?? true;
+    const showToast = args.showToast ?? true;
+
+    if (autoSpawn && (!registry.getWorker(workerId) || registry.getWorker(workerId)?.status === "stopped")) {
+      const profile = getProfile(workerId, getProfiles());
+      if (!profile) return `Worker "${workerId}" is not running and no profile "${workerId}" exists to spawn.`;
+      const { basePort, timeout } = getSpawnDefaults();
+      await spawnWorker(profile, { basePort, timeout, directory: getDirectory(), client });
+    }
+
+    setPassthrough(ctx.sessionID, workerId);
+
+    if (showToast) {
+      void client.tui
+        .showToast({ body: { message: `Passthrough enabled (worker: ${workerId})`, variant: "success" } })
+        .catch(() => {});
+    }
+
+    return `Passthrough enabled (worker: ${workerId}). Say "exit passthrough" to stop.`;
+  },
+});
+
+export const clearPassthroughMode = tool({
+  description: "Disable passthrough mode for the current session (if enabled).",
+  args: {
+    showToast: tool.schema.boolean().optional().describe("Show a toast (default: true)"),
+  },
+  async execute(args, ctx: ToolContext) {
+    const client = getClient();
+    if (!client) return "OpenCode client not available; restart OpenCode.";
+    if (!ctx?.sessionID) return "Missing sessionID; run this inside an active OpenCode session.";
+    const showToast = args.showToast ?? true;
+
+    const prev = clearPassthrough(ctx.sessionID);
+
+    if (showToast) {
+      void client.tui
+        .showToast({ body: { message: prev ? "Passthrough disabled" : "Passthrough already disabled", variant: "info" } })
+        .catch(() => {});
+    }
+
+    return prev ? "Passthrough disabled." : "Passthrough was not enabled.";
   },
 });
 
@@ -225,6 +280,77 @@ export const orchestratorDashboard = tool({
       warnings.length ? ["", "## Warnings", ...warnings.map((w) => `- \`${w.id}\`: ${w.warning}`)].join("\n") : "",
       "",
       "Tip: `orchestrator.trace.docs` shows docs worker activity.",
+    ].join("\n");
+  },
+});
+
+export const orchestratorOutput = tool({
+  description:
+    "Unified view of orchestrator activity: wakeups, inter-agent messages, recent jobs, and internal logs (including vision router logs).",
+  args: {
+    limit: tool.schema.number().optional().describe("Max items per section (default: 20)"),
+    after: tool.schema.number().optional().describe("Only include events after this unix-ms timestamp"),
+    format: tool.schema.enum(["markdown", "json"]).optional().describe("Output format (default: markdown)"),
+  },
+  async execute(args) {
+    const limit = Math.max(1, args.limit ?? 20);
+    const after = typeof args.after === "number" && Number.isFinite(args.after) ? args.after : 0;
+    const format: "markdown" | "json" = args.format ?? getDefaultListFormat();
+
+    const wakeups = messageBus.getWakeupHistory({ limit, after });
+    const msgs = messageBus.list("orchestrator", { limit, after });
+    const jobs = workerJobs
+      .list({ limit: Math.max(limit, 50) })
+      .filter((j) => (after ? j.startedAt > after || (j.finishedAt ?? 0) > after : true))
+      .slice(0, limit);
+    const logs = getLogBuffer(Math.max(limit * 2, 50)).filter((l) => (after ? l.at > after : true));
+
+    const payload = { wakeups, messages: msgs, jobs, logs };
+    if (format === "json") return JSON.stringify(payload, null, 2);
+
+    const wakeupRows = wakeups.map((e) => [
+      new Date(e.timestamp).toISOString(),
+      e.workerId,
+      e.reason,
+      e.jobId ?? "",
+      e.summary?.slice(0, 80) ?? "",
+    ]);
+    const msgRows = msgs.map((m) => [
+      new Date(m.createdAt).toISOString(),
+      m.from,
+      m.topic ?? "",
+      m.jobId ?? "",
+      m.text.replace(/\s+/g, " ").slice(0, 120),
+    ]);
+    const jobRows = jobs.map((j) => [
+      j.id,
+      j.workerId,
+      j.status,
+      new Date(j.startedAt).toISOString(),
+      j.durationMs ? `${j.durationMs}` : "",
+      (j.message ?? "").slice(0, 60).replace(/\s+/g, " "),
+    ]);
+    const logRows = logs
+      .slice()
+      .reverse()
+      .slice(0, limit)
+      .reverse()
+      .map((l) => [new Date(l.at).toISOString(), l.level, l.message.slice(0, 200)]);
+
+    return [
+      "# Orchestrator Output",
+      "",
+      "## Wakeups",
+      wakeupRows.length ? renderMarkdownTable(["Time", "Worker", "Reason", "Job", "Summary"], wakeupRows) : "(none)",
+      "",
+      "## Messages (to orchestrator)",
+      msgRows.length ? renderMarkdownTable(["Time", "From", "Topic", "Job", "Text"], msgRows) : "(none)",
+      "",
+      "## Jobs",
+      jobRows.length ? renderMarkdownTable(["Job", "Worker", "Status", "Started", "ms", "Message"], jobRows) : "(none)",
+      "",
+      "## Logs",
+      logRows.length ? renderMarkdownTable(["Time", "Level", "Message"], logRows) : "(none)",
     ].join("\n");
   },
 });

@@ -1,7 +1,7 @@
 {
   "id": "slow-worker",
   "name": "Slow Worker",
-  "model": "test-model-slow",
+  "model": "opencode/gpt-5-nano",
   "purpose": "Worker that simulates slow responses for timeout and performance testing",
   "whenToUse": "Use this worker to test timeout handling and performance degradation scenarios",
   "systemPrompt": "You are a slow worker. Take your time to respond thoroughly. Simulate latency in your responses.",

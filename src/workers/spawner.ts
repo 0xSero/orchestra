@@ -1,5 +1,8 @@
 /**
  * Worker Spawner - Creates and manages OpenCode worker instances
+ *
+ * NOTE: This module handles the low-level spawn and communication operations.
+ * For worker lifecycle management (reuse, pooling, deduplication), use worker-pool.ts.
  */
 
 import { createOpencodeClient } from "@opencode-ai/sdk";
@@ -14,7 +17,6 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { ensureRuntime, registerWorkerInDeviceRegistry } from "../core/runtime";
 import { listDeviceRegistry, removeWorkerEntriesByPid, type DeviceRegistryWorkerEntry } from "../core/device-registry";
 import { getUserConfigDir } from "../helpers/format";
-import { withWorkerProfileLock } from "../core/profile-lock";
 import { getRepoContextForWorker } from "../ux/repo-context";
 
 interface SpawnOptions {
@@ -28,7 +30,8 @@ interface SpawnOptions {
   client?: any;
 }
 
-const inFlightSpawns = new Map<string, Promise<WorkerInstance>>();
+// In-flight spawn deduplication moved to worker-pool.ts
+// This module now focuses on pure spawn operations
 
 function isValidPort(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 65535;
@@ -88,123 +91,15 @@ async function checkWorkerBridgeTools(
   return { ok: missing.length === 0, missing, toolIds };
 }
 
+// isProcessAlive, findExistingWorker, and tryReuseExistingWorker moved to worker-pool.ts
+// This module now handles only the core spawn operation
+
 function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
   } catch {
     return false;
-  }
-}
-
-/**
- * Find an existing worker from the device registry that matches the profile
- * and is still alive.
- */
-async function findExistingWorker(
-  profileId: string
-): Promise<DeviceRegistryWorkerEntry | undefined> {
-  const entries = await listDeviceRegistry();
-  const candidates = entries.filter(
-    (e): e is DeviceRegistryWorkerEntry =>
-      e.kind === "worker" &&
-      e.workerId === profileId &&
-      (e.status === "ready" || e.status === "busy") &&
-      isProcessAlive(e.pid)
-  );
-  // Prefer the most recently updated entry
-  candidates.sort((a, b) => b.updatedAt - a.updatedAt);
-  return candidates[0];
-}
-
-/**
- * Try to reconnect to an existing worker process instead of spawning a new one.
- * Returns undefined if reconnection fails or no suitable worker exists.
- */
-async function tryReuseExistingWorker(
-  profile: WorkerProfile,
-  directory: string
-): Promise<WorkerInstance | undefined> {
-  const existing = await findExistingWorker(profile.id);
-  if (!existing || !existing.url) return undefined;
-
-  try {
-    const client = createOpencodeClient({ baseUrl: existing.url });
-
-    // Verify the worker is still responsive and get existing sessions
-    const sessionsResult = await Promise.race([
-      client.session.list({ query: { directory } } as any),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Health check timeout")), 3000)
-      ),
-    ]);
-
-    if (!sessionsResult.data) return undefined;
-
-    const sessions = sessionsResult.data as Array<{ id: string }>;
-
-    const toolCheck = await checkWorkerBridgeTools(client, directory).catch(() => undefined);
-    if (toolCheck && !toolCheck.ok) {
-      await client.instance.dispose({ query: { directory } } as any).catch(() => {});
-      await removeWorkerEntriesByPid(existing.pid).catch(() => {});
-      return undefined;
-    }
-
-    // Determine which session to use:
-    // 1. Prefer the session stored in registry (continuity)
-    // 2. Fall back to first existing session
-    // 3. Create new session only if none exist
-    let sessionId: string | undefined;
-
-    if (existing.sessionId && sessions.some((s) => s.id === existing.sessionId)) {
-      // Stored session still exists, reuse it
-      sessionId = existing.sessionId;
-    } else if (sessions.length > 0) {
-      // Use first available session
-      sessionId = sessions[0].id;
-    } else {
-      // No sessions exist, create a new one
-      const newSession = await client.session.create({
-        body: { title: `Worker: ${profile.name}` },
-        query: { directory },
-      });
-      if (!newSession.data) return undefined;
-      sessionId = newSession.data.id;
-    }
-
-    const instance: WorkerInstance = {
-      profile,
-      status: existing.status === "busy" ? "busy" : "ready",
-      port: existing.port ?? 0,
-      serverUrl: existing.url,
-      directory,
-      startedAt: new Date(existing.startedAt),
-      lastActivity: new Date(),
-      client,
-      pid: existing.pid,
-      sessionId,
-      modelResolution: "reused existing worker",
-    };
-
-    // Register in the in-memory registry
-    registry.register(instance);
-
-    // Update device registry with current session
-    await registerWorkerInDeviceRegistry({
-      workerId: profile.id,
-      pid: existing.pid,
-      url: existing.url,
-      port: existing.port,
-      sessionId,
-      status: instance.status,
-      startedAt: existing.startedAt,
-    }).catch(() => {});
-
-    return instance;
-  } catch {
-    // Worker is dead or unresponsive, clean up the stale entry
-    await removeWorkerEntriesByPid(existing.pid).catch(() => {});
-    return undefined;
   }
 }
 
@@ -326,159 +221,138 @@ async function spawnOpencodeServe(options: {
 }
 
 /**
- * Spawn a new worker instance, or reuse an existing one if available.
+ * Spawn a new worker instance.
+ *
+ * NOTE: This function performs a fresh spawn. For deduplication and reuse,
+ * use workerPool.getOrSpawn() from worker-pool.ts instead.
  */
 export async function spawnWorker(
   profile: WorkerProfile,
   options: SpawnOptions & { forceNew?: boolean }
 ): Promise<WorkerInstance> {
-  // First, check if we already have this worker in our in-memory registry
+  // Check if already in registry (quick check, not authoritative)
   const existingInRegistry = registry.getWorker(profile.id);
   if (existingInRegistry && existingInRegistry.status !== "error" && existingInRegistry.status !== "stopped") {
     return existingInRegistry;
   }
 
-  // De-dupe concurrent spawn requests in-process (per worker profile).
-  // This enforces a hard "1 opencode session per profile" rule.
-  const inFlight = inFlightSpawns.get(profile.id);
-  if (inFlight) {
-    return inFlight;
-  }
+  // Resolve profile model if needed
+  const resolvedProfile = await (async (): Promise<WorkerProfile> => {
+    const modelSpec = profile.model.trim();
+    const isNodeTag = modelSpec.startsWith("auto") || modelSpec.startsWith("node");
 
-  const spawnPromise = (async () => {
-    // Try to reuse an existing worker from device registry (cross-session reuse)
-    const reused = await tryReuseExistingWorker(profile, options.directory);
-    if (reused) return reused;
+    // When spawning from inside the plugin, we always pass the orchestrator client.
+    // Without it, we can only accept fully-qualified provider/model IDs.
+    if (!options.client) {
+      if (isNodeTag) {
+        throw new Error(
+          `Profile "${profile.id}" uses "${profile.model}", but model resolution is unavailable. ` +
+            `Set a concrete provider/model ID for this profile.`
+        );
+      }
+      if (!modelSpec.includes("/")) {
+        throw new Error(
+          `Invalid model "${profile.model}". OpenCode models must be in "provider/model" format. ` +
+            `Run list_models({}) to see configured models and copy the full ID.`
+        );
+      }
+      return profile;
+    }
 
-    return await withWorkerProfileLock(
-      profile.id,
-      // Lock should cover the entire "reuse-or-spawn" flow to enforce "1 opencode session per profile" across processes.
-      { timeoutMs: Math.max(15_000, options.timeout + 15_000) },
-      async () => {
-        // After waiting on the lock, re-check reuse. Another orchestrator may have spawned it.
-        const reusedAfterLock = await tryReuseExistingWorker(profile, options.directory);
-        if (reusedAfterLock) return reusedAfterLock;
+    const { profiles } = await hydrateProfileModelsFromOpencode({
+      client: options.client,
+      directory: options.directory,
+      profiles: { [profile.id]: profile },
+    });
+    return profiles[profile.id] ?? profile;
+  })();
 
-        const resolvedProfile = await (async (): Promise<WorkerProfile> => {
-          const modelSpec = profile.model.trim();
-          const isNodeTag = modelSpec.startsWith("auto") || modelSpec.startsWith("node");
+  const hostname = "127.0.0.1";
+  const fixedPort = isValidPort(resolvedProfile.port) ? resolvedProfile.port : undefined;
+  // Use port 0 to let OpenCode choose a free port dynamically.
+  const requestedPort = fixedPort ?? 0;
 
-          // When spawning from inside the plugin, we always pass the orchestrator client.
-          // Without it, we can only accept fully-qualified provider/model IDs.
-          if (!options.client) {
-            if (isNodeTag) {
-              throw new Error(
-                `Profile "${profile.id}" uses "${profile.model}", but model resolution is unavailable. ` +
-                  `Set a concrete provider/model ID for this profile.`
-              );
-            }
-            if (!modelSpec.includes("/")) {
-              throw new Error(
-                `Invalid model "${profile.model}". OpenCode models must be in "provider/model" format. ` +
-                  `Run list_models({}) to see configured models and copy the full ID.`
-              );
-            }
-            return profile;
-          }
+  const modelResolution =
+    profile.model.trim().startsWith("auto") || profile.model.trim().startsWith("node")
+      ? `resolved from ${profile.model.trim()}`
+      : resolvedProfile.model === profile.model
+        ? "configured"
+        : `resolved from ${profile.model.trim()}`;
 
-          const { profiles } = await hydrateProfileModelsFromOpencode({
-            client: options.client,
-            directory: options.directory,
-            profiles: { [profile.id]: profile },
-          });
-          return profiles[profile.id] ?? profile;
-        })();
+  // Create initial instance
+  const instance: WorkerInstance = {
+    profile: resolvedProfile,
+    status: "starting",
+    port: requestedPort,
+    directory: options.directory,
+    startedAt: new Date(),
+    modelResolution,
+  };
 
-        const hostname = "127.0.0.1";
-        const fixedPort = isValidPort(resolvedProfile.port) ? resolvedProfile.port : undefined;
-        // Use port 0 to let OpenCode choose a free port dynamically.
-        const requestedPort = fixedPort ?? 0;
+  // Register immediately so TUI can show it
+  registry.register(instance);
 
-        const modelResolution =
-          profile.model.trim().startsWith("auto") || profile.model.trim().startsWith("node")
-            ? `resolved from ${profile.model.trim()}`
-            : resolvedProfile.model === profile.model
-              ? "configured"
-              : `resolved from ${profile.model.trim()}`;
+  try {
+    const rt = await ensureRuntime();
+    const pluginSpecifier = resolveWorkerBridgePluginSpecifier();
+    if (process.env.OPENCODE_ORCH_SPAWNER_DEBUG === "1") {
+      console.error(
+        `[spawner] pluginSpecifier=${pluginSpecifier}, profile=${resolvedProfile.id}, model=${resolvedProfile.model}`
+      );
+    }
 
-        // Create initial instance
-        const instance: WorkerInstance = {
-          profile: resolvedProfile,
-          status: "starting",
-          port: requestedPort,
-          directory: options.directory,
-          startedAt: new Date(),
-          modelResolution,
-        };
+    // Start the opencode server for this worker (port=0 => dynamic port)
+    const { url, proc, close } = await spawnOpencodeServe({
+      hostname,
+      port: requestedPort,
+      timeout: options.timeout,
+      config: {
+        model: resolvedProfile.model,
+        plugin: pluginSpecifier ? [pluginSpecifier] : [],
+        // Apply any tool restrictions
+        ...(resolvedProfile.tools && { tools: resolvedProfile.tools }),
+      },
+      env: {
+        OPENCODE_ORCH_BRIDGE_URL: rt.bridge.url,
+        OPENCODE_ORCH_BRIDGE_TOKEN: rt.bridge.token,
+        OPENCODE_ORCH_INSTANCE_ID: rt.instanceId,
+        OPENCODE_ORCH_WORKER_ID: resolvedProfile.id,
+      },
+    });
 
-        // Register immediately so TUI can show it
-        registry.register(instance);
+    const client = createOpencodeClient({ baseUrl: url });
+    const toolCheck = await checkWorkerBridgeTools(client, options.directory).catch((error) => {
+      instance.warning = `Unable to verify worker bridge tools: ${error instanceof Error ? error.message : String(error)}`;
+      return undefined;
+    });
+    if (toolCheck && !toolCheck.ok) {
+      throw new Error(
+        `Worker bridge tools missing (${toolCheck.missing.join(", ")}). ` +
+          `Loaded tools: ${toolCheck.toolIds.join(", ")}. ` +
+          `Check worker plugin path (${pluginSpecifier ?? "none"}) and OpenCode config.`
+      );
+    }
 
-        try {
-          const rt = await ensureRuntime();
-          const pluginSpecifier = resolveWorkerBridgePluginSpecifier();
-          if (process.env.OPENCODE_ORCH_SPAWNER_DEBUG === "1") {
-            console.error(
-              `[spawner] pluginSpecifier=${pluginSpecifier}, profile=${resolvedProfile.id}, model=${resolvedProfile.model}`
-            );
-          }
+    instance.client = client;
+    instance.shutdown = close;
+    instance.pid = proc.pid ?? undefined;
+    instance.serverUrl = url;
 
-          // Start the opencode server for this worker (port=0 => dynamic port)
-          const { url, proc, close } = await spawnOpencodeServe({
-            hostname,
-            port: requestedPort,
-            timeout: options.timeout,
-            config: {
-              model: resolvedProfile.model,
-              plugin: pluginSpecifier ? [pluginSpecifier] : [],
-              // Apply any tool restrictions
-              ...(resolvedProfile.tools && { tools: resolvedProfile.tools }),
-            },
-            env: {
-              OPENCODE_ORCH_BRIDGE_URL: rt.bridge.url,
-              OPENCODE_ORCH_BRIDGE_TOKEN: rt.bridge.token,
-              OPENCODE_ORCH_INSTANCE_ID: rt.instanceId,
-              OPENCODE_ORCH_WORKER_ID: resolvedProfile.id,
-            },
-          });
-
-          const client = createOpencodeClient({ baseUrl: url });
-          const toolCheck = await checkWorkerBridgeTools(client, options.directory).catch((error) => {
-            instance.warning = `Unable to verify worker bridge tools: ${error instanceof Error ? error.message : String(error)}`;
-            return undefined;
-          });
-          if (toolCheck && !toolCheck.ok) {
-            throw new Error(
-              `Worker bridge tools missing (${toolCheck.missing.join(", ")}). ` +
-                `Loaded tools: ${toolCheck.toolIds.join(", ")}. ` +
-                `Check worker plugin path (${pluginSpecifier ?? "none"}) and OpenCode config.`
-            );
-          }
-
-          instance.client = client;
-          instance.shutdown = close;
-          instance.pid = proc.pid ?? undefined;
-          instance.serverUrl = url;
-
-          // Record the process early so other orchestrator instances can reuse rather than spawn.
-          if (typeof instance.pid === "number") {
-            await registerWorkerInDeviceRegistry({
-              workerId: resolvedProfile.id,
-              pid: instance.pid,
-              url,
-              port: instance.port,
-              sessionId: instance.sessionId,
-              status: "starting",
-              startedAt: instance.startedAt.getTime(),
-            });
-          }
+    // Record the process early so other orchestrator instances can reuse rather than spawn.
+    if (typeof instance.pid === "number") {
+      await registerWorkerInDeviceRegistry({
+        workerId: resolvedProfile.id,
+        pid: instance.pid,
+        url,
+        port: instance.port,
+        sessionId: instance.sessionId,
+        status: "starting",
+        startedAt: instance.startedAt.getTime(),
+      });
+    }
 
     // Preflight provider availability to avoid "ready but never responds" workers.
-    // Note: We no longer warn about "api" sourced providers because:
-    // 1. The warning is a false positive when env vars provide credentials
-    // 2. The warning gets cleared after first successful response anyway
-    // 3. If the provider truly isn't configured, the worker will fail with a clear error
-    const { providerId, modelKey } = parseProviderId(resolvedProfile.model);
+    const { providerId } = parseProviderId(resolvedProfile.model);
     if (providerId) {
       const providersRes = await client.config.providers({ query: { directory: options.directory } });
       const providers = (providersRes.data as any)?.providers as Array<{ id: string; models?: Record<string, unknown>; source?: string; key?: string }> | undefined;
@@ -488,21 +362,6 @@ export async function spawnWorker(
           `Provider "${providerId}" is not configured for this worker (model: "${resolvedProfile.model}"). ` +
             `Update your OpenCode config/providers or override the profile model.`
         );
-      }
-      // Only warn if model doesn't exist in provider's model catalog
-      if (modelKey && provider.models && typeof provider.models === "object") {
-        const modelMap = provider.models as Record<string, unknown>;
-        const candidates = new Set([
-          resolvedProfile.model,
-          modelKey,
-          `${providerId}/${modelKey}`,
-          `${providerId}:${modelKey}`,
-        ]);
-        const found = [...candidates].some((k) => k in modelMap);
-        if (!found) {
-          // Don't warn - model catalogs can be incomplete. If the model doesn't work,
-          // the worker will fail with a clear error message.
-        }
       }
     }
 
@@ -585,21 +444,22 @@ export async function spawnWorker(
                 `## Communication Tools Available\n\n` +
                 `You have these tools for communicating with the orchestrator and other workers:\n\n` +
                 `1. **message_tool** - Send reports or messages\n` +
-                `   - kind="report": Use at END of every task. Include summary, details, issues.\n` +
+                `   - kind="report": Use for orchestrator jobs (when a jobId is provided) or when explicitly requested.\n` +
                 `   - kind="message": Send to another worker or the orchestrator. Set "to" field.\n\n` +
                 `2. **worker_inbox** - Check for messages from other workers or the orchestrator\n` +
                 `   - Call this if you need to check for incoming messages\n` +
                 `   - Use "after" param to get only new messages\n\n` +
-                `3. **wakeup_orchestrator** - CRITICAL for async jobs!\n` +
-                `   - Call this when you complete an async job (reason="result_ready")\n` +
+                `3. **wakeup_orchestrator** - Notifications (optional)\n` +
+                `   - Optional: call this when you complete an async job (reason="result_ready")\n` +
                 `   - Call this if you need attention (reason="needs_attention")\n` +
                 `   - Call this on errors (reason="error")\n` +
                 `   - Include the jobId if one was provided\n\n` +
                 `## Required Behavior\n\n` +
-                `1. At the END of every task, call message_tool with kind="report"\n` +
-                `2. If you received a jobId in <orchestrator-job>, include it in your report AND call wakeup_orchestrator\n` +
-                `3. If you need to communicate with another worker, use message_tool with kind="message"\n` +
-                `4. Check worker_inbox if you're waiting for responses from other agents\n` +
+                `1. Always return a direct plain-text answer to the prompt.\n` +
+                `2. If you received a jobId in <orchestrator-job>, call message_tool with kind="report" and include that jobId (required).\n` +
+                `3. If bridge tools fail/unavailable, still return your answer in plain text.\n` +
+                `4. If you need to communicate with another worker, use message_tool with kind="message"\n` +
+                `5. Check worker_inbox if you're waiting for responses from other agents\n` +
                 `</orchestrator-instructions>`,
             },
           ],
@@ -608,60 +468,47 @@ export async function spawnWorker(
       } as any)
       .catch(() => {});
 
-        // Mark as ready
-        instance.status = "ready";
-        instance.lastActivity = new Date();
-        registry.updateStatus(resolvedProfile.id, "ready");
-        if (typeof instance.pid === "number") {
-          await registerWorkerInDeviceRegistry({
-            workerId: resolvedProfile.id,
-            pid: instance.pid,
-            url,
-            port: instance.port,
-            sessionId: instance.sessionId,
-            status: "ready",
-            startedAt: instance.startedAt.getTime(),
-          });
-        }
-
-          return instance;
-        } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          console.error(`[spawner] ERROR spawning ${resolvedProfile.id}: ${errorMsg}`);
-          try {
-            await instance.shutdown?.();
-          } catch {
-            // ignore
-          }
-          instance.status = "error";
-          instance.error = errorMsg;
-          registry.updateStatus(resolvedProfile.id, "error", errorMsg);
-          if (typeof instance.pid === "number") {
-            await registerWorkerInDeviceRegistry({
-              workerId: resolvedProfile.id,
-              pid: instance.pid,
-              url: instance.serverUrl,
-              port: instance.port,
-              sessionId: instance.sessionId,
-              status: "error",
-              startedAt: instance.startedAt.getTime(),
-              lastError: errorMsg,
-            });
-          }
-          throw error;
-        }
-      }
-    );
-  })();
-
-  inFlightSpawns.set(profile.id, spawnPromise);
-  try {
-    const result = await spawnPromise;
-    return result;
-  } finally {
-    if (inFlightSpawns.get(profile.id) === spawnPromise) {
-      inFlightSpawns.delete(profile.id);
+    // Mark as ready
+    instance.status = "ready";
+    instance.lastActivity = new Date();
+    registry.updateStatus(resolvedProfile.id, "ready");
+    if (typeof instance.pid === "number") {
+      await registerWorkerInDeviceRegistry({
+        workerId: resolvedProfile.id,
+        pid: instance.pid,
+        url,
+        port: instance.port,
+        sessionId: instance.sessionId,
+        status: "ready",
+        startedAt: instance.startedAt.getTime(),
+      });
     }
+
+    return instance;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[spawner] ERROR spawning ${resolvedProfile.id}: ${errorMsg}`);
+    try {
+      await instance.shutdown?.();
+    } catch {
+      // ignore
+    }
+    instance.status = "error";
+    instance.error = errorMsg;
+    registry.updateStatus(resolvedProfile.id, "error", errorMsg);
+    if (typeof instance.pid === "number") {
+      await registerWorkerInDeviceRegistry({
+        workerId: resolvedProfile.id,
+        pid: instance.pid,
+        url: instance.serverUrl,
+        port: instance.port,
+        sessionId: instance.sessionId,
+        status: "error",
+        startedAt: instance.startedAt.getTime(),
+        lastError: errorMsg,
+      });
+    }
+    throw error;
   }
 }
 
@@ -799,7 +646,21 @@ export async function sendToWorker(
     // Build the full task text with source info and job instructions
     let taskText = sourceInfo + message;
     if (options?.jobId) {
-      taskText += `\n\n<orchestrator-job id="${options.jobId}">IMPORTANT: When done, call wakeup_orchestrator with reason="result_ready" and this jobId, then call message_tool with kind="report".</orchestrator-job>`;
+      taskText +=
+        `\n\n<orchestrator-job id="${options.jobId}">\n` +
+        `IMPORTANT:\n` +
+        `- Include your full result as plain text in your assistant response.\n` +
+        `- When done, call message_tool with kind="report" and include this jobId.\n` +
+        `- If message_tool fails/unavailable, still return your full result in plain text and mention the error.\n` +
+        `wakeup_orchestrator is optional (use it for attention/errors/progress).\n` +
+        `</orchestrator-job>`;
+    } else {
+      taskText +=
+        `\n\n<orchestrator-sync>\n` +
+        `IMPORTANT: Reply with your final answer as plain text in your assistant response.\n` +
+        `Do not call message_tool for this request unless explicitly asked.\n` +
+        `If you do call any tools, still include the full answer as plain text.\n` +
+        `</orchestrator-sync>`;
     }
     
     const parts = await buildPromptParts({ message: taskText, attachments: options?.attachments });

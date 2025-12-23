@@ -35,7 +35,7 @@
     {
       "id": "stress-worker-1",
       "name": "Stress Worker 1",
-      "model": "test-model",
+      "model": "opencode/gpt-5-nano",
       "purpose": "High concurrency stress testing",
       "whenToUse": "For stress tests with concurrent spawns",
       "temperature": 0.1
@@ -43,7 +43,7 @@
     {
       "id": "stress-worker-2",
       "name": "Stress Worker 2",
-      "model": "test-model",
+      "model": "opencode/gpt-5-nano",
       "purpose": "High concurrency stress testing",
       "whenToUse": "For stress tests with concurrent spawns",
       "temperature": 0.1
@@ -51,7 +51,7 @@
     {
       "id": "stress-worker-3",
       "name": "Stress Worker 3",
-      "model": "test-model",
+      "model": "opencode/gpt-5-nano",
       "purpose": "High concurrency stress testing",
       "whenToUse": "For stress tests with concurrent spawns",
       "temperature": 0.1
@@ -59,7 +59,7 @@
     {
       "id": "stress-worker-4",
       "name": "Stress Worker 4",
-      "model": "test-model",
+      "model": "opencode/gpt-5-nano",
       "purpose": "High concurrency stress testing",
       "whenToUse": "For stress tests with concurrent spawns",
       "temperature": 0.1
@@ -67,7 +67,7 @@
     {
       "id": "stress-worker-5",
       "name": "Stress Worker 5",
-      "model": "test-model",
+      "model": "opencode/gpt-5-nano",
       "purpose": "High concurrency stress testing",
       "whenToUse": "For stress tests with concurrent spawns",
       "temperature": 0.1

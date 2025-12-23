@@ -44,9 +44,11 @@ export {
 export { memoryLink, memoryPut, memoryRecentTool, memorySearchTool } from "./tools-memory";
 export {
   clearWakeups,
+  clearPassthroughMode,
   enableDocsPassthrough,
   macosKeybindsFix,
   orchestratorDashboard,
+  orchestratorOutput,
   orchestratorDeviceRegistry,
   orchestratorDemo,
   orchestratorHelp,
@@ -54,6 +56,7 @@ export {
   orchestratorResults,
   orchestratorStart,
   orchestratorTodoView,
+  setPassthroughMode,
   orchestratorWakeups,
 } from "./tools-ux";
 export { orchestratorDiagnostics } from "./tools-diagnostics";
@@ -87,9 +90,11 @@ import {
 import { memoryLink, memoryPut, memoryRecentTool, memorySearchTool } from "./tools-memory";
 import {
   clearWakeups,
+  clearPassthroughMode,
   enableDocsPassthrough,
   macosKeybindsFix,
   orchestratorDashboard,
+  orchestratorOutput,
   orchestratorDeviceRegistry,
   orchestratorDemo,
   orchestratorHelp,
@@ -97,6 +102,7 @@ import {
   orchestratorResults,
   orchestratorStart,
   orchestratorTodoView,
+  setPassthroughMode,
   orchestratorWakeups,
 } from "./tools-ux";
 import { orchestratorDiagnostics } from "./tools-diagnostics";
@@ -125,11 +131,17 @@ export const coreOrchestratorTools = {
   run_workflow: runWorkflowTool,
 
   // Observability (useful for orchestration + debugging)
+  orchestrator_output: orchestratorOutput,
   orchestrator_results: orchestratorResults,
   orchestrator_messages: orchestratorMessages,
   orchestrator_wakeups: orchestratorWakeups,
   orchestrator_device_registry: orchestratorDeviceRegistry,
   orchestrator_diagnostics: orchestratorDiagnostics,
+
+  // Passthrough (session-scoped)
+  set_passthrough: setPassthroughMode,
+  clear_passthrough: clearPassthroughMode,
+  enable_docs_passthrough: enableDocsPassthrough,
 };
 
 export const pluginTools = {

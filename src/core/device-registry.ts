@@ -1,3 +1,12 @@
+/**
+ * Device Registry - Backwards compatibility layer
+ *
+ * The device registry functionality has been consolidated into worker-pool.ts.
+ * This file provides the same exports for backwards compatibility.
+ *
+ * @deprecated Import from "./worker-pool" for new code
+ */
+
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -5,10 +14,10 @@ import { writeJsonAtomic } from "../helpers/fs";
 import { getUserConfigDir } from "../helpers/format";
 import { isProcessAlive } from "../helpers/process";
 
+// Types remain the same for compatibility
 export type DeviceRegistryWorkerEntry = {
   kind: "worker";
   orchestratorInstanceId: string;
-  /** PID of the orchestrator process that spawned this worker (for orphan cleanup) */
   hostPid?: number;
   workerId: string;
   pid: number;
@@ -40,7 +49,6 @@ type DeviceRegistryFile = {
 };
 
 export function getDeviceRegistryPath(): string {
-  // Prefer per-user config so multiple opencode instances can share state.
   return join(getUserConfigDir(), "opencode", "orchestrator-device-registry.json");
 }
 

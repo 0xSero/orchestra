@@ -7,14 +7,29 @@ function getBridgeConfig() {
   return { url, token, workerId };
 }
 
+function getBridgeTimeoutMs() {
+  const raw = process.env.OPENCODE_ORCH_BRIDGE_TIMEOUT_MS;
+  const value = raw ? Number(raw) : 10_000;
+  return Number.isFinite(value) && value > 0 ? value : 10_000;
+}
+
 async function postJson(path, body) {
   const { url, token } = getBridgeConfig();
   if (!url || !token) throw new Error("Missing orchestrator bridge env (OPENCODE_ORCH_BRIDGE_URL/OPENCODE_ORCH_BRIDGE_TOKEN)");
-  const res = await fetch(`${url}${path}`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const timeoutMs = getBridgeTimeoutMs();
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(new Error(`Bridge request timed out after ${timeoutMs}ms`)), timeoutMs);
+  let res;
+  try {
+    res = await fetch(`${url}${path}`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: abort.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`Bridge error ${res.status}: ${text || res.statusText}`);
@@ -25,10 +40,19 @@ async function postJson(path, body) {
 async function getJson(path) {
   const { url, token } = getBridgeConfig();
   if (!url || !token) throw new Error("Missing orchestrator bridge env (OPENCODE_ORCH_BRIDGE_URL/OPENCODE_ORCH_BRIDGE_TOKEN)");
-  const res = await fetch(`${url}${path}`, {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
-  });
+  const timeoutMs = getBridgeTimeoutMs();
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(new Error(`Bridge request timed out after ${timeoutMs}ms`)), timeoutMs);
+  let res;
+  try {
+    res = await fetch(`${url}${path}`, {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` },
+      signal: abort.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`Bridge error ${res.status}: ${text || res.statusText}`);
@@ -56,7 +80,7 @@ export const WorkerBridgePlugin = async () => {
 
       if (args.kind === "message") {
         const to = args.to ?? "orchestrator";
-        await postJson("/v1/message", { from: workerId, to, topic: args.topic, text: args.text });
+        await postJson("/v1/message", { from: workerId, to, topic: args.topic, jobId: args.jobId, text: args.text });
         return `Message delivered to "${to}".`;
       }
 
