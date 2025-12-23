@@ -1,6 +1,6 @@
 {
   "name": "opencode-orchestrator",
-  "version": "0.2.0",
+  "version": "0.2.3",
   "description": "Multi-agent orchestrator plugin for OpenCode - spawn, manage, and coordinate specialized AI workers",
   "type": "module",
   "main": "dist/index.js",

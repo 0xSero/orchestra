@@ -5,16 +5,43 @@ All notable changes to Open Orchestra will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.1] - Unreleased
+## [0.2.3] - 2025-12-23
 
 ### Added
-- _Document new features here_
+- **Vision Auto-Routing** - Automatic detection and routing of images to vision-capable workers
+  - Supports clipboard images, file URLs, data URLs, and base64 formats
+  - Global lock prevents concurrent vision processing race conditions
+  - Debug toast notifications for tracing the vision pipeline
+- **Worker Pool Architecture** - New centralized worker pool management ([worker-pool.ts](src/core/worker-pool.ts))
+  - Replaces fragmented registry system with unified pool
+  - Better lifecycle management and resource tracking
+- **Progress Tracking System** - Real-time progress reporting for long-running operations ([progress.ts](src/core/progress.ts))
+- **Stream Formatter** - Structured output formatting for worker responses ([stream-formatter.ts](src/core/stream-formatter.ts))
+- **Memory Injection** - Automatic context injection from memory graph ([inject.ts](src/memory/inject.ts))
+- **Vision Analyzer** - Dedicated image analysis module ([analyzer.ts](src/vision/analyzer.ts))
+- **Passthrough Mode** - Direct model passthrough without worker overhead ([passthrough.ts](src/core/passthrough.ts))
+- **OpenCode Config Integration** - Read OpenCode's native configuration ([opencode.ts](src/config/opencode.ts))
 
 ### Changed
-- _Document changes here_
+- **Simplified Architecture** - Major codebase simplification removing ~3,700 lines of code
+  - Removed device-registry.ts, profile-lock.ts, and fragmented registry.ts
+  - Consolidated worker management into worker-pool.ts
+  - Streamlined spawner.ts with cleaner spawn logic
+- **Bridge Server Rewrite** - Simplified inter-process communication
+- **Test Suite Overhaul** - Removed flaky/complex tests, kept essential coverage
+  - Deleted 1,800+ lines of brittle test code
+  - Added focused integration tests for bridge-server
+- **CI Improvements** - E2E tests now use OpenCode's free built-in model (no API keys required)
+
+### Removed
+- Device registry system (replaced by worker pool)
+- Profile lock mechanism (simplified spawn coordination)
+- Message bus complexity (streamlined to essential messaging)
+- Redundant unit tests for internal modules
 
 ### Fixed
-- _Document bug fixes here_
+- Instance tracking issue causing sessions not to terminate properly with orchestrator
+- CodeRabbit review comments (biome config, CODEOWNERS, markdown code blocks)
 
 ---
 
