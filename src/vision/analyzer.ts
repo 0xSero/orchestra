@@ -307,10 +307,28 @@ export function formatVisionAnalysis(result: VisionResult): string | undefined {
   if (result.success && result.analysis) {
     const trimmed = result.analysis.trim();
     if (!trimmed) return undefined;
-    return `[VISION ANALYSIS]\n${trimmed}`;
+    const durationInfo = result.durationMs ? ` (${(result.durationMs / 1000).toFixed(1)}s)` : "";
+    const modelInfo = result.model ? ` via ${result.model}` : "";
+    return [
+      ``,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `🖼️ **Vision Analysis**${modelInfo}${durationInfo}`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      ``,
+      trimmed,
+      ``,
+    ].join("\n");
   }
   if (result.error) {
-    return `[VISION ANALYSIS FAILED]\n${result.error.trim()}`;
+    return [
+      ``,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `⚠️ **Vision Analysis Failed**`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      ``,
+      result.error.trim(),
+      ``,
+    ].join("\n");
   }
   return undefined;
 }

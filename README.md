@@ -96,7 +96,7 @@ See the [Quickstart Guide](./docs/quickstart.md) for detailed setup instructions
 - **Profile-Based Spawning** - Auto-model resolution from OpenCode config
 - **Dynamic Port Allocation** - Avoids conflicts with automatic port assignment
 - **Session-Based Isolation** - Each worker maintains its own conversation context
-- **Optional Neo4j Memory** - Persistent knowledge graph (advanced feature)
+- **File-Based Memory (Neo4j Optional)** - Persistent knowledge without extra infrastructure
 
 ## Architecture
 
@@ -120,7 +120,7 @@ graph TB
     end
     
     subgraph Storage["Persistence"]
-        Neo4j["Neo4j Graph DB"]
+        MemoryStore["Memory Store<br/><small>file/Neo4j</small>"]
         ConfigFiles["orchestrator.json"]
     end
     
@@ -131,7 +131,7 @@ graph TB
     Orchestrator --> Explorer
     Orchestrator --> Memory
     
-    Memory --> Neo4j
+    Memory --> MemoryStore
     Config --> ConfigFiles
     
     style Orchestrator fill:#6495ED,stroke:#2F4F8F,color:#fff
@@ -234,7 +234,7 @@ Command shortcuts:
 | `coder` | `auto` | No | No | Code implementation, file operations |
 | `architect` | `auto` | No | No | System design, planning (read-only) |
 | `explorer` | `auto:fast` | No | No | Fast codebase searches |
-| `memory` | `auto` | No | Yes | Neo4j memory graph, context pruning |
+| `memory` | `auto` | No | Yes | File-based memory (Neo4j optional), context pruning |
 
 ## Worker Lifecycle
 
@@ -246,7 +246,7 @@ stateDiagram-v2
     Busy --> Ready: task complete
     Ready --> Stopped: stop_worker()
     Busy --> Error: failure
-    Error --> Ready: recovery
+    Error --> Stopped: manual reset
     Stopped --> [*]
 ```
 
@@ -293,9 +293,9 @@ stateDiagram-v2
 | `orchestrator.workflows` | List workflows |
 | `orchestrator.boomerang` | Run the RooCode boomerang workflow |
 
-## Advanced: Memory System (Optional)
+## Advanced: Memory System
 
-Open Orchestra includes an optional Neo4j-backed memory system for persistent knowledge storage. See the memory section in [Guide](./docs/guide.md) for setup instructions.
+Open Orchestra stores memory in a local file by default, with optional Neo4j-backed graph storage if you configure it. See the memory section in [Guide](./docs/guide.md) for setup instructions.
 
 ## Development
 
@@ -323,15 +323,17 @@ opencode-orchestrator/
 │   │   ├── orchestrator.ts   # Config loading/merging
 │   │   └── profiles.ts       # Built-in worker profiles
 │   ├── core/
-│   │   └── registry.ts       # Worker registry
+│   │   └── worker-pool.ts    # Worker registry/pool
 │   ├── memory/
-│   │   ├── graph.ts          # Memory graph operations
+│   │   ├── store.ts          # Memory backend selection
+│   │   ├── store-file.ts     # File-based memory
+│   │   ├── graph.ts          # Neo4j graph operations (optional)
 │   │   └── neo4j.ts          # Neo4j connection
 │   ├── models/
 │   │   ├── catalog.ts        # Model catalog utilities
 │   │   └── hydrate.ts        # Model resolution
 │   ├── tools/
-│   │   └── index.ts          # 8 tool implementations
+│   │   └── index.ts          # Tool exports
 │   ├── types/
 │   │   └── index.ts          # TypeScript definitions
 │   ├── ux/

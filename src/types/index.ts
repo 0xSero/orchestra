@@ -4,6 +4,24 @@
 
 export type WorkerStatus = "starting" | "ready" | "busy" | "error" | "stopped";
 
+export interface ToolPermissions {
+  categories?: {
+    filesystem?: "full" | "read" | "none";
+    execution?: "full" | "sandboxed" | "none";
+    network?: "full" | "localhost" | "none";
+  };
+  tools?: {
+    [toolName: string]: {
+      enabled: boolean;
+      constraints?: Record<string, unknown>;
+    };
+  };
+  paths?: {
+    allowed?: string[];
+    denied?: string[];
+  };
+}
+
 export interface WorkerProfile {
   /** Unique identifier for this worker */
   id: string;
@@ -33,6 +51,12 @@ export interface WorkerProfile {
   tags?: string[];
   /** Whether to inject repo context on auto-launch (for docs worker) */
   injectRepoContext?: boolean;
+  /** Optional tool permission constraints */
+  permissions?: ToolPermissions;
+  /** Extend another profile */
+  extends?: string;
+  /** Compose multiple profiles */
+  compose?: string[];
 }
 
 export interface WorkerInstance {
@@ -155,6 +179,26 @@ export type TelemetryConfig = {
   host?: string;
 };
 
+export type SpawnPolicy = {
+  /** Allow auto-spawn at orchestrator startup */
+  autoSpawn?: boolean;
+  /** Allow on-demand spawns (vision routing, delegate_task, etc.) */
+  onDemand?: boolean;
+  /** Allow manual spawns via tools */
+  allowManual?: boolean;
+  /** Allow warm pool pre-spawns */
+  warmPool?: boolean;
+  /** Deprecated: device registry reuse was removed; this flag is ignored. */
+  reuseExisting?: boolean;
+};
+
+export type SpawnPolicyConfig = {
+  /** Default policy applied to any profile without an override */
+  default?: SpawnPolicy;
+  /** Per-profile policy overrides */
+  profiles?: Record<string, SpawnPolicy>;
+};
+
 export interface OrchestratorConfig {
   /** Base port to start assigning from */
   basePort: number;
@@ -164,10 +208,34 @@ export interface OrchestratorConfig {
   spawn: string[];
   /** Auto-spawn workers on plugin init */
   autoSpawn: boolean;
+  /** Worker IDs allowed to auto-spawn on demand */
+  spawnOnDemand?: string[];
+  /** Per-profile spawn policy overrides */
+  spawnPolicy?: SpawnPolicyConfig;
   /** Timeout for worker startup (ms) */
   startupTimeout: number;
   /** Health check interval (ms) */
   healthCheckInterval: number;
+  /** Health check settings */
+  healthCheck?: {
+    enabled?: boolean;
+    intervalMs?: number;
+    timeoutMs?: number;
+    maxRetries?: number;
+  };
+  /** Warm pool pre-spawn settings */
+  warmPool?: {
+    enabled?: boolean;
+    profiles?: Record<string, { size?: number; idleTimeoutMs?: number }>;
+  };
+  /** Model selection preferences */
+  modelSelection?: {
+    mode?: "performance" | "balanced" | "economical";
+    maxCostPer1kTokens?: number;
+    preferredProviders?: string[];
+  };
+  /** Model alias table */
+  modelAliases?: Record<string, string>;
   /** UX and prompt injection settings */
   ui?: {
     /** Show OpenCode toasts for orchestrator events */
@@ -246,8 +314,14 @@ export type OrchestratorConfigFile = {
   $schema?: string;
   basePort?: number;
   autoSpawn?: boolean;
+  spawnOnDemand?: string[];
+  spawnPolicy?: SpawnPolicyConfig;
   startupTimeout?: number;
   healthCheckInterval?: number;
+  healthCheck?: OrchestratorConfig["healthCheck"];
+  warmPool?: OrchestratorConfig["warmPool"];
+  modelSelection?: OrchestratorConfig["modelSelection"];
+  modelAliases?: OrchestratorConfig["modelAliases"];
   ui?: OrchestratorConfig["ui"];
   notifications?: OrchestratorConfig["notifications"];
   agent?: OrchestratorConfig["agent"];
@@ -307,6 +381,7 @@ export interface OrchestratorEvents {
   "worker:ready": { worker: WorkerInstance };
   "worker:busy": { worker: WorkerInstance };
   "worker:error": { worker: WorkerInstance; error: string };
+  "worker:dead": { worker: WorkerInstance };
   "worker:stopped": { worker: WorkerInstance };
   "worker:response": { worker: WorkerInstance; response: WorkerResponse };
   "worker:wakeup": { payload: WakeupPayload };

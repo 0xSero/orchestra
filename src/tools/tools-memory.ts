@@ -1,11 +1,11 @@
 import { tool } from "@opencode-ai/plugin";
 import { loadNeo4jConfigFromEnv } from "../memory/neo4j";
-import { linkMemory, recentMemory, searchMemory, upsertMemory, type MemoryScope } from "../memory/graph";
+import { getMemoryBackend, linkMemory, recentMemory, searchMemory, upsertMemory, type MemoryScope } from "../memory/store";
 import { getClient, getDefaultListFormat, getProjectId } from "./state";
 
 export const memoryPut = tool({
   description:
-    "Upsert a memory entry into Neo4j (requires env: OPENCODE_NEO4J_URI/USERNAME/PASSWORD). Stores to global or per-project graph.",
+    "Upsert a memory entry (file-based by default; uses Neo4j if configured). Stores to global or per-project memory.",
   args: {
     scope: tool.schema.enum(["project", "global"]).optional().describe("Memory scope (default: project)"),
     key: tool.schema.string().describe("Stable key (e.g. 'architecture:db', 'decision:use-minimax')"),
@@ -14,9 +14,7 @@ export const memoryPut = tool({
   },
   async execute(args) {
     const cfg = loadNeo4jConfigFromEnv();
-    if (!cfg) {
-      return "Neo4j is not configured. Set env vars: OPENCODE_NEO4J_URI, OPENCODE_NEO4J_USERNAME, OPENCODE_NEO4J_PASSWORD (and optional OPENCODE_NEO4J_DATABASE).";
-    }
+    const backend = getMemoryBackend(cfg);
 
     const scope: MemoryScope = args.scope ?? "project";
     const projectId = scope === "project" ? getProjectId() : undefined;
@@ -34,11 +32,11 @@ export const memoryPut = tool({
     const client = getClient();
     if (client) {
       void client.tui
-        .showToast({ body: { message: `Saved memory: ${node.key} (${node.scope})`, variant: "success" } })
+        .showToast({ body: { message: `Saved memory: ${node.key} (${node.scope}, ${backend})`, variant: "success" } })
         .catch(() => {});
     }
 
-    return JSON.stringify(node, null, 2);
+    return JSON.stringify({ backend, ...node }, null, 2);
   },
 });
 
@@ -52,9 +50,7 @@ export const memoryLink = tool({
   },
   async execute(args) {
     const cfg = loadNeo4jConfigFromEnv();
-    if (!cfg) {
-      return "Neo4j is not configured. Set env vars: OPENCODE_NEO4J_URI, OPENCODE_NEO4J_USERNAME, OPENCODE_NEO4J_PASSWORD (and optional OPENCODE_NEO4J_DATABASE).";
-    }
+    const backend = getMemoryBackend(cfg);
 
     const scope: MemoryScope = args.scope ?? "project";
     const projectId = scope === "project" ? getProjectId() : undefined;
@@ -69,12 +65,12 @@ export const memoryLink = tool({
       type: args.relation ?? "relates_to",
     });
 
-    return JSON.stringify(res, null, 2);
+    return JSON.stringify({ backend, ...res }, null, 2);
   },
 });
 
 export const memorySearchTool = tool({
-  description: "Search memory entries (full-text-ish) in Neo4j.",
+  description: "Search memory entries (full-text-ish). Uses file storage by default.",
   args: {
     scope: tool.schema.enum(["project", "global"]).optional().describe("Memory scope (default: project)"),
     query: tool.schema.string().describe("Search query"),
@@ -83,9 +79,7 @@ export const memorySearchTool = tool({
   },
   async execute(args) {
     const cfg = loadNeo4jConfigFromEnv();
-    if (!cfg) {
-      return "Neo4j is not configured. Set env vars: OPENCODE_NEO4J_URI, OPENCODE_NEO4J_USERNAME, OPENCODE_NEO4J_PASSWORD (and optional OPENCODE_NEO4J_DATABASE).";
-    }
+    const backend = getMemoryBackend(cfg);
 
     const scope: MemoryScope = args.scope ?? "project";
     const projectId = scope === "project" ? getProjectId() : undefined;
@@ -93,7 +87,7 @@ export const memorySearchTool = tool({
 
     const results = await searchMemory({ cfg, scope, projectId, query: args.query, limit: args.limit ?? 10 });
     const format = args.format ?? getDefaultListFormat();
-    if (format === "json") return JSON.stringify(results, null, 2);
+    if (format === "json") return JSON.stringify({ backend, results }, null, 2);
 
     if (results.length === 0) return "No matches.";
     return results
@@ -111,9 +105,7 @@ export const memoryRecentTool = tool({
   },
   async execute(args) {
     const cfg = loadNeo4jConfigFromEnv();
-    if (!cfg) {
-      return "Neo4j is not configured. Set env vars: OPENCODE_NEO4J_URI, OPENCODE_NEO4J_USERNAME, OPENCODE_NEO4J_PASSWORD (and optional OPENCODE_NEO4J_DATABASE).";
-    }
+    const backend = getMemoryBackend(cfg);
 
     const scope: MemoryScope = args.scope ?? "project";
     const projectId = scope === "project" ? getProjectId() : undefined;
@@ -121,7 +113,7 @@ export const memoryRecentTool = tool({
 
     const results = await recentMemory({ cfg, scope, projectId, limit: args.limit ?? 10 });
     const format = args.format ?? getDefaultListFormat();
-    if (format === "json") return JSON.stringify(results, null, 2);
+    if (format === "json") return JSON.stringify({ backend, results }, null, 2);
     if (results.length === 0) return "No memory entries.";
     return results.map((r) => `- \`${r.key}\` (${r.scope}) - ${r.value}`).join("\n");
   },

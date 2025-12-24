@@ -105,7 +105,7 @@ export interface PerformanceBaseline {
   metrics: {
     spawnLatency: { p50: number; p95: number; p99: number };
     memoryBaseline: number;
-    registryReadLatency: { p50: number; p95: number };
+    fileReadLatency: { p50: number; p95: number };
     lockAcquisition: { p50: number; p95: number };
   };
   /** Raw benchmark results */
@@ -204,13 +204,13 @@ export async function benchmark(
  * @example
  * ```typescript
  * const result = await benchmarkWithConfig({
- *   name: 'device-registry-read',
+ *   name: 'file-read',
  *   warmupIterations: 10,
  *   measureIterations: 100,
- *   setup: async () => { await seedDeviceRegistry(50); },
- *   teardown: async () => { await cleanupDeviceRegistry(); }
+ *   setup: async () => { await seedFixtures(); },
+ *   teardown: async () => { await cleanupFixtures(); }
  * }, async () => {
- *   await listDeviceRegistry();
+ *   await readFixture();
  * });
  * ```
  */
@@ -380,7 +380,7 @@ export function compareBenchmarks(
  * const results = await benchmarkSuite('io-operations', {
  *   'read-config': async () => await loadConfig(),
  *   'write-config': async () => await saveConfig(config),
- *   'list-devices': async () => await listDeviceRegistry(),
+ *   'list-files': async () => await readFixture(),
  * }, { iterations: 50 });
  * ```
  */
@@ -465,7 +465,7 @@ export function createBaseline(
   benchmarks: Record<string, BenchmarkResult>
 ): PerformanceBaseline {
   const spawnLatency = benchmarks["spawn-worker"];
-  const registryRead = benchmarks["device-registry-read"];
+  const fileRead = benchmarks["file-read"];
   const lockAcquire = benchmarks["lock-acquisition"];
 
   return {
@@ -481,8 +481,8 @@ export function createBaseline(
           }
         : { p50: 0, p95: 0, p99: 0 },
       memoryBaseline: process.memoryUsage().rss,
-      registryReadLatency: registryRead
-        ? { p50: registryRead.median, p95: registryRead.p95 }
+      fileReadLatency: fileRead
+        ? { p50: fileRead.median, p95: fileRead.p95 }
         : { p50: 0, p95: 0 },
       lockAcquisition: lockAcquire
         ? { p50: lockAcquire.median, p95: lockAcquire.p95 }

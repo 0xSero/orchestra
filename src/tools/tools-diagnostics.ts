@@ -1,5 +1,5 @@
 import { tool } from "@opencode-ai/plugin";
-import { workerPool, listDeviceRegistry } from "../core/worker-pool";
+import { workerPool } from "../core/worker-pool";
 import { formatBytes, listOpencodeServeProcesses } from "../core/process-metrics";
 import { renderMarkdownTable } from "./markdown";
 import { getDefaultListFormat } from "./state";
@@ -13,7 +13,6 @@ export const orchestratorDiagnostics = tool({
   },
   async execute(args) {
     const format: "markdown" | "json" = args.format ?? getDefaultListFormat();
-    const device = await listDeviceRegistry().catch(() => []);
     const opencode = await listOpencodeServeProcesses().catch(() => []);
 
     const workers = [...workerPool.workers.values()].sort((a, b) => a.profile.id.localeCompare(b.profile.id));
@@ -30,29 +29,16 @@ export const orchestratorDiagnostics = tool({
       ];
     });
 
-    const byWorkerId = new Map<string, number>();
-    for (const e of device) {
-      if ((e as any).kind !== "worker") continue;
-      const id = String((e as any).workerId ?? "");
-      if (!id) continue;
-      byWorkerId.set(id, (byWorkerId.get(id) ?? 0) + 1);
-    }
-    const dupWorkerIds = [...byWorkerId.entries()].filter(([, n]) => n > 1).map(([id]) => id);
-
     const summary = {
       hostPid: process.pid,
       workersInMemoryRegistry: workers.length,
-      deviceRegistryEntries: device.length,
-      deviceWorkers: device.filter((e: any) => e.kind === "worker").length,
-      deviceSessions: device.filter((e: any) => e.kind === "session").length,
       opencodeServeProcesses: opencode.length,
       opencodeServeRssBytesTotal: opencode.reduce((sum, p) => sum + (p.rssBytes ?? 0), 0),
-      duplicateWorkerIdsInDeviceRegistry: dupWorkerIds,
     };
 
     const logs = getLogBuffer(100);
     if (format === "json") {
-      return JSON.stringify({ summary, workers, deviceRegistry: device, opencodeServe: opencode, logs }, null, 2);
+      return JSON.stringify({ summary, workers, opencodeServe: opencode, logs }, null, 2);
     }
 
     const opencodeRows = opencode
@@ -72,9 +58,7 @@ export const orchestratorDiagnostics = tool({
       "",
       `- Host PID: ${summary.hostPid}`,
       `- In-memory workers: ${summary.workersInMemoryRegistry}`,
-      `- Device registry: workers=${summary.deviceWorkers}, sessions=${summary.deviceSessions}`,
       `- opencode serve processes: ${summary.opencodeServeProcesses} (RSS total: ${formatBytes(summary.opencodeServeRssBytesTotal)})`,
-      dupWorkerIds.length ? `- Warning: duplicate worker ids in device registry: ${dupWorkerIds.join(", ")}` : "",
       "",
       "## Workers (in-memory registry)",
       workerRows.length ? renderMarkdownTable(["Worker", "Status", "PID", "RSS", "Port", "Session"], workerRows) : "(none)",

@@ -40,7 +40,7 @@ graph TB
     end
     
     subgraph Storage["Persistence"]
-        Neo4j["Neo4j"]
+        MemoryStore["Memory Store"]
         Files["Config Files"]
     end
     
@@ -56,7 +56,7 @@ graph TB
     
     Spawner --> SDK
     Config --> Files
-    Tools --> Neo4j
+    Tools --> MemoryStore
     
     style OpenCode fill:#e3f2fd
     style Orchestra fill:#fff3e0
@@ -324,7 +324,7 @@ stateDiagram-v2
 
 ## Memory System
 
-The memory system uses Neo4j for persistent knowledge storage:
+The memory system stores knowledge in a local file by default, with optional Neo4j graph storage:
 
 ```mermaid
 graph LR
@@ -335,7 +335,7 @@ graph LR
         Recent["memory_recent"]
     end
     
-    subgraph Graph["Neo4j Graph"]
+    subgraph Graph["Memory Store (file/Neo4j)"]
         subgraph Project["Project Scope"]
             P1[("Memory Node")]
             P2[("Memory Node")]
@@ -369,7 +369,7 @@ type MemoryNode = {
 };
 ```
 
-### Graph Operations
+### Neo4j Operations (optional)
 
 | Operation | Cypher Pattern |
 |-----------|----------------|
@@ -390,8 +390,12 @@ Key sections:
 {
   "basePort": 14096,
   "autoSpawn": true,
+  "spawnOnDemand": ["vision"],
   "startupTimeout": 30000,
-  "healthCheckInterval": 30000,
+  "healthCheck": {
+    "enabled": true,
+    "intervalMs": 30000
+  },
   
   "ui": {
     "toasts": true,

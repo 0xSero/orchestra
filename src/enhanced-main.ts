@@ -3,7 +3,6 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { WorkerHealthChecker } from "./core/net-utils.js";
 import { SystemOptimizer } from "./core/system-optimizer.js";
-import { ConfigFileMonitor, WorkerWorkspaceManager } from "./core/file-monitor.js";
 import { logger } from "./core/logger.js";
 
 // Handle both ESM and CommonJS compatibility
@@ -15,30 +14,24 @@ export interface MainConfig {
   directory?: string;
   enableHealthCheck?: boolean;
   enableSystemOptimizer?: boolean;
-  enableFileMonitoring?: boolean;
   healthPort?: number;
 }
 
 export class EnhancedOrchestratorMain {
   private healthChecker: WorkerHealthChecker;
   private systemOptimizer: SystemOptimizer;
-  private fileMonitor: ConfigFileMonitor;
-  private workspaceManager: WorkerWorkspaceManager;
   private config: MainConfig;
   
   constructor(config: MainConfig = {}) {
     this.config = {
       enableHealthCheck: true,
       enableSystemOptimizer: true,
-      enableFileMonitoring: true,
       healthPort: 0,
       ...config
     };
     
     this.healthChecker = new WorkerHealthChecker();
     this.systemOptimizer = new SystemOptimizer();
-    this.fileMonitor = new ConfigFileMonitor();
-    this.workspaceManager = new WorkerWorkspaceManager(config.directory || process.cwd());
   }
   
   /**
@@ -59,11 +52,6 @@ export class EnhancedOrchestratorMain {
       );
     }
     
-    // Start file monitoring if enabled
-    if (this.config.enableFileMonitoring && this.config.directory) {
-      this.setupFileMonitoring();
-    }
-    
     await Promise.all(initPromises);
     
     // Log system information
@@ -71,22 +59,6 @@ export class EnhancedOrchestratorMain {
       const systemInfo = this.systemOptimizer.getSystemSummary();
       logger.info(`[EnhancedMain] ${systemInfo}`);
     }
-  }
-  
-  private setupFileMonitoring(): void {
-    // Monitor main orchestrator config
-    const configPath = join(this.config.directory!, '.opencode', 'orchestrator.json');
-    this.fileMonitor.startWatching(configPath);
-    
-    // Monitor global config if it exists
-    const globalConfigPath = join(this.config.directory!, 'orchestrator.json');
-    this.fileMonitor.startWatching(globalConfigPath);
-    
-    // Set up file change handler
-    this.fileMonitor.onFileChange((event) => {
-      logger.info(`[EnhancedMain] Configuration file changed: ${event.path}`);
-      // In a real implementation, this would trigger config reload
-    });
   }
   
   /**
@@ -123,20 +95,6 @@ export class EnhancedOrchestratorMain {
   }
   
   /**
-   * Create workspace for a worker
-   */
-  async createWorkerWorkspace(workerId: string): Promise<string> {
-    return this.workspaceManager.createWorkspace(workerId);
-  }
-  
-  /**
-   * Cleanup worker workspace
-   */
-  async cleanupWorkerWorkspace(workerId: string): Promise<void> {
-    return this.workspaceManager.cleanupWorkspace(workerId);
-  }
-  
-  /**
    * Get optimal spawn delay
    */
   getOptimalSpawnDelay(): number {
@@ -158,7 +116,6 @@ export class EnhancedOrchestratorMain {
     shutdownPromises.push(this.healthChecker.stopHealthServer());
     
     return Promise.all(shutdownPromises).then(() => {
-      this.fileMonitor.stopAll();
       logger.info('[EnhancedMain] All enhanced components shut down');
     });
   }
@@ -175,13 +132,6 @@ export class EnhancedOrchestratorMain {
       systemOptimizer: {
         enabled: this.config.enableSystemOptimizer,
         healthy: this.getSystemHealth()
-      },
-      fileMonitoring: {
-        enabled: this.config.enableFileMonitoring,
-        watchedFiles: this.fileMonitor.getWatchedPaths()
-      },
-      workspaceManager: {
-        activeWorkspaces: this.workspaceManager.listWorkspaces()
       }
     };
   }

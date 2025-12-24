@@ -12,7 +12,7 @@ export const builtInProfiles: Record<string, WorkerProfile> = {
   vision: {
     id: "vision",
     name: "Vision Analyst",
-    model: "zhipuai-coding-plan/glm-4.6v",
+    model: "node:vision",
     purpose: "Analyze images, screenshots, diagrams, and visual content",
     whenToUse:
       "When you need to understand visual content like screenshots, architecture diagrams, UI mockups, error screenshots, or any image-based information",
@@ -41,6 +41,12 @@ export const builtInProfiles: Record<string, WorkerProfile> = {
       write: false,
       edit: false,
     },
+    permissions: {
+      categories: {
+        filesystem: "read",
+        execution: "none",
+      },
+    },
     systemPrompt: `You are a documentation and research specialist. Your job is to:
       - Find and cite official documentation
       - Locate working code examples
@@ -55,7 +61,7 @@ export const builtInProfiles: Record<string, WorkerProfile> = {
   coder: {
     id: "coder",
     name: "Code Implementer",
-    model: "node",
+    model: "node:code",
     purpose: "Write, edit, and refactor code with full tool access",
     whenToUse:
       "When you need to actually write or modify code, create files, run commands, or implement features",
@@ -73,7 +79,7 @@ export const builtInProfiles: Record<string, WorkerProfile> = {
   architect: {
     id: "architect",
     name: "System Architect",
-    model: "node",
+    model: "node:reasoning",
     purpose: "Design systems, plan implementations, review architecture decisions",
     whenToUse:
       "When you need to plan a complex feature, design system architecture, or make high-level technical decisions",
@@ -81,6 +87,12 @@ export const builtInProfiles: Record<string, WorkerProfile> = {
       write: false,
       edit: false,
       bash: false,
+    },
+    permissions: {
+      categories: {
+        filesystem: "read",
+        execution: "none",
+      },
     },
     systemPrompt: `You are a systems architect. Your job is to:
       - Design scalable, maintainable architectures
@@ -104,6 +116,11 @@ export const builtInProfiles: Record<string, WorkerProfile> = {
       write: false,
       edit: false,
     },
+    permissions: {
+      categories: {
+        filesystem: "read",
+      },
+    },
     temperature: 0.1,
     systemPrompt: `You are a fast codebase explorer. Your job is to:
       - Quickly find relevant files and code
@@ -118,7 +135,7 @@ export const builtInProfiles: Record<string, WorkerProfile> = {
   memory: {
     id: "memory",
     name: "Memory Graph Curator",
-    model: "node",
+    model: "node:docs",
     purpose: "Maintain a Neo4j-backed memory graph (project + global) and advise on context pruning",
     whenToUse:
       "When you want to record durable project knowledge, track decisions and entities over time, or decide what context can be safely pruned",
@@ -132,6 +149,144 @@ export const builtInProfiles: Record<string, WorkerProfile> = {
 
       If Neo4j access is available, use it to upsert nodes/edges with stable keys.
       Prefer concise, structured memory entries (bullets), and link related concepts.`,
+  },
+
+  // Reviewer - reads code and flags issues without editing
+  reviewer: {
+    id: "reviewer",
+    name: "Code Reviewer",
+    model: "node:reasoning",
+    purpose: "Review code for correctness, risks, and missing tests",
+    whenToUse:
+      "When you need a second set of eyes on changes, PRs, or to identify risks and regressions",
+    tools: {
+      write: false,
+      edit: false,
+      bash: false,
+    },
+    permissions: {
+      categories: {
+        filesystem: "read",
+        execution: "none",
+      },
+    },
+    tags: ["review", "quality", "regression", "risk"],
+    systemPrompt: `You are a meticulous code reviewer. Your job is to:
+      - Identify correctness bugs, edge cases, and regressions
+      - Flag risky changes or missing tests
+      - Verify assumptions and constraints
+      - Suggest targeted, minimal fixes
+
+      Do not edit files. Provide clear, actionable feedback.`,
+  },
+
+  // QA specialist - test planning and verification
+  qa: {
+    id: "qa",
+    name: "QA Validator",
+    model: "node:fast",
+    purpose: "Design validation steps and verify expected behavior",
+    whenToUse:
+      "When you need a test plan, reproduction steps, or verification of behavior",
+    tools: {
+      write: false,
+      edit: false,
+    },
+    permissions: {
+      categories: {
+        filesystem: "read",
+        execution: "sandboxed",
+      },
+    },
+    tags: ["qa", "test", "verification", "repro"],
+    systemPrompt: `You are a QA and validation specialist. Your job is to:
+      - Create focused test plans and repro steps
+      - Suggest validations and acceptance criteria
+      - Highlight risky areas for regression
+
+      Keep steps concise and actionable.`,
+  },
+
+  // Security specialist - threat modeling and vuln review
+  security: {
+    id: "security",
+    name: "Security Analyst",
+    model: "node:reasoning",
+    purpose: "Assess security risks and recommend mitigations",
+    whenToUse:
+      "When you need to analyze security posture, threat models, or vulnerability risks",
+    tools: {
+      write: false,
+      edit: false,
+      bash: false,
+    },
+    permissions: {
+      categories: {
+        filesystem: "read",
+        execution: "none",
+      },
+    },
+    tags: ["security", "threat", "vulnerability", "risk"],
+    systemPrompt: `You are a security analyst. Your job is to:
+      - Identify vulnerabilities and insecure patterns
+      - Threat-model changes and data flows
+      - Recommend concrete mitigations
+
+      Be precise and conservative in your assessments.`,
+  },
+
+  // Product/requirements specialist
+  product: {
+    id: "product",
+    name: "Product Spec Writer",
+    model: "node:docs",
+    purpose: "Translate ideas into clear requirements and acceptance criteria",
+    whenToUse:
+      "When you need product requirements, specs, or acceptance criteria before implementation",
+    tools: {
+      write: false,
+      edit: false,
+    },
+    permissions: {
+      categories: {
+        filesystem: "read",
+        execution: "none",
+      },
+    },
+    tags: ["product", "spec", "requirements", "acceptance"],
+    systemPrompt: `You are a product spec writer. Your job is to:
+      - Turn ideas into requirements and acceptance criteria
+      - Clarify scope, constraints, and edge cases
+      - Define success metrics
+
+      Be concise and explicit.`,
+  },
+
+  // Data/insights specialist
+  analyst: {
+    id: "analyst",
+    name: "Data Analyst",
+    model: "node:fast",
+    purpose: "Summarize data, metrics, and experiment results",
+    whenToUse:
+      "When you need to interpret metrics, logs, or experiment results into insights",
+    tools: {
+      write: false,
+      edit: false,
+    },
+    permissions: {
+      categories: {
+        filesystem: "read",
+        execution: "none",
+      },
+    },
+    tags: ["data", "metrics", "analysis", "insights"],
+    systemPrompt: `You are a data analyst. Your job is to:
+      - Summarize metrics and patterns
+      - Highlight anomalies and trends
+      - Provide concise insights and next steps
+
+      Be quantitative and clear.`,
   },
 };
 

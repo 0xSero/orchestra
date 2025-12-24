@@ -130,6 +130,14 @@ Built-in workflows are available for multi-step runs:
 - `orchestrator.workflows` - command shortcut for listing workflows
 - `orchestrator.boomerang` - command shortcut for the RooCode boomerang workflow
 
+Built-in workflow IDs:
+- `roocode-boomerang`
+- `bug-triage`
+- `security-audit`
+- `qa-regression`
+- `spec-to-implementation`
+- `data-digest`
+
 Example:
 
 ```bash
@@ -167,7 +175,7 @@ Recent logs are buffered and visible via `orchestrator.diagnostics`.
 
 ## Memory (optional)
 
-The memory system stores durable knowledge in Neo4j. Set these variables if you want it enabled:
+The memory system stores durable knowledge in a local file by default. Configure Neo4j if you want graph storage:
 
 ```
 OPENCODE_NEO4J_URI=bolt://localhost:7687

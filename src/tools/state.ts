@@ -17,6 +17,9 @@ let profiles: Record<string, WorkerProfile> = builtInProfiles;
 let defaultListFormat: "markdown" | "json" = "markdown";
 let workflowsConfig: OrchestratorConfig["workflows"] | undefined;
 let securityConfig: OrchestratorConfig["security"] | undefined;
+let modelSelection: OrchestratorConfig["modelSelection"] | undefined;
+let modelAliases: OrchestratorConfig["modelAliases"] | undefined;
+let spawnPolicy: OrchestratorConfig["spawnPolicy"] | undefined;
 
 export function getDirectory(): string {
   return directory;
@@ -54,6 +57,18 @@ export function getSecurityConfig(): OrchestratorConfig["security"] | undefined 
   return securityConfig;
 }
 
+export function getModelSelection(): OrchestratorConfig["modelSelection"] | undefined {
+  return modelSelection;
+}
+
+export function getModelAliases(): OrchestratorConfig["modelAliases"] | undefined {
+  return modelAliases;
+}
+
+export function getSpawnPolicy(): OrchestratorConfig["spawnPolicy"] | undefined {
+  return spawnPolicy;
+}
+
 export function setDirectory(dir: string) {
   directory = dir;
 }
@@ -88,4 +103,16 @@ export function setWorkflowConfig(next: OrchestratorConfig["workflows"] | undefi
 
 export function setSecurityConfig(next: OrchestratorConfig["security"] | undefined) {
   securityConfig = next;
+}
+
+export function setModelSelection(next: OrchestratorConfig["modelSelection"] | undefined) {
+  modelSelection = next;
+}
+
+export function setModelAliases(next: OrchestratorConfig["modelAliases"] | undefined) {
+  modelAliases = next;
+}
+
+export function setSpawnPolicy(next: OrchestratorConfig["spawnPolicy"] | undefined) {
+  spawnPolicy = next;
 }

@@ -7,7 +7,15 @@ import { hydrateProfileModelsFromOpencode } from "../models/hydrate";
 import { renderMarkdownTable } from "./markdown";
 import { configPathForScope, readOrchestratorConfigFile, setSpawnList, upsertProfileEntry, writeOrchestratorConfigFile } from "./config-store";
 import { normalizeModelInput } from "./normalize-model";
-import { getClient, getDefaultListFormat, getDirectory, getProfiles, getWorktree } from "./state";
+import {
+  getClient,
+  getDefaultListFormat,
+  getDirectory,
+  getModelAliases,
+  getModelSelection,
+  getProfiles,
+  getWorktree,
+} from "./state";
 
 export const listProfiles = tool({
   description:
@@ -154,7 +162,13 @@ export const autofillProfileModels = tool({
       return cfg.profiles.some((p: any) => p && typeof p === "object" && (p as any).id === id && typeof (p as any).model === "string");
     };
 
-    const hydrated = await hydrateProfileModelsFromOpencode({ client, directory: getDirectory(), profiles: selected });
+    const hydrated = await hydrateProfileModelsFromOpencode({
+      client,
+      directory: getDirectory(),
+      profiles: selected,
+      modelAliases: getModelAliases(),
+      modelSelection: getModelSelection(),
+    });
 
     let next: OrchestratorConfigFile = existing;
     const applied: Array<{ id: string; from: string; to: string; reason: string }> = [];
@@ -223,6 +237,12 @@ export const orchestratorConfig = tool({
           basePort: config.basePort,
           autoSpawn: config.autoSpawn,
           spawn: config.spawn,
+          spawnOnDemand: config.spawnOnDemand,
+          spawnPolicy: config.spawnPolicy,
+          healthCheck: config.healthCheck,
+          warmPool: config.warmPool,
+          modelSelection: config.modelSelection,
+          modelAliases: config.modelAliases,
           ui: config.ui,
           agent: config.agent,
           commands: config.commands,
@@ -243,6 +263,7 @@ export const orchestratorConfig = tool({
       "",
       `- autoSpawn: ${config.autoSpawn ? "true" : "false"}`,
       `- spawn: ${config.spawn.length ? config.spawn.join(", ") : "(none)"}`,
+      `- spawnOnDemand: ${config.spawnOnDemand?.length ? config.spawnOnDemand.join(", ") : "(none)"}`,
       `- basePort: ${config.basePort}`,
       `- startupTimeout: ${config.startupTimeout}ms`,
       `- workflows: ${config.workflows?.enabled === false ? "disabled" : "enabled"}`,
@@ -273,7 +294,12 @@ export const setProfileModel = tool({
   },
   async execute(args) {
     const client = getClient();
-    const normalized = await normalizeModelInput(args.model, { client, directory: getDirectory() });
+    const normalized = await normalizeModelInput(args.model, {
+      client,
+      directory: getDirectory(),
+      modelSelection: getModelSelection(),
+      modelAliases: getModelAliases(),
+    });
     if (!normalized.ok) return normalized.error;
     const toPersist = args.model.includes("/") ? args.model.trim() : normalized.model;
 
@@ -344,6 +370,55 @@ export const setAutoSpawn = tool({
   },
 });
 
+export const setSpawnPolicy = tool({
+  description: "Configure per-profile spawn policy overrides (writes to orchestrator.json)",
+  args: {
+    scope: tool.schema.enum(["global", "project"]).describe("Where to write config"),
+    profileId: tool.schema.string().optional().describe("Profile ID to target (omit to edit defaults)"),
+    autoSpawn: tool.schema.boolean().optional().describe("Allow auto-spawn at startup"),
+    onDemand: tool.schema.boolean().optional().describe("Allow on-demand spawns"),
+    allowManual: tool.schema.boolean().optional().describe("Allow manual spawns via tools"),
+    warmPool: tool.schema.boolean().optional().describe("Allow warm pool pre-spawns"),
+    reuseExisting: tool.schema.boolean().optional().describe("Deprecated (device registry removed); no effect"),
+    clear: tool.schema.boolean().optional().describe("Remove the policy entry (default: false)"),
+  },
+  async execute(args) {
+    const path = configPathForScope(args.scope, getDirectory());
+    const existing = await readOrchestratorConfigFile(path);
+    const clear = args.clear ?? false;
+
+    const patch = {
+      ...(typeof args.autoSpawn === "boolean" ? { autoSpawn: args.autoSpawn } : {}),
+      ...(typeof args.onDemand === "boolean" ? { onDemand: args.onDemand } : {}),
+      ...(typeof args.allowManual === "boolean" ? { allowManual: args.allowManual } : {}),
+      ...(typeof args.warmPool === "boolean" ? { warmPool: args.warmPool } : {}),
+      ...(typeof args.reuseExisting === "boolean" ? { reuseExisting: args.reuseExisting } : {}),
+    };
+
+    const spawnPolicy = { ...(existing.spawnPolicy ?? {}) } as NonNullable<OrchestratorConfigFile["spawnPolicy"]>;
+
+    if (!args.profileId) {
+      if (clear) {
+        delete (spawnPolicy as any).default;
+      } else {
+        spawnPolicy.default = { ...(spawnPolicy.default ?? {}), ...patch };
+      }
+    } else {
+      const profiles = { ...(spawnPolicy?.profiles ?? {}) };
+      if (clear) {
+        delete profiles[args.profileId];
+      } else {
+        profiles[args.profileId] = { ...(profiles[args.profileId] ?? {}), ...patch };
+      }
+      spawnPolicy.profiles = profiles;
+    }
+
+    const next: OrchestratorConfigFile = { ...existing, spawnPolicy };
+    await writeOrchestratorConfigFile(path, next);
+    return `Saved spawn policy in ${args.scope} file: ${path}`;
+  },
+});
+
 export const resetProfileModels = tool({
   description:
     "Reset saved profile→model overrides so workers go back to default `node:*` selection (writes to orchestrator.json).",
@@ -401,7 +476,12 @@ export const setOrchestratorAgent = tool({
     const existing = await readOrchestratorConfigFile(path);
     let model = args.model;
     if (typeof model === "string") {
-      const normalized = await normalizeModelInput(model, { client: getClient(), directory: getDirectory() });
+      const normalized = await normalizeModelInput(model, {
+        client: getClient(),
+        directory: getDirectory(),
+        modelSelection: getModelSelection(),
+        modelAliases: getModelAliases(),
+      });
       if (!normalized.ok) return normalized.error;
       model = normalized.model;
     }

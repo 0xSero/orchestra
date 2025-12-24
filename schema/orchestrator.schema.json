@@ -7,8 +7,87 @@
     "$schema": { "type": "string" },
     "basePort": { "type": "number", "default": 14096 },
     "autoSpawn": { "type": "boolean", "default": true },
+    "spawnOnDemand": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": ["vision"],
+      "description": "Worker IDs allowed to auto-spawn when needed (e.g. vision analysis)."
+    },
+    "spawnPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-profile spawn controls (auto, on-demand, manual, warm pool, reuse).",
+      "properties": {
+        "default": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "autoSpawn": { "type": "boolean" },
+            "onDemand": { "type": "boolean" },
+            "allowManual": { "type": "boolean" },
+            "warmPool": { "type": "boolean" },
+            "reuseExisting": { "type": "boolean" }
+          }
+        },
+        "profiles": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "autoSpawn": { "type": "boolean" },
+              "onDemand": { "type": "boolean" },
+              "allowManual": { "type": "boolean" },
+              "warmPool": { "type": "boolean" },
+              "reuseExisting": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
     "startupTimeout": { "type": "number", "default": 30000 },
     "healthCheckInterval": { "type": "number", "default": 30000 },
+    "healthCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "intervalMs": { "type": "number", "default": 30000, "minimum": 10000 },
+        "timeoutMs": { "type": "number", "default": 3000 },
+        "maxRetries": { "type": "number", "default": 3 }
+      }
+    },
+    "warmPool": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "profiles": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "size": { "type": "number", "minimum": 0 },
+              "idleTimeoutMs": { "type": "number", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    "modelSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["performance", "balanced", "economical"], "default": "performance" },
+        "maxCostPer1kTokens": { "type": "number" },
+        "preferredProviders": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "modelAliases": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
     "ui": {
       "type": "object",
       "additionalProperties": false,
@@ -199,9 +278,46 @@
               "supportsWeb": { "type": "boolean" },
               "temperature": { "type": "number" },
               "tags": { "type": "array", "items": { "type": "string" } },
+              "extends": { "type": "string" },
+              "compose": { "type": "array", "items": { "type": "string" } },
               "tools": {
                 "type": "object",
                 "additionalProperties": { "type": "boolean" }
+              },
+              "permissions": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "categories": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "filesystem": { "type": "string", "enum": ["full", "read", "none"] },
+                      "execution": { "type": "string", "enum": ["full", "sandboxed", "none"] },
+                      "network": { "type": "string", "enum": ["full", "localhost", "none"] }
+                    }
+                  },
+                  "tools": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["enabled"],
+                      "properties": {
+                        "enabled": { "type": "boolean" },
+                        "constraints": { "type": "object" }
+                      }
+                    }
+                  },
+                  "paths": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "allowed": { "type": "array", "items": { "type": "string" } },
+                      "denied": { "type": "array", "items": { "type": "string" } }
+                    }
+                  }
+                }
               }
             }
           }
@@ -231,9 +347,46 @@
               "supportsWeb": { "type": "boolean" },
               "temperature": { "type": "number" },
               "tags": { "type": "array", "items": { "type": "string" } },
+              "extends": { "type": "string" },
+              "compose": { "type": "array", "items": { "type": "string" } },
               "tools": {
                 "type": "object",
                 "additionalProperties": { "type": "boolean" }
+              },
+              "permissions": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "categories": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "filesystem": { "type": "string", "enum": ["full", "read", "none"] },
+                      "execution": { "type": "string", "enum": ["full", "sandboxed", "none"] },
+                      "network": { "type": "string", "enum": ["full", "localhost", "none"] }
+                    }
+                  },
+                  "tools": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["enabled"],
+                      "properties": {
+                        "enabled": { "type": "boolean" },
+                        "constraints": { "type": "object" }
+                      }
+                    }
+                  },
+                  "paths": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "allowed": { "type": "array", "items": { "type": "string" } },
+                      "denied": { "type": "array", "items": { "type": "string" } }
+                    }
+                  }
+                }
               }
             }
           }

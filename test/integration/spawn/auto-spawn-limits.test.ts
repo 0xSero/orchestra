@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { delegateTask } from "../../../src/tools/tools-workers";
-import { setDirectory, setProfiles, setSpawnDefaults } from "../../../src/tools/state";
+import { setClient, setDirectory, setModelAliases, setModelSelection, setProfiles, setSpawnDefaults, setSpawnPolicy } from "../../../src/tools/state";
 import { shutdownAllWorkers } from "../../../src/core/runtime";
 import type { WorkerProfile } from "../../../src/types";
 
@@ -43,6 +43,10 @@ describe("delegateTask integration", () => {
     setDirectory(process.cwd());
     setSpawnDefaults({ basePort: 0, timeout: 60_000 });
     setProfiles(profiles);
+    setClient(undefined as any);
+    setModelSelection(undefined);
+    setModelAliases(undefined);
+    setSpawnPolicy(undefined);
   });
 
   afterAll(async () => {

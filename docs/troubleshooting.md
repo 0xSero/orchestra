@@ -14,7 +14,7 @@ list_models
 list_workers
 
 # Get detailed diagnostics
-orchestrator_diagnostics
+orchestrator_diagnostics  # enable in opencode.json tools if disabled
 ```
 
 ---
@@ -226,7 +226,7 @@ stop_worker({ workerId: "all" })
 - "Session does not exist"
 - Intermittent communication failures
 
-**Cause:** Worker process died but registry still thinks it's alive.
+**Cause:** Worker process died but the orchestrator still thinks it's alive.
 
 **Solution:**
 
@@ -235,10 +235,7 @@ stop_worker({ workerId: "all" })
 stop_worker({ workerId: "docs", force: true })
 ```
 
-2. Clear the device registry (cross-session persistence):
-```
-orchestrator_device_registry({ action: "clear" })
-```
+2. Restart OpenCode if the worker stays stuck.
 
 3. Respawn:
 ```
@@ -285,20 +282,30 @@ delegate_task({
 
 ---
 
-### 8. "Memory tools not working" or Neo4j Errors
+### 8. "Memory tools not working"
 
 **Symptoms:**
 - `memory_put` or `memory_search` fails
-- "Neo4j connection refused"
+- "Neo4j connection refused" (if enabled)
 - "Memory system not available"
 
-**Cause:** Neo4j is optional and not configured.
+**Cause:** Memory is disabled, file storage is unavailable, or Neo4j is misconfigured (if enabled).
 
 **Solution:**
 
-1. Memory is optional. If you don't need it, don't use memory tools.
+1. Ensure memory is enabled in config:
+```json
+// .opencode/orchestrator.json
+{
+  "memory": {
+    "enabled": true
+  }
+}
+```
 
-2. If you want memory, set up Neo4j:
+2. Check that OpenCode can write to your config directory (`~/.config/opencode`).
+
+3. If you want Neo4j-backed memory, set up Neo4j:
 ```bash
 # Using Docker
 docker run -d \
@@ -308,21 +315,11 @@ docker run -d \
   neo4j:latest
 ```
 
-3. Configure the connection:
+4. Configure the connection:
 ```bash
 export OPENCODE_NEO4J_URI=bolt://localhost:7687
 export OPENCODE_NEO4J_USERNAME=neo4j
 export OPENCODE_NEO4J_PASSWORD=password
-```
-
-4. Or in config:
-```json
-// .opencode/orchestrator.json
-{
-  "memory": {
-    "enabled": true
-  }
-}
 ```
 
 ---
@@ -482,4 +479,4 @@ Include:
 | Can't spawn | `pkill -f "opencode serve"` then retry |
 | No auto-spawn | Add IDs to `workers` array in config |
 | Need logs | `export OPENCODE_ORCH_DEBUG=1` |
-| Clear state | `orchestrator_device_registry({ action: "clear" })` |
+| Clear state | Restart OpenCode |

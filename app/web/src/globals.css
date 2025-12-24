@@ -1,0 +1,137 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Geist Font */
+@font-face {
+  font-family: "Geist Sans";
+  src: url("https://cdn.jsdelivr.net/npm/geist@1.2.0/dist/fonts/geist-sans/Geist-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Sans";
+  src: url("https://cdn.jsdelivr.net/npm/geist@1.2.0/dist/fonts/geist-sans/Geist-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Sans";
+  src: url("https://cdn.jsdelivr.net/npm/geist@1.2.0/dist/fonts/geist-sans/Geist-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("https://cdn.jsdelivr.net/npm/geist@1.2.0/dist/fonts/geist-mono/GeistMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    /* Warm Paper - Light Mode */
+    --background: 40 30% 97%;
+    --foreground: 30 15% 15%;
+
+    --card: 40 25% 95%;
+    --card-foreground: 30 15% 15%;
+
+    --popover: 40 25% 95%;
+    --popover-foreground: 30 15% 15%;
+
+    --primary: 35 80% 45%;
+    --primary-foreground: 40 30% 97%;
+
+    --secondary: 35 20% 90%;
+    --secondary-foreground: 30 15% 20%;
+
+    --muted: 35 15% 85%;
+    --muted-foreground: 30 10% 40%;
+
+    --accent: 35 20% 88%;
+    --accent-foreground: 30 15% 15%;
+
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 35 15% 85%;
+    --input: 35 15% 85%;
+    --ring: 30 20% 25%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    /* Warm Paper - Dark Mode */
+    --background: 30 5% 10.5%;
+    --foreground: 40 20% 92%;
+
+    --card: 30 5% 12%;
+    --card-foreground: 40 20% 92%;
+
+    --popover: 30 5% 12%;
+    --popover-foreground: 40 20% 92%;
+
+    --primary: 35 70% 55%;
+    --primary-foreground: 30 5% 10%;
+
+    --secondary: 35 10% 18%;
+    --secondary-foreground: 40 20% 90%;
+
+    --muted: 30 5% 20%;
+    --muted-foreground: 40 10% 60%;
+
+    --accent: 35 20% 18%;
+    --accent-foreground: 40 20% 92%;
+
+    --destructive: 0 60% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 5% 20%;
+    --input: 30 5% 20%;
+    --ring: 35 15% 70%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  /* Custom scrollbar - Warm Paper style */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/30;
+  }
+}
+
+@layer utilities {
+  /* Focus ring utility */
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  }
+}

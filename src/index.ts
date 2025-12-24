@@ -1,10 +1,12 @@
 import type { Plugin } from "@opencode-ai/plugin";
 import { loadOrchestratorConfig } from "./config/orchestrator";
-import { workerPool, removeSessionEntry, upsertSessionEntry } from "./core/worker-pool";
+import { workerPool } from "./core/worker-pool";
 import {
   coreOrchestratorTools,
   setClient,
   setDirectory,
+  setModelAliases,
+  setModelSelection,
   setProfiles,
   setProjectId,
   setSecurityConfig,
@@ -13,7 +15,8 @@ import {
   setWorkflowConfig,
   setWorktree,
 } from "./tools";
-import { spawnWorkers, stopWorker } from "./workers/spawner";
+import { setSpawnPolicy } from "./tools/state";
+import { spawnWorker, stopWorker } from "./workers/spawner";
 import type { WorkerInstance } from "./types";
 import type { Config } from "@opencode-ai/sdk";
 import { createIdleNotifier } from "./ux/idle-notification";
@@ -30,6 +33,9 @@ import { orchestratorPrompt } from "../prompts/orchestrator";
 import { workerJobs } from "./core/jobs";
 import { buildPassthroughSystemPrompt, clearPassthrough, getPassthrough, isPassthroughExitMessage } from "./core/passthrough";
 import { buildMemoryInjection } from "./memory/inject";
+import { HealthMonitor, defaultHealthCheckConfig } from "./core/health-monitor";
+import { warmPool } from "./core/warm-pool";
+import { canReuseExisting } from "./core/spawn-policy";
 
 export const OrchestratorPlugin: Plugin = async (ctx) => {
   // CRITICAL: Prevent recursive spawning - if this is a worker process, skip orchestrator initialization
@@ -55,23 +61,57 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
   setLoggerConfig({});
   setWorkflowConfig(config.workflows);
   setSecurityConfig(config.security);
+  setModelSelection(config.modelSelection);
+  setModelAliases(config.modelAliases);
+  setSpawnPolicy(config.spawnPolicy);
   loadWorkflows(config);
+
+  const getAgentSupportsVision = async (agentId: string | undefined): Promise<boolean> => {
+    const agentProfile = agentId ? (config.profiles as any)?.[agentId] : undefined;
+    return agentId === "vision" || Boolean(agentProfile?.supportsVision);
+  };
+
+  // Start health monitoring if configured.
+  const healthConfig = config.healthCheck ?? {
+    enabled: true,
+    intervalMs: config.healthCheckInterval,
+    timeoutMs: defaultHealthCheckConfig.timeoutMs,
+    maxRetries: defaultHealthCheckConfig.maxRetries,
+  };
+  const healthMonitor = new HealthMonitor(workerPool, healthConfig);
+  healthMonitor.start();
+
+  // Configure warm pool pre-spawns if enabled.
+  warmPool.configure({
+    config: config.warmPool,
+    profiles: config.profiles,
+    spawnOptions: {
+      basePort: config.basePort,
+      timeout: config.startupTimeout,
+      directory: ctx.directory,
+      client: ctx.client,
+      modelSelection: config.modelSelection,
+      modelAliases: config.modelAliases,
+    },
+    spawnFn: spawnWorker,
+  });
 
   // Initialize telemetry if enabled
   if (config.telemetry?.enabled !== false) {
     initTelemetry(config.telemetry?.apiKey, config.telemetry?.host);
   }
 
-  const showToast = (message: string, variant: "success" | "info" | "warning" | "error") =>
-    (config.ui?.toasts === false
-      ? Promise.resolve()
-      : ctx.client.tui.showToast({ body: { message, variant } }).catch(() => {}));
+  const showToast = async (message: string, variant: "success" | "info" | "warning" | "error") => {
+    if (config.ui?.toasts === false) return;
+    await ctx.client.tui.showToast({ body: { message, variant } }).catch(() => {});
+  };
 
   const visionTimeoutMs = (() => {
     const raw = process.env.OPENCODE_VISION_TIMEOUT_MS;
     const ms = raw ? Number(raw) : 300_000;
     return Number.isFinite(ms) && ms > 0 ? ms : 300_000;
   })();
+
 
   const lastStatus = new Map<string, string>();
   const onWorkerUpdate = (instance: WorkerInstance) => {
@@ -116,12 +156,24 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
   if (config.autoSpawn && config.spawn.length > 0) {
     void (async () => {
       const profilesToSpawn = config.spawn.map((id) => config.profiles[id]).filter(Boolean);
-      const { succeeded, failed } = await spawnWorkers(profilesToSpawn, {
-        basePort: config.basePort,
-        timeout: config.startupTimeout,
-        directory: ctx.directory,
-        client: ctx.client,
-      });
+      const succeeded: WorkerInstance[] = [];
+      const failed: Array<{ profile: WorkerInstance["profile"]; error: string }> = [];
+      for (const profile of profilesToSpawn) {
+        try {
+          const instance = await spawnWorker(profile, {
+            basePort: config.basePort,
+            timeout: config.startupTimeout,
+            directory: ctx.directory,
+            client: ctx.client,
+            modelSelection: config.modelSelection,
+            modelAliases: config.modelAliases,
+            reuseExisting: canReuseExisting(config.spawnPolicy, profile.id),
+          });
+          succeeded.push(instance);
+        } catch (err) {
+          failed.push({ profile, error: err instanceof Error ? err.message : String(err) });
+        }
+      }
       if (failed.length === 0) {
         void showToast(`Spawned ${succeeded.length} worker(s)`, "success");
       } else {
@@ -150,8 +202,7 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
       if (!hasImages(parts)) continue;
 
       const agentId = typeof info?.agent === "string" ? info.agent : undefined;
-      const agentProfile = agentId ? (config.profiles as any)?.[agentId] : undefined;
-      const agentSupportsVision = Boolean(agentProfile?.supportsVision) || agentId === "vision";
+      const agentSupportsVision = await getAgentSupportsVision(agentId);
       if (agentSupportsVision) break;
 
       if (messageId && visionProcessedMessageIds.has(messageId)) break;
@@ -244,6 +295,21 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
 
       // Keep profile models as configured (often `node:*` or canonical IDs).
       // Resolution happens at spawn-time based on last-used model + configured providers.
+
+      const toolDefaults: Record<string, boolean> = {
+        enable_worker_agent: false,
+        disable_worker_agent: false,
+        list_worker_agents: false,
+        orchestrator_output: false,
+        orchestrator_results: false,
+        orchestrator_diagnostics: false,
+      };
+      const existingTools = (opencodeConfig as any).tools;
+      if (!existingTools || typeof existingTools !== "object") {
+        (opencodeConfig as any).tools = { ...toolDefaults };
+      } else {
+        (opencodeConfig as any).tools = { ...toolDefaults, ...existingTools };
+      }
 
       if (config.commands?.enabled !== false) {
         const prefix = config.commands?.prefix ?? "orchestrator.";
@@ -351,8 +417,9 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
       if (hasImages(originalParts)) {
         const messageId = typeof input.messageID === "string" ? input.messageID : undefined;
         if (!messageId || !visionProcessedMessageIds.has(messageId)) {
-          const agentProfile = (config.profiles as any)?.[input.agent as any] as any | undefined;
-          const agentSupportsVision = Boolean(agentProfile?.supportsVision) || input.agent === "vision";
+          const agentSupportsVision = await getAgentSupportsVision(
+            typeof input.agent === "string" ? input.agent : undefined
+          );
           if (!agentSupportsVision) {
             // Do not block the user message on vision analysis.
             // Schedule analysis async, inject a placeholder immediately, then send a wakeup when done.
@@ -368,23 +435,19 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
             const visionWorkerName = visionProfile?.name ?? "Vision Worker";
             const visionModel = visionProfile?.model ?? "vision model";
 
-            // Build ASCII box with dynamic width - use FULL job ID so orchestrator can await it
-            const workerInfo = `${visionWorkerName} (${visionModel})`;
-            const awaitCall = `await_worker_job({ jobId: "${job.id}" })`;
-            const boxWidth = Math.max(60, workerInfo.length + 12, job.id.length + 12, awaitCall.length + 4);
-            const hr = "─".repeat(boxWidth - 2);
-            const pad = (s: string) => s.padEnd(boxWidth - 4);
-
+            // Clean, readable placeholder format
             const placeholder = [
-              `┌${hr}┐`,
-              `│ 🖼  [VISION ANALYSIS PENDING]${" ".repeat(boxWidth - 34)}│`,
-              `├${hr}┤`,
-              `│ Worker: ${pad(workerInfo)}│`,
-              `│ Job ID: ${pad(job.id)}│`,
-              `├${hr}┤`,
-              `│ ${pad("⏳ Analyzing image content...")}│`,
-              `│ ${pad(awaitCall)}│`,
-              `└${hr}┘`,
+              ``,
+              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+              `🔍 **Vision Analysis Pending**`,
+              ``,
+              `   Worker: ${visionWorkerName}`,
+              `   Model:  ${visionModel}`,
+              `   Job:    \`${job.id}\``,
+              ``,
+              `   → \`await_worker_job({ jobId: "${job.id}" })\``,
+              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+              ``,
             ].join("\n");
 
             output.parts = replaceImagesWithAnalysis(originalParts, placeholder, {
@@ -400,7 +463,6 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
                 client: ctx.client,
                 basePort: config.basePort,
                 timeout: visionTimeoutMs,
-                requestKey: messageId ? `${input.sessionID}:${messageId}` : undefined,
                 profiles: config.profiles,
                 showToast,
               });
@@ -415,12 +477,21 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
               }
 
               const reason = result.success ? "result_ready" : "error";
-              const summary = result.success ? "vision analysis complete" : (result.error ?? "vision analysis failed");
-              const wakeupMessage =
-                `<orchestrator-internal kind="wakeup" workerId="vision" reason="${reason}" jobId="${job.id}">\n` +
-                `[VISION ANALYSIS] ${summary} (jobId: ${job.id}).\n` +
-                `Check await_worker_job({ jobId: "${job.id}" }) for details.\n` +
-                `</orchestrator-internal>`;
+              const icon = result.success ? "✅" : "⚠️";
+              const status = result.success ? "Complete" : "Failed";
+              const detail = result.success ? "Analysis ready" : (result.error ?? "Vision analysis failed");
+              const wakeupMessage = [
+                `<orchestrator-internal kind="wakeup" workerId="vision" reason="${reason}" jobId="${job.id}">`,
+                ``,
+                `${icon} **Vision Analysis ${status}**`,
+                ``,
+                `   ${detail}`,
+                `   Job: \`${job.id}\``,
+                ``,
+                `   → \`await_worker_job({ jobId: "${job.id}" })\``,
+                ``,
+                `</orchestrator-internal>`,
+              ].join("\n");
               void injectOrchestratorNotice(input.sessionID, wakeupMessage);
 
               if (!result.success && result.error) {
@@ -429,11 +500,18 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
             })().catch((err) => {
               const msg = err instanceof Error ? err.message : String(err);
               workerJobs.setError(job.id, { error: msg });
-              const wakeupMessage =
-                `<orchestrator-internal kind="wakeup" workerId="vision" reason="error" jobId="${job.id}">\n` +
-                `[VISION ANALYSIS] ${msg} (jobId: ${job.id}).\n` +
-                `Check await_worker_job({ jobId: "${job.id}" }) for details.\n` +
-                `</orchestrator-internal>`;
+              const wakeupMessage = [
+                `<orchestrator-internal kind="wakeup" workerId="vision" reason="error" jobId="${job.id}">`,
+                ``,
+                `❌ **Vision Analysis Error**`,
+                ``,
+                `   ${msg}`,
+                `   Job: \`${job.id}\``,
+                ``,
+                `   → \`await_worker_job({ jobId: "${job.id}" })\``,
+                ``,
+                `</orchestrator-internal>`,
+              ].join("\n");
               void injectOrchestratorNotice(input.sessionID, wakeupMessage);
               void showToast(`Vision analysis crashed: ${msg}`, "error");
             });
@@ -476,24 +554,13 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
         workerPool.off("update", onWorkerUpdate);
         workerPool.off("spawn", onWorkerUpdate);
         workerPool.off("stop", onWorkerRemove);
+        healthMonitor.stop();
+        warmPool.stop();
         await shutdownAllWorkers().catch(() => {});
         await flushTelemetry().catch(() => {});
       }
-      if (event.type === "session.created" || event.type === "session.updated") {
-        const info = (event as any)?.properties?.info as any;
-        if (info?.id && typeof info.title === "string" && typeof info.directory === "string") {
-          await upsertSessionEntry({
-            hostPid: process.pid,
-            sessionId: info.id,
-            title: info.title,
-            directory: info.directory,
-            createdAt: typeof info?.time?.created === "number" ? info.time.created : Date.now(),
-          }).catch(() => {});
-        }
-      }
       if (event.type === "session.deleted") {
         const sessionId = (event as any)?.properties?.info?.id as string | undefined;
-        if (sessionId) await removeSessionEntry(sessionId, process.pid).catch(() => {});
         if (sessionId) {
           clearPassthrough(sessionId);
           const owned = workerPool.getWorkersForSession(sessionId);

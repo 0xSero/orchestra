@@ -1,12 +1,59 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { OrchestratorConfig, OrchestratorConfigFile, WorkerProfile } from "../types";
+import type { OrchestratorConfig, OrchestratorConfigFile, SpawnPolicy, ToolPermissions, WorkerProfile } from "../types";
 import { builtInProfiles } from "./profiles";
+import { resolveProfileInheritance, type WorkerProfileDefinition } from "./profile-inheritance";
 import { isPlainObject, asBooleanRecord, asStringArray, getUserConfigDir, deepMerge } from "../helpers/format";
+import { canAutoSpawn, canSpawnOnDemand, canWarmPool } from "../core/spawn-policy";
 
 
-function resolveWorkerEntry(entry: unknown): WorkerProfile | undefined {
+function parsePermissions(value: unknown): ToolPermissions | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const out: ToolPermissions = {};
+  if (isPlainObject(value.categories)) {
+    out.categories = {};
+    if (value.categories.filesystem === "full" || value.categories.filesystem === "read" || value.categories.filesystem === "none") {
+      out.categories.filesystem = value.categories.filesystem;
+    }
+    if (value.categories.execution === "full" || value.categories.execution === "sandboxed" || value.categories.execution === "none") {
+      out.categories.execution = value.categories.execution;
+    }
+    if (value.categories.network === "full" || value.categories.network === "localhost" || value.categories.network === "none") {
+      out.categories.network = value.categories.network;
+    }
+  }
+  if (isPlainObject(value.tools)) {
+    out.tools = {};
+    for (const [toolName, cfg] of Object.entries(value.tools)) {
+      if (!isPlainObject(cfg)) continue;
+      if (typeof cfg.enabled !== "boolean") continue;
+      out.tools[toolName] = {
+        enabled: cfg.enabled,
+        constraints: isPlainObject(cfg.constraints) ? cfg.constraints : undefined,
+      };
+    }
+  }
+  if (isPlainObject(value.paths)) {
+    const allowed = asStringArray(value.paths.allowed);
+    const denied = asStringArray(value.paths.denied);
+    if (allowed || denied) out.paths = { allowed: allowed ?? undefined, denied: denied ?? undefined };
+  }
+  return out;
+}
+
+function parseSpawnPolicyEntry(value: unknown): SpawnPolicy | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const out: SpawnPolicy = {};
+  if (typeof value.autoSpawn === "boolean") out.autoSpawn = value.autoSpawn;
+  if (typeof value.onDemand === "boolean") out.onDemand = value.onDemand;
+  if (typeof value.allowManual === "boolean") out.allowManual = value.allowManual;
+  if (typeof value.warmPool === "boolean") out.warmPool = value.warmPool;
+  if (typeof value.reuseExisting === "boolean") out.reuseExisting = value.reuseExisting;
+  return out;
+}
+
+function resolveWorkerEntry(entry: unknown): WorkerProfileDefinition | undefined {
   if (typeof entry === "string") return builtInProfiles[entry];
   if (!isPlainObject(entry)) return undefined;
 
@@ -16,15 +63,7 @@ function resolveWorkerEntry(entry: unknown): WorkerProfile | undefined {
   const base = builtInProfiles[id];
   const merged: Record<string, unknown> = { ...(base ?? {}), ...entry };
 
-  if (
-    typeof merged.id !== "string" ||
-    typeof merged.name !== "string" ||
-    typeof merged.model !== "string" ||
-    typeof merged.purpose !== "string" ||
-    typeof merged.whenToUse !== "string"
-  ) {
-    return undefined;
-  }
+  if (typeof merged.id !== "string") return undefined;
 
   if ("tools" in merged) {
     const tools = asBooleanRecord(merged.tools);
@@ -38,7 +77,17 @@ function resolveWorkerEntry(entry: unknown): WorkerProfile | undefined {
     merged.tags = tags;
   }
 
-  return merged as unknown as WorkerProfile;
+  if ("permissions" in merged) {
+    merged.permissions = parsePermissions(merged.permissions);
+  }
+
+  if ("extends" in merged && typeof merged.extends !== "string") delete merged.extends;
+  if ("compose" in merged) {
+    const compose = asStringArray(merged.compose);
+    merged.compose = compose;
+  }
+
+  return merged as unknown as WorkerProfileDefinition;
 }
 
 export function getDefaultGlobalOrchestratorConfigPath(): string {
@@ -70,8 +119,72 @@ function parseOrchestratorConfigFile(raw: unknown): Partial<OrchestratorConfigFi
 
   if (typeof raw.basePort === "number") partial.basePort = raw.basePort;
   if (typeof raw.autoSpawn === "boolean") partial.autoSpawn = raw.autoSpawn;
+  if (Array.isArray(raw.spawnOnDemand) && raw.spawnOnDemand.every((id: unknown) => typeof id === "string")) {
+    partial.spawnOnDemand = raw.spawnOnDemand;
+  }
+  if (isPlainObject(raw.spawnPolicy)) {
+    const spawnPolicy: Record<string, unknown> = {};
+    if (isPlainObject(raw.spawnPolicy.default)) {
+      const parsed = parseSpawnPolicyEntry(raw.spawnPolicy.default);
+      if (parsed) spawnPolicy.default = parsed;
+    }
+    if (isPlainObject(raw.spawnPolicy.profiles)) {
+      const profiles: Record<string, SpawnPolicy> = {};
+      for (const [id, cfg] of Object.entries(raw.spawnPolicy.profiles)) {
+        const parsed = parseSpawnPolicyEntry(cfg);
+        if (parsed) profiles[id] = parsed;
+      }
+      spawnPolicy.profiles = profiles;
+    }
+    partial.spawnPolicy = spawnPolicy as OrchestratorConfig["spawnPolicy"];
+  }
   if (typeof raw.startupTimeout === "number") partial.startupTimeout = raw.startupTimeout;
   if (typeof raw.healthCheckInterval === "number") partial.healthCheckInterval = raw.healthCheckInterval;
+  if (isPlainObject(raw.healthCheck)) {
+    const healthCheck: Record<string, unknown> = {};
+    if (typeof raw.healthCheck.enabled === "boolean") healthCheck.enabled = raw.healthCheck.enabled;
+    if (typeof raw.healthCheck.intervalMs === "number") healthCheck.intervalMs = raw.healthCheck.intervalMs;
+    if (typeof raw.healthCheck.timeoutMs === "number") healthCheck.timeoutMs = raw.healthCheck.timeoutMs;
+    if (typeof raw.healthCheck.maxRetries === "number") healthCheck.maxRetries = raw.healthCheck.maxRetries;
+    partial.healthCheck = healthCheck as OrchestratorConfig["healthCheck"];
+  }
+
+  if (isPlainObject(raw.warmPool)) {
+    const warmPool: Record<string, unknown> = {};
+    if (typeof raw.warmPool.enabled === "boolean") warmPool.enabled = raw.warmPool.enabled;
+    if (isPlainObject(raw.warmPool.profiles)) {
+      const profiles: Record<string, unknown> = {};
+      for (const [id, cfg] of Object.entries(raw.warmPool.profiles)) {
+        if (!isPlainObject(cfg)) continue;
+        const entry: Record<string, unknown> = {};
+        if (typeof cfg.size === "number") entry.size = cfg.size;
+        if (typeof cfg.idleTimeoutMs === "number") entry.idleTimeoutMs = cfg.idleTimeoutMs;
+        profiles[id] = entry;
+      }
+      warmPool.profiles = profiles;
+    }
+    partial.warmPool = warmPool as OrchestratorConfig["warmPool"];
+  }
+
+  if (isPlainObject(raw.modelSelection)) {
+    const modelSelection: Record<string, unknown> = {};
+    if (raw.modelSelection.mode === "performance" || raw.modelSelection.mode === "balanced" || raw.modelSelection.mode === "economical") {
+      modelSelection.mode = raw.modelSelection.mode;
+    }
+    if (typeof raw.modelSelection.maxCostPer1kTokens === "number") modelSelection.maxCostPer1kTokens = raw.modelSelection.maxCostPer1kTokens;
+    if (Array.isArray(raw.modelSelection.preferredProviders) && raw.modelSelection.preferredProviders.every((p: unknown) => typeof p === "string")) {
+      modelSelection.preferredProviders = raw.modelSelection.preferredProviders;
+    }
+    partial.modelSelection = modelSelection as OrchestratorConfig["modelSelection"];
+  }
+
+  if (isPlainObject(raw.modelAliases)) {
+    const modelAliases: Record<string, string> = {};
+    for (const [key, value] of Object.entries(raw.modelAliases)) {
+      if (typeof value === "string") modelAliases[key] = value;
+    }
+    partial.modelAliases = modelAliases;
+  }
 
   if ("profiles" in raw) {
     const profiles = asConfigArray(raw.profiles);
@@ -240,19 +353,19 @@ function collectProfilesAndSpawn(input: OrchestratorConfigFile): {
   profiles: Record<string, WorkerProfile>;
   spawn: string[];
 } {
-  const profiles: Record<string, WorkerProfile> = { ...builtInProfiles };
+  const definitions: Record<string, WorkerProfileDefinition> = {};
   const spawn: string[] = [];
   const seen = new Set<string>();
 
-  const registerProfile = (entry: unknown): WorkerProfile | undefined => {
+  const registerProfile = (entry: unknown): WorkerProfileDefinition | undefined => {
     const resolved = resolveWorkerEntry(entry);
-    if (resolved) profiles[resolved.id] = resolved;
+    if (resolved) definitions[resolved.id] = resolved;
     return resolved;
   };
 
   const enqueueSpawn = (id: string | undefined) => {
     if (!id) return;
-    if (!(id in profiles)) return;
+    if (!(id in builtInProfiles) && !(id in definitions)) return;
     if (seen.has(id)) return;
     seen.add(id);
     spawn.push(id);
@@ -271,6 +384,7 @@ function collectProfilesAndSpawn(input: OrchestratorConfigFile): {
     enqueueSpawn(resolved?.id);
   }
 
+  const profiles = resolveProfileInheritance({ builtIns: builtInProfiles, definitions });
   return { profiles, spawn };
 }
 
@@ -286,8 +400,33 @@ export async function loadOrchestratorConfig(input: {
   const defaultsFile: OrchestratorConfigFile = {
     basePort: 14096,
     autoSpawn: true,
+    spawnOnDemand: ["vision"],
+    spawnPolicy: {
+      default: {
+        autoSpawn: true,
+        onDemand: true,
+        allowManual: true,
+        warmPool: true,
+        reuseExisting: true,
+      },
+      profiles: {},
+    },
     startupTimeout: 30000,
     healthCheckInterval: 30000,
+    healthCheck: {
+      enabled: true,
+      intervalMs: 30000,
+      timeoutMs: 3000,
+      maxRetries: 3,
+    },
+    warmPool: {
+      enabled: false,
+      profiles: {},
+    },
+    modelSelection: {
+      mode: "performance",
+    },
+    modelAliases: {},
     ui: {
       toasts: true,
       injectSystemContext: true,
@@ -405,18 +544,34 @@ export async function loadOrchestratorConfig(input: {
   ) as unknown as OrchestratorConfigFile;
 
   const { profiles, spawn } = collectProfilesAndSpawn(mergedFile);
-  const spawnList = [...spawn];
-  if (mergedFile.memory?.enabled !== false && mergedFile.memory?.autoSpawn !== false) {
-    if (profiles.memory && !spawnList.includes("memory")) {
-      spawnList.push("memory");
+  const spawnPolicy = (mergedFile.spawnPolicy ?? defaultsFile.spawnPolicy) as OrchestratorConfig["spawnPolicy"];
+  const spawnList = spawn.filter((id) => canAutoSpawn(spawnPolicy, id));
+  const spawnOnDemand = (mergedFile.spawnOnDemand ?? defaultsFile.spawnOnDemand ?? []).filter((id) =>
+    canSpawnOnDemand(spawnPolicy, id)
+  );
+
+  const warmPool = (() => {
+    const base = (mergedFile.warmPool ?? defaultsFile.warmPool) as OrchestratorConfig["warmPool"];
+    if (!base?.profiles) return base;
+    const nextProfiles: Record<string, { size?: number; idleTimeoutMs?: number }> = {};
+    for (const [id, cfg] of Object.entries(base.profiles)) {
+      if (!canWarmPool(spawnPolicy, id)) continue;
+      nextProfiles[id] = cfg ?? {};
     }
-  }
+    return { ...base, profiles: nextProfiles };
+  })();
 
   const config: OrchestratorConfig = {
     basePort: mergedFile.basePort ?? defaultsFile.basePort ?? 14096,
     autoSpawn: mergedFile.autoSpawn ?? defaultsFile.autoSpawn ?? true,
+    spawnOnDemand,
+    spawnPolicy,
     startupTimeout: mergedFile.startupTimeout ?? defaultsFile.startupTimeout ?? 30000,
     healthCheckInterval: mergedFile.healthCheckInterval ?? defaultsFile.healthCheckInterval ?? 30000,
+    healthCheck: (mergedFile.healthCheck ?? defaultsFile.healthCheck) as OrchestratorConfig["healthCheck"],
+    warmPool,
+    modelSelection: (mergedFile.modelSelection ?? defaultsFile.modelSelection) as OrchestratorConfig["modelSelection"],
+    modelAliases: (mergedFile.modelAliases ?? defaultsFile.modelAliases) as OrchestratorConfig["modelAliases"],
     ui: (mergedFile.ui ?? defaultsFile.ui) as OrchestratorConfig["ui"],
     notifications: (mergedFile.notifications ?? defaultsFile.notifications) as OrchestratorConfig["notifications"],
     agent: (mergedFile.agent ?? defaultsFile.agent) as OrchestratorConfig["agent"],

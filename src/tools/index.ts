@@ -7,6 +7,8 @@
 export {
   setClient,
   setDirectory,
+  setModelAliases,
+  setModelSelection,
   setProfiles,
   setProjectId,
   setSecurityConfig,
@@ -23,6 +25,7 @@ export {
   delegateTask,
   ensureWorkers,
   findWorker,
+  suggestWorker,
   getWorkerJob,
   getWorkerInfo,
   listWorkers,
@@ -39,6 +42,7 @@ export {
   resetProfileModels,
   setAutoSpawn,
   setOrchestratorAgent,
+  setSpawnPolicy,
   setProfileModel,
 } from "./tools-profiles";
 export { memoryLink, memoryPut, memoryRecentTool, memorySearchTool } from "./tools-memory";
@@ -48,7 +52,6 @@ export {
   macosKeybindsFix,
   orchestratorDashboard,
   orchestratorOutput,
-  orchestratorDeviceRegistry,
   orchestratorDemo,
   orchestratorHelp,
   orchestratorResults,
@@ -58,6 +61,7 @@ export {
 } from "./tools-ux";
 export { orchestratorDiagnostics } from "./tools-diagnostics";
 export { listWorkflowsTool, runWorkflowTool } from "./tools-workflows";
+export { enableWorkerAgent, disableWorkerAgent, listWorkerAgents } from "./tools-agents";
 
 import {
   askWorker,
@@ -66,6 +70,7 @@ import {
   delegateTask,
   ensureWorkers,
   findWorker,
+  suggestWorker,
   getWorkerJob,
   getWorkerInfo,
   listWorkers,
@@ -82,6 +87,7 @@ import {
   resetProfileModels,
   setAutoSpawn,
   setOrchestratorAgent,
+  setSpawnPolicy,
   setProfileModel,
 } from "./tools-profiles";
 import { memoryLink, memoryPut, memoryRecentTool, memorySearchTool } from "./tools-memory";
@@ -91,7 +97,6 @@ import {
   macosKeybindsFix,
   orchestratorDashboard,
   orchestratorOutput,
-  orchestratorDeviceRegistry,
   orchestratorDemo,
   orchestratorHelp,
   orchestratorResults,
@@ -101,9 +106,10 @@ import {
 } from "./tools-ux";
 import { orchestratorDiagnostics } from "./tools-diagnostics";
 import { listWorkflowsTool, runWorkflowTool } from "./tools-workflows";
+import { enableWorkerAgent, disableWorkerAgent, listWorkerAgents } from "./tools-agents";
 
 /**
- * Core tools exported for the plugin (simplified from 27 to 8 essential tools)
+ * Core tools exported for the plugin.
  */
 export const coreOrchestratorTools = {
   // Core worker lifecycle + messaging
@@ -115,11 +121,15 @@ export const coreOrchestratorTools = {
   list_worker_jobs: listWorkerJobs,
   delegate_task: delegateTask,
   stop_worker: stopWorkerTool,
+  enable_worker_agent: enableWorkerAgent,
+  disable_worker_agent: disableWorkerAgent,
+  list_worker_agents: listWorkerAgents,
 
   // Discovery
   list_profiles: listProfiles,
   list_workers: listWorkers,
   list_models: listModels,
+  suggest_worker: suggestWorker,
   orchestrator_status: orchestratorConfig,
   list_workflows: listWorkflowsTool,
   run_workflow: runWorkflowTool,
@@ -127,7 +137,6 @@ export const coreOrchestratorTools = {
   // Observability (useful for orchestration + debugging)
   orchestrator_output: orchestratorOutput,
   orchestrator_results: orchestratorResults,
-  orchestrator_device_registry: orchestratorDeviceRegistry,
   orchestrator_diagnostics: orchestratorDiagnostics,
 
   // Passthrough (session-scoped)
@@ -142,7 +151,6 @@ export const pluginTools = {
   orchestrator_demo: orchestratorDemo,
   orchestrator_dashboard: orchestratorDashboard,
   orchestrator_results: orchestratorResults,
-  orchestrator_device_registry: orchestratorDeviceRegistry,
   orchestrator_diagnostics: orchestratorDiagnostics,
   worker_trace: workerTrace,
   orchestrator_todo: orchestratorTodoView,
@@ -154,6 +162,7 @@ export const pluginTools = {
   set_profile_model: setProfileModel,
   reset_profile_models: resetProfileModels,
   set_autospawn: setAutoSpawn,
+  set_spawn_policy: setSpawnPolicy,
   set_orchestrator_agent: setOrchestratorAgent,
 
   // Memory tools
@@ -166,6 +175,7 @@ export const pluginTools = {
   get_worker_info: getWorkerInfo,
   ensure_workers: ensureWorkers,
   find_worker: findWorker,
+  suggest_worker: suggestWorker,
   autofill_profile_models: autofillProfileModels,
   
 };

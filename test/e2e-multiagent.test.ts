@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { workerPool, listDeviceRegistry, pruneDeadEntries } from "../src/core/worker-pool";
+import { workerPool } from "../src/core/worker-pool";
 import { shutdownAllWorkers } from "../src/core/runtime";
 import { workerJobs } from "../src/core/jobs";
 import { spawnWorker, stopWorker, sendToWorker } from "../src/workers/spawner";
@@ -46,13 +46,12 @@ describe("e2e (multiagent)", () => {
 
   afterAll(async () => {
     await shutdownAllWorkers().catch(() => {});
-    await pruneDeadEntries().catch(() => {});
     restoreEnv?.();
   }, 120_000);
 
   describe("registry + cleanup", () => {
     test(
-      "workers are registered, tracked in device registry, and have bridge tools",
+      "workers are registered and have bridge tools",
       async () => {
         const a = workerPool.get("workerA");
         const b = workerPool.get("workerB");
@@ -62,11 +61,6 @@ describe("e2e (multiagent)", () => {
         expect(typeof b?.pid).toBe("number");
         expect(typeof a?.serverUrl).toBe("string");
         expect(typeof b?.serverUrl).toBe("string");
-
-        const entries = await listDeviceRegistry();
-        const pids = new Set(entries.filter((e: any) => e.kind === "worker").map((e: any) => e.pid));
-        expect(pids.has(a!.pid!)).toBe(true);
-        expect(pids.has(b!.pid!)).toBe(true);
 
         const idsA = await a!.client!.tool.ids({} as any);
         expect(Array.isArray(idsA.data)).toBe(true);
@@ -89,12 +83,6 @@ describe("e2e (multiagent)", () => {
         expect(workerPool.get("workerA")).toBeUndefined();
         expect(workerPool.get("workerB")).toBeUndefined();
 
-        await pruneDeadEntries();
-        const entries = await listDeviceRegistry();
-        const alivePids = new Set(entries.filter((e: any) => e.kind === "worker").map((e: any) => e.pid));
-        // After pruning, stopped processes should be gone.
-        if (a?.pid) expect(alivePids.has(a.pid)).toBe(false);
-        if (b?.pid) expect(alivePids.has(b.pid)).toBe(false);
       },
       120_000
     );

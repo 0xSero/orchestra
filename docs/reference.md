@@ -23,10 +23,11 @@ Orchestrator visibility:
 - `orchestrator_status` - Show config and worker mappings
 - `orchestrator_output` - Jobs + log tail for recent activity
 - `orchestrator_results` - Inspect last worker outputs
-- `orchestrator_device_registry` - Device registry status
 - `orchestrator_diagnostics` - Process and memory diagnostics
 - `list_workflows` - List registered workflows
 - `run_workflow` - Run a workflow by id
+
+Note: `orchestrator_output`, `orchestrator_results`, and `orchestrator_diagnostics` are disabled by default. Enable them via `tools` in your `opencode.json` if needed.
 
 ## UX tools
 

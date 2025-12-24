@@ -2,16 +2,27 @@ import { tool } from "@opencode-ai/plugin";
 import { readFile, writeFile } from "node:fs/promises";
 import { getDefaultGlobalOpenCodeConfigPath } from "../config/orchestrator";
 import { getProfile } from "../config/profiles";
-import { workerPool, listDeviceRegistry } from "../core/worker-pool";
+import { workerPool } from "../core/worker-pool";
 import { workerJobs } from "../core/jobs";
 import { clearPassthrough, setPassthrough } from "../core/passthrough";
 import { getLogBuffer } from "../core/logger";
 import { getHandbookMarkdown } from "../ux/handbook";
 import { getRepoDocsBundle } from "../ux/repo-docs";
 import { sendToWorker, spawnWorker } from "../workers/spawner";
+import { canSpawnManually, canReuseExisting } from "../core/spawn-policy";
 import { renderMarkdownTable } from "./markdown";
 import { autofillProfileModels } from "./tools-profiles";
-import { getClient, getDefaultListFormat, getDirectory, getProfiles, getSpawnDefaults, type ToolContext } from "./state";
+import {
+  getClient,
+  getDefaultListFormat,
+  getDirectory,
+  getModelAliases,
+  getModelSelection,
+  getProfiles,
+  getSpawnPolicy,
+  getSpawnDefaults,
+  type ToolContext,
+} from "./state";
 
 export const orchestratorHelp = tool({
   description: "Show help for using the orchestrator plugin (workers, profiles, delegation)",
@@ -41,8 +52,19 @@ export const enableDocsPassthrough = tool({
     if (autoSpawn && (!workerPool.get(workerId) || workerPool.get(workerId)?.status === "stopped")) {
       const profile = getProfile(workerId, getProfiles());
       if (profile) {
+        if (!canSpawnManually(getSpawnPolicy(), profile.id)) {
+          return `Spawning "${profile.id}" is disabled by spawnPolicy.`;
+        }
         const { basePort, timeout } = getSpawnDefaults();
-        await spawnWorker(profile, { basePort, timeout, directory: getDirectory(), client }).catch(() => {});
+        await spawnWorker(profile, {
+          basePort,
+          timeout,
+          directory: getDirectory(),
+          client,
+          modelSelection: getModelSelection(),
+          modelAliases: getModelAliases(),
+          reuseExisting: canReuseExisting(getSpawnPolicy(), profile.id),
+        }).catch(() => {});
       }
     }
 
@@ -78,8 +100,19 @@ export const setPassthroughMode = tool({
     if (autoSpawn && (!workerPool.get(workerId) || workerPool.get(workerId)?.status === "stopped")) {
       const profile = getProfile(workerId, getProfiles());
       if (!profile) return `Worker "${workerId}" is not running and no profile "${workerId}" exists to spawn.`;
+      if (!canSpawnManually(getSpawnPolicy(), profile.id)) {
+        return `Spawning "${profile.id}" is disabled by spawnPolicy.`;
+      }
       const { basePort, timeout } = getSpawnDefaults();
-      await spawnWorker(profile, { basePort, timeout, directory: getDirectory(), client });
+      await spawnWorker(profile, {
+        basePort,
+        timeout,
+        directory: getDirectory(),
+        client,
+        modelSelection: getModelSelection(),
+        modelAliases: getModelAliases(),
+        reuseExisting: canReuseExisting(getSpawnPolicy(), profile.id),
+      });
     }
 
     setPassthrough(ctx.sessionID, workerId);
@@ -153,7 +186,18 @@ export const orchestratorStart = tool({
     if (!instance) {
       try {
         const { basePort, timeout } = getSpawnDefaults();
-        instance = await spawnWorker(base, { basePort, timeout, directory: getDirectory(), client });
+        if (!canSpawnManually(getSpawnPolicy(), base.id)) {
+          return `Spawning "${base.id}" is disabled by spawnPolicy.`;
+        }
+        instance = await spawnWorker(base, {
+          basePort,
+          timeout,
+          directory: getDirectory(),
+          client,
+          modelSelection: getModelSelection(),
+          modelAliases: getModelAliases(),
+          reuseExisting: canReuseExisting(getSpawnPolicy(), base.id),
+        });
         chosenPersistModel = instance.profile.model;
         spawned = true;
       } catch (e) {
@@ -374,52 +418,6 @@ export const orchestratorResults = tool({
       lines.push("");
     }
     return lines.join("\n");
-  },
-});
-
-export const orchestratorDeviceRegistry = tool({
-  description: "List all orchestrator-tracked OpenCode worker sessions across this device (file-backed registry).",
-  args: {
-    format: tool.schema.enum(["markdown", "json"]).optional().describe("Output format (default: markdown)"),
-  },
-  async execute(args) {
-    const entries = await listDeviceRegistry();
-    const format: "markdown" | "json" = args.format ?? getDefaultListFormat();
-    if (format === "json") return JSON.stringify(entries, null, 2);
-    if (entries.length === 0) return "No worker sessions recorded on this device.";
-    const workerRows = entries
-      .filter((e: any) => e.kind === "worker")
-      .map((e: any) => [
-        e.orchestratorInstanceId,
-        e.workerId,
-        String(e.status),
-        String(e.pid),
-        String(e.port ?? ""),
-        String(e.sessionId ?? ""),
-        new Date(e.updatedAt).toISOString(),
-      ]);
-    const sessionRows = entries
-      .filter((e: any) => e.kind === "session")
-      .map((e: any) => [
-        String(e.hostPid),
-        String(e.sessionId),
-        String(e.title),
-        String(e.directory),
-        new Date(e.updatedAt).toISOString(),
-      ]);
-    return [
-      "# Device Registry",
-      "",
-      "## Workers",
-      workerRows.length
-        ? renderMarkdownTable(["Orch", "Worker", "Status", "PID", "Port", "Session", "Updated"], workerRows)
-        : "(none)",
-      "",
-      "## Sessions",
-      sessionRows.length
-        ? renderMarkdownTable(["Host PID", "Session", "Title", "Directory", "Updated"], sessionRows)
-        : "(none)",
-    ].join("\n");
   },
 });
 

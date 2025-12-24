@@ -2,11 +2,23 @@ import { tool } from "@opencode-ai/plugin";
 import { workerPool } from "../core/worker-pool";
 import { workerJobs } from "../core/jobs";
 import { getProfile } from "../config/profiles";
-import type { WorkerProfile } from "../types";
-import { sendToWorker, spawnWorker, spawnWorkers, stopWorker } from "../workers/spawner";
+import type { WorkerInstance, WorkerProfile } from "../types";
+import { sendToWorker, spawnWorker, stopWorker } from "../workers/spawner";
+import { suggestProfiles } from "../profiles/discovery";
 import { renderMarkdownTable, toBool } from "./markdown";
 import { normalizeModelInput } from "./normalize-model";
-import { getClient, getDefaultListFormat, getDirectory, getProfiles, getSpawnDefaults, type ToolContext } from "./state";
+import { canSpawnManually, canSpawnOnDemand, canReuseExisting } from "../core/spawn-policy";
+import {
+  getClient,
+  getDefaultListFormat,
+  getDirectory,
+  getModelAliases,
+  getModelSelection,
+  getProfiles,
+  getSpawnPolicy,
+  getSpawnDefaults,
+  type ToolContext,
+} from "./state";
 
 export const listWorkers = tool({
   description: "List all available workers in the orchestrator registry, or get detailed info for a specific worker",
@@ -174,13 +186,21 @@ export const askWorkerAsync = tool({
       const client = getClient();
       if (!sessionId || !client) return;
       const reason = res.success ? "result_ready" : "error";
-      const summary = res.success ? "async job complete" : (res.error ?? "async job failed");
-      const wakeupMessage =
-        `<orchestrator-internal kind="wakeup" workerId="${args.workerId}" reason="${reason}" jobId="${job.id}">\n` +
-        `[WORKER WAKEUP] Worker "${args.workerId}" ${res.success ? "completed" : "failed"} async job ${job.id}.` +
-        `${summary ? ` ${summary}` : ""}\n` +
-        `Check await_worker_job({ jobId: "${job.id}" }) for details.\n` +
-        `</orchestrator-internal>`;
+      const icon = res.success ? "✅" : "⚠️";
+      const status = res.success ? "Complete" : "Failed";
+      const detail = res.success ? "Result ready" : (res.error ?? "Job failed");
+      const wakeupMessage = [
+        `<orchestrator-internal kind="wakeup" workerId="${args.workerId}" reason="${reason}" jobId="${job.id}">`,
+        ``,
+        `${icon} **Worker ${status}** — ${args.workerId}`,
+        ``,
+        `   ${detail}`,
+        `   Job: \`${job.id}\``,
+        ``,
+        `   → \`await_worker_job({ jobId: "${job.id}" })\``,
+        ``,
+        `</orchestrator-internal>`,
+      ].join("\n");
       void client.session
         .prompt({
           path: { id: sessionId },
@@ -308,12 +328,14 @@ export const getWorkerInfo = tool({
 });
 
 export const spawnNewWorker = tool({
-  description: `Spawn a new worker with a specific profile. Built-in profiles: vision, docs, coder, architect, explorer.
+  description: `Spawn a new worker with a specific profile. Built-in profiles: vision, docs, coder, architect, explorer, memory, reviewer, qa, security, product, analyst.
 You can also provide custom configuration to override defaults.`,
   args: {
-    profileId: tool.schema.string().describe("Profile ID to use (built-in: vision, docs, coder, architect, explorer)"),
+    profileId: tool.schema.string().describe("Profile ID to use (built-in: vision, docs, coder, architect, explorer, memory, reviewer, qa, security, product, analyst)"),
     model: tool.schema.string().optional().describe("Override the model to use"),
     customId: tool.schema.string().optional().describe("Custom ID for this worker instance"),
+    reuseExisting: tool.schema.boolean().optional().describe("Deprecated (device registry removed); no effect"),
+    forceNew: tool.schema.boolean().optional().describe("Stop any running worker and spawn a fresh one (default: false)"),
     showToast: tool.schema.boolean().optional().describe("Show a toast notification in the UI"),
   },
   async execute(args, ctx: ToolContext) {
@@ -324,9 +346,19 @@ You can also provide custom configuration to override defaults.`,
       return `Unknown profile "${args.profileId}". Available profiles: ${available || "(none)"}`;
     }
 
+    const spawnPolicy = getSpawnPolicy();
+    if (!canSpawnManually(spawnPolicy, baseProfile.id)) {
+      return `Spawning "${baseProfile.id}" is disabled by spawnPolicy.`;
+    }
+
     let model = baseProfile.model;
     if (args.model) {
-      const normalized = await normalizeModelInput(args.model, { client: getClient(), directory: getDirectory() });
+      const normalized = await normalizeModelInput(args.model, {
+        client: getClient(),
+        directory: getDirectory(),
+        modelSelection: getModelSelection(),
+        modelAliases: getModelAliases(),
+      });
       if (!normalized.ok) return `Failed to spawn worker: ${normalized.error}`;
       model = normalized.model;
     }
@@ -348,11 +380,17 @@ You can also provide custom configuration to override defaults.`,
       }
       const { basePort, timeout } = getSpawnDefaults();
       const existing = workerPool.get(profile.id);
+      if (args.forceNew && existing) {
+        await stopWorker(profile.id).catch(() => {});
+      }
       const instance = await spawnWorker(profile, {
         basePort,
         timeout,
         directory: getDirectory(),
         client,
+        modelSelection: getModelSelection(),
+        modelAliases: getModelAliases(),
+        reuseExisting: args.reuseExisting ?? canReuseExisting(spawnPolicy, baseProfile.id),
       });
       if (ctx?.sessionID && !existing && instance.modelResolution !== "reused existing worker") {
         workerPool.trackOwnership(ctx.sessionID, instance.profile.id);
@@ -373,10 +411,14 @@ export const ensureWorkers = tool({
   },
   async execute(args, ctx: ToolContext) {
     const profiles = getProfiles();
+    const spawnPolicy = getSpawnPolicy();
     const uniqueIds = [...new Set(args.profileIds)];
     const toSpawn: WorkerProfile[] = [];
     for (const id of uniqueIds) {
       if (workerPool.get(id)) continue;
+      if (!canSpawnManually(spawnPolicy, id)) {
+        return `Spawning "${id}" is disabled by spawnPolicy.`;
+      }
       const profile = getProfile(id, profiles);
       if (!profile) return `Unknown profile "${id}". Run list_profiles({}) to see available profiles.`;
       toSpawn.push(profile);
@@ -385,12 +427,28 @@ export const ensureWorkers = tool({
     if (toSpawn.length === 0) return "All requested workers are already running.";
 
     const { basePort, timeout } = getSpawnDefaults();
-    const { succeeded, failed } = await spawnWorkers(toSpawn, {
-      basePort,
-      timeout,
-      directory: getDirectory(),
-      client: getClient(),
-    });
+    const succeeded: WorkerInstance[] = [];
+    const failed: Array<{ profile: WorkerProfile; error: string }> = [];
+
+    for (const profile of toSpawn) {
+      try {
+        const instance = await spawnWorker(profile, {
+          basePort,
+          timeout,
+          directory: getDirectory(),
+          client: getClient(),
+          modelSelection: getModelSelection(),
+          modelAliases: getModelAliases(),
+          reuseExisting: canReuseExisting(spawnPolicy, profile.id),
+        });
+        succeeded.push(instance);
+      } catch (err) {
+        failed.push({
+          profile,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
     if (ctx?.sessionID) {
       for (const instance of succeeded) {
         if (instance.modelResolution === "reused existing worker") continue;
@@ -444,6 +502,7 @@ export const delegateTask = tool({
     const profiles = getProfiles();
     const requiresVision = args.requiresVision ?? false;
     const autoSpawn = args.autoSpawn ?? true;
+    const spawnPolicy = getSpawnPolicy();
 
     let targetId = args.workerId;
     if (!targetId) {
@@ -469,12 +528,18 @@ export const delegateTask = tool({
 
       const profile = getProfile(guessProfile, profiles);
       if (!profile) return `No suitable profile found to spawn (wanted "${guessProfile}").`;
+      if (!canSpawnOnDemand(spawnPolicy, profile.id)) {
+        return `Auto-spawn for "${profile.id}" is disabled by spawnPolicy. Spawn it manually first.`;
+      }
       const { basePort, timeout } = getSpawnDefaults();
       const instance = await spawnWorker(profile, {
         basePort,
         timeout,
         directory: getDirectory(),
         client: getClient(),
+        modelSelection: getModelSelection(),
+        modelAliases: getModelAliases(),
+        reuseExisting: canReuseExisting(spawnPolicy, profile.id),
       });
       targetId = instance.profile.id;
       if (ctx?.sessionID && instance.modelResolution !== "reused existing worker") {
@@ -538,6 +603,26 @@ export const findWorker = tool({
       status: best.status,
       alternatives: matches.slice(1).map((w) => ({ id: w.profile.id, purpose: w.profile.purpose })),
     });
+  },
+});
+
+export const suggestWorker = tool({
+  description: "Suggest suitable worker profiles for a given task description.",
+  args: {
+    purpose: tool.schema.string().describe("Task description or intent"),
+    limit: tool.schema.number().optional().describe("Max suggestions to return (default: 5)"),
+    format: tool.schema.enum(["markdown", "json"]).optional().describe("Output format (default: markdown)"),
+  },
+  async execute(args) {
+    const profiles = getProfiles();
+    const suggestions = suggestProfiles(args.purpose, profiles, { limit: args.limit ?? 5 });
+    const format: "markdown" | "json" = args.format ?? getDefaultListFormat();
+
+    if (format === "json") return JSON.stringify(suggestions, null, 2);
+    if (suggestions.length === 0) return "No matching profiles found.";
+
+    const rows = suggestions.map((s) => [s.id, String(s.score), s.reason]);
+    return renderMarkdownTable(["Profile", "Score", "Reason"], rows);
   },
 });
 

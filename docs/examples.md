@@ -421,13 +421,13 @@ ask_worker({
 
 ### Setting Up Memory
 
-First, ensure Neo4j is running:
+Memory is file-based by default. If you want Neo4j-backed memory, ensure Neo4j is running:
 ```bash
 docker run -d --name neo4j -p 7474:7474 -p 7687:7687 \
   -e NEO4J_AUTH=neo4j/password neo4j:latest
 ```
 
-Configure environment:
+Configure environment (Neo4j optional):
 ```bash
 export OPENCODE_NEO4J_URI=bolt://localhost:7687
 export OPENCODE_NEO4J_USERNAME=neo4j

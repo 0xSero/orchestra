@@ -5,13 +5,17 @@ import {
   getClient,
   getDefaultListFormat,
   getDirectory,
+  getModelAliases,
+  getModelSelection,
   getProfiles,
   getSecurityConfig,
+  getSpawnPolicy,
   getSpawnDefaults,
   getWorkflowsConfig,
 } from "./state";
 import { spawnWorker, sendToWorker } from "../workers/spawner";
 import { workerPool } from "../core/worker-pool";
+import { canSpawnOnDemand, canReuseExisting } from "../core/spawn-policy";
 import type { WorkflowRunInput, WorkflowSecurityLimits } from "../workflows/types";
 
 const defaultLimits: WorkflowSecurityLimits = {
@@ -58,6 +62,9 @@ async function ensureWorker(workerId: string, autoSpawn: boolean): Promise<strin
   if (!profile) {
     throw new Error(`Unknown worker profile "${workerId}".`);
   }
+  if (!canSpawnOnDemand(getSpawnPolicy(), profile.id)) {
+    throw new Error(`Auto-spawn for "${profile.id}" is disabled by spawnPolicy.`);
+  }
 
   const { basePort, timeout } = getSpawnDefaults();
   const instance = await spawnWorker(profile, {
@@ -65,6 +72,9 @@ async function ensureWorker(workerId: string, autoSpawn: boolean): Promise<strin
     timeout,
     directory: getDirectory(),
     client: getClient(),
+    modelSelection: getModelSelection(),
+    modelAliases: getModelAliases(),
+    reuseExisting: canReuseExisting(getSpawnPolicy(), profile.id),
   });
   return instance.profile.id;
 }

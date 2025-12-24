@@ -7,7 +7,7 @@
 
 import { createOpencodeClient } from "@opencode-ai/sdk";
 import type { WorkerProfile, WorkerInstance } from "../types";
-import { workerPool, listDeviceRegistry, removeWorkerEntriesByPid, type DeviceRegistryWorkerEntry } from "../core/worker-pool";
+import { workerPool } from "../core/worker-pool";
 import { hydrateProfileModelsFromOpencode } from "../models/hydrate";
 import { buildPromptParts, extractTextFromPromptResponse, normalizeBase64Image, type WorkerAttachment } from "./prompt";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -15,10 +15,20 @@ import { existsSync } from "node:fs";
 import { copyFile, mkdir, unlink, writeFile } from "node:fs/promises";
 import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { ensureRuntime, registerWorkerInDeviceRegistry } from "../core/runtime";
+import { ensureRuntime } from "../core/runtime";
 import { getUserConfigDir } from "../helpers/format";
 import { mergeOpenCodeConfig } from "../config/opencode";
 import { getRepoContextForWorker } from "../ux/repo-context";
+import { buildToolConfigFromPermissions, summarizePermissions } from "../permissions/validator";
+import { ensureSupervisorWorker } from "../core/supervisor-client";
+
+function shouldUseSupervisor(options?: { supervisorUrl?: string }): boolean {
+  if (process.env.OPENCODE_SUPERVISOR_MODE === "1") return false;
+  if (process.env.OPENCODE_ORCH_SUPERVISOR_DISABLED === "1") return false;
+  if (options?.supervisorUrl) return true;
+  if (process.env.OPENCODE_ORCH_SUPERVISOR_URL) return true;
+  return process.env.OPENCODE_ORCH_SUPERVISOR_ENABLE === "1";
+}
 
 interface SpawnOptions {
   /** Base port to start from */
@@ -29,6 +39,16 @@ interface SpawnOptions {
   directory: string;
   /** Orchestrator client used to resolve model nodes (auto/node tags) */
   client?: any;
+  /** Model selection preferences */
+  modelSelection?: import("../types").OrchestratorConfig["modelSelection"];
+  /** Model alias table */
+  modelAliases?: import("../types").OrchestratorConfig["modelAliases"];
+  /** Deprecated (device registry removed); no effect */
+  reuseExisting?: boolean;
+  /** Force local spawn even if a supervisor is available */
+  forceLocal?: boolean;
+  /** Optional supervisor URL override */
+  supervisorUrl?: string;
 }
 
 // In-flight spawn deduplication moved to worker-pool.ts
@@ -181,17 +201,7 @@ async function checkWorkerBridgeTools(
   return { ok: missing.length === 0, missing, toolIds };
 }
 
-// isProcessAlive, findExistingWorker, and tryReuseExistingWorker moved to worker-pool.ts
 // This module now handles only the core spawn operation
-
-function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 async function spawnOpencodeServe(options: {
   hostname: string;
@@ -208,6 +218,8 @@ async function spawnOpencodeServe(options: {
     ...options.env,
     OPENCODE_CONFIG_CONTENT: JSON.stringify(mergedConfig ?? options.config ?? {}),
     OPENCODE_ORCHESTRATOR_WORKER: "1", // Signal that this is a worker, not the orchestrator
+    // Allow workers to self-terminate if the orchestrator process disappears.
+    OPENCODE_ORCH_PARENT_PID: String(process.pid),
   };
 
   const proc = spawn(
@@ -321,6 +333,14 @@ export async function spawnWorker(
   profile: WorkerProfile,
   options: SpawnOptions & { forceNew?: boolean }
 ): Promise<WorkerInstance> {
+  // When configured, delegate spawning to the external supervisor and attach to the ensured worker.
+  if (!options.forceLocal && shouldUseSupervisor(options)) {
+    const port = await ensureSupervisorWorker(profile, options).catch(() => undefined);
+    if (port && Number.isFinite(port)) {
+      return connectToWorker(profile, port);
+    }
+  }
+
   // Use workerPool.getOrSpawn for proper deduplication (prevents duplicate spawns)
   return workerPool.getOrSpawn(profile, options, _spawnWorkerCore);
 }
@@ -337,22 +357,22 @@ async function _spawnWorkerCore(
   const resolvedProfile = await (async (): Promise<WorkerProfile> => {
     const modelSpec = profile.model.trim();
     const isNodeTag = modelSpec.startsWith("auto") || modelSpec.startsWith("node");
+    const isExplicitModel = modelSpec.includes("/");
 
     // When spawning from inside the plugin, we always pass the orchestrator client.
     // Without it, we can only accept fully-qualified provider/model IDs.
     if (!options.client) {
-      if (isNodeTag) {
+      if (isNodeTag || !isExplicitModel) {
         throw new Error(
           `Profile "${profile.id}" uses "${profile.model}", but model resolution is unavailable. ` +
             `Set a concrete provider/model ID for this profile.`
         );
       }
-      if (!modelSpec.includes("/")) {
-        throw new Error(
-          `Invalid model "${profile.model}". OpenCode models must be in "provider/model" format. ` +
-            `Run list_models({}) to see configured models and copy the full ID.`
-        );
-      }
+      return profile;
+    }
+
+    // Skip expensive provider resolution for explicit provider/model IDs.
+    if (!isNodeTag && isExplicitModel) {
       return profile;
     }
 
@@ -360,6 +380,8 @@ async function _spawnWorkerCore(
       client: options.client,
       directory: options.directory,
       profiles: { [profile.id]: profile },
+      modelAliases: options.modelAliases,
+      modelSelection: options.modelSelection,
     });
     return profiles[profile.id] ?? profile;
   })();
@@ -375,6 +397,12 @@ async function _spawnWorkerCore(
       : resolvedProfile.model === profile.model
         ? "configured"
         : `resolved from ${profile.model.trim()}`;
+
+  const toolConfig = buildToolConfigFromPermissions({
+    permissions: resolvedProfile.permissions,
+    baseTools: resolvedProfile.tools,
+  });
+  const permissionSummary = summarizePermissions(resolvedProfile.permissions);
 
   // Create initial instance
   const instance: WorkerInstance = {
@@ -407,12 +435,12 @@ async function _spawnWorkerCore(
         model: resolvedProfile.model,
         plugin: pluginSpecifier ? [pluginSpecifier] : [],
         // Apply any tool restrictions
-        ...(resolvedProfile.tools && { tools: resolvedProfile.tools }),
+        ...(toolConfig && { tools: toolConfig }),
+        ...(resolvedProfile.permissions && { permissions: resolvedProfile.permissions }),
       },
       env: {
         OPENCODE_ORCH_BRIDGE_URL: rt.bridge.url,
         OPENCODE_ORCH_BRIDGE_TOKEN: rt.bridge.token,
-        OPENCODE_ORCH_INSTANCE_ID: rt.instanceId,
         OPENCODE_ORCH_WORKER_ID: resolvedProfile.id,
       },
     });
@@ -436,19 +464,6 @@ async function _spawnWorkerCore(
     }
 
     instance.client = client;
-
-    // Record the process early so other orchestrator instances can reuse rather than spawn.
-    if (typeof instance.pid === "number") {
-      await registerWorkerInDeviceRegistry({
-        workerId: resolvedProfile.id,
-        pid: instance.pid,
-        url,
-        port: instance.port,
-        sessionId: instance.sessionId,
-        status: "starting",
-        startedAt: instance.startedAt.getTime(),
-      });
-    }
 
     // Note: We skip provider preflight checks here because OpenCode has built-in providers
     // that aren't visible via client.config.providers(). The spawn will fail naturally
@@ -485,18 +500,6 @@ async function _spawnWorkerCore(
 
     instance.sessionId = session.id;
 
-    if (typeof instance.pid === "number") {
-      await registerWorkerInDeviceRegistry({
-        workerId: resolvedProfile.id,
-        pid: instance.pid,
-        url,
-        port: instance.port,
-        sessionId: instance.sessionId,
-        status: "starting",
-        startedAt: instance.startedAt.getTime(),
-      });
-    }
-
     // Inject system context + reporting/messaging instructions.
     // For workers with injectRepoContext: true (like docs), also inject repo context.
     let repoContextSection = "";
@@ -511,6 +514,9 @@ async function _spawnWorkerCore(
       vision: !!resolvedProfile.supportsVision,
       web: !!resolvedProfile.supportsWeb,
     });
+    const permissionsSection = permissionSummary
+      ? `<worker-permissions>\n${permissionSummary}\n</worker-permissions>\n\n`
+      : "";
 
     await client.session
       .prompt({
@@ -529,6 +535,7 @@ async function _spawnWorkerCore(
                 `You are worker "${resolvedProfile.id}" (${resolvedProfile.name}).\n` +
                 `Your capabilities: ${capabilitiesJson}\n` +
                 `</worker-identity>\n\n` +
+                permissionsSection +
                 `<orchestrator-instructions>\n` +
                 `## Communication Tools Available\n\n` +
                 `You have these tools for communicating with the orchestrator:\n\n` +
@@ -555,17 +562,6 @@ async function _spawnWorkerCore(
     instance.status = "ready";
     instance.lastActivity = new Date();
     workerPool.updateStatus(resolvedProfile.id, "ready");
-    if (typeof instance.pid === "number") {
-      await registerWorkerInDeviceRegistry({
-        workerId: resolvedProfile.id,
-        pid: instance.pid,
-        url,
-        port: instance.port,
-        sessionId: instance.sessionId,
-        status: "ready",
-        startedAt: instance.startedAt.getTime(),
-      });
-    }
 
     return instance;
   } catch (error) {
@@ -579,18 +575,6 @@ async function _spawnWorkerCore(
     instance.status = "error";
     instance.error = errorMsg;
     workerPool.updateStatus(resolvedProfile.id, "error", errorMsg);
-    if (typeof instance.pid === "number") {
-      await registerWorkerInDeviceRegistry({
-        workerId: resolvedProfile.id,
-        pid: instance.pid,
-        url: instance.serverUrl,
-        port: instance.port,
-        sessionId: instance.sessionId,
-        status: "error",
-        startedAt: instance.startedAt.getTime(),
-        lastError: errorMsg,
-      });
-    }
     throw error;
   }
 }
@@ -668,18 +652,6 @@ export async function stopWorker(workerId: string): Promise<boolean> {
     instance.status = "stopped";
     workerPool.updateStatus(workerId, "stopped");
     workerPool.unregister(workerId);
-    if (typeof instance.pid === "number") {
-      await registerWorkerInDeviceRegistry({
-        workerId,
-        pid: instance.pid,
-        url: instance.serverUrl,
-        port: instance.port,
-        sessionId: instance.sessionId,
-        status: "stopped",
-        startedAt: instance.startedAt.getTime(),
-      });
-      await removeWorkerEntriesByPid(instance.pid).catch(() => {});
-    }
     return true;
   } catch {
     return false;
@@ -891,17 +863,6 @@ export async function sendToWorker(
       report: instance.lastResult?.report,
       durationMs,
     };
-    if (typeof instance.pid === "number") {
-      await registerWorkerInDeviceRegistry({
-        workerId,
-        pid: instance.pid,
-        url: instance.serverUrl,
-        port: instance.port,
-        sessionId: instance.sessionId,
-        status: "ready",
-        startedAt: instance.startedAt.getTime(),
-      });
-    }
 
     return { success: true, response: responseText };
   } catch (error) {
@@ -963,37 +924,4 @@ export async function spawnWorkers(
   }
 
   return { succeeded, failed };
-}
-
-/**
- * List all reusable workers from the device registry (alive processes not yet in our registry).
- */
-export async function listReusableWorkers(): Promise<DeviceRegistryWorkerEntry[]> {
-  const entries = await listDeviceRegistry();
-  const inRegistry = new Set([...workerPool.workers.keys()]);
-
-  return entries.filter(
-    (e): e is DeviceRegistryWorkerEntry =>
-      e.kind === "worker" &&
-      !inRegistry.has(e.workerId) &&
-      (e.status === "ready" || e.status === "busy") &&
-      isProcessAlive(e.pid)
-  );
-}
-
-/**
- * Clean up all dead worker entries from the device registry.
- */
-export async function cleanupDeadWorkers(): Promise<number> {
-  const entries = await listDeviceRegistry();
-  let cleaned = 0;
-
-  for (const e of entries) {
-    if (e.kind === "worker" && !isProcessAlive(e.pid)) {
-      await removeWorkerEntriesByPid(e.pid).catch(() => {});
-      cleaned++;
-    }
-  }
-
-  return cleaned;
 }

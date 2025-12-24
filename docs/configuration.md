@@ -24,7 +24,8 @@ Open Orchestra reads configuration from multiple locations, merged in order (lat
 ```json
 {
   "$schema": "../node_modules/opencode-orchestrator/schema/orchestrator.schema.json",
-  "autoSpawn": false
+  "autoSpawn": false,
+  "spawnOnDemand": []
 }
 ```
 
@@ -34,7 +35,29 @@ Open Orchestra reads configuration from multiple locations, merged in order (lat
 {
   "$schema": "../node_modules/opencode-orchestrator/schema/orchestrator.schema.json",
   "autoSpawn": true,
-  "workers": ["docs", "coder"]
+  "workers": ["docs", "coder"],
+  "spawnOnDemand": ["vision"]
+}
+```
+
+### Spawn Policy Overrides
+
+```json
+{
+  "$schema": "../node_modules/opencode-orchestrator/schema/orchestrator.schema.json",
+  "spawnPolicy": {
+    "default": {
+      "autoSpawn": true,
+      "onDemand": true,
+      "allowManual": true,
+      "warmPool": true
+    },
+    "profiles": {
+      "vision": { "autoSpawn": false, "onDemand": true },
+      "docs": { "allowManual": false },
+      "qa": { "warmPool": false }
+    }
+  }
 }
 ```
 
@@ -46,7 +69,19 @@ Open Orchestra reads configuration from multiple locations, merged in order (lat
   "basePort": 14096,
   "autoSpawn": true,
   "startupTimeout": 30000,
-  "healthCheckInterval": 30000,
+  "healthCheck": {
+    "enabled": true,
+    "intervalMs": 30000,
+    "timeoutMs": 3000,
+    "maxRetries": 3
+  },
+  "warmPool": {
+    "enabled": false
+  },
+  "spawnOnDemand": ["vision"],
+  "modelSelection": {
+    "mode": "balanced"
+  },
   "ui": {
     "toasts": true,
     "debug": false
@@ -69,8 +104,11 @@ Open Orchestra reads configuration from multiple locations, merged in order (lat
 | `$schema` | string | - | JSON Schema for editor autocomplete |
 | `basePort` | number | `14096` | Starting port for worker allocation (use `0` for dynamic) |
 | `autoSpawn` | boolean | `true` | Auto-start workers when plugin loads |
+| `spawnOnDemand` | string[] | `["vision"]` | Workers allowed to auto-spawn when needed (vision analysis, etc.) |
+| `spawnPolicy` | object | - | Per-profile spawn controls (auto/on-demand/manual/warm pool/reuse) |
 | `startupTimeout` | number | `30000` | Max time (ms) to wait for worker startup |
-| `healthCheckInterval` | number | `30000` | Interval (ms) between health checks |
+| `healthCheck` | object | - | Health monitor config (enabled/interval/timeout/retries) |
+| `healthCheckInterval` | number | `30000` | Legacy interval setting (superseded by `healthCheck.intervalMs`) |
 
 **Example:**
 ```json
@@ -229,9 +267,9 @@ Configure idle notifications.
 }
 ```
 
-### Memory Settings (Neo4j)
+### Memory Settings
 
-Configure the optional persistent memory system.
+Configure the persistent memory system (file-based by default; Neo4j optional).
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -241,7 +279,7 @@ Configure the optional persistent memory system.
 | `memory.scope` | string | `"project"` | `"project"` or `"global"` |
 | `memory.maxChars` | number | `2000` | Max characters per memory entry |
 
-**Environment Variables:**
+**Environment Variables (Neo4j optional):**
 ```bash
 OPENCODE_NEO4J_URI=bolt://localhost:7687
 OPENCODE_NEO4J_USERNAME=neo4j
@@ -350,11 +388,16 @@ Profiles define worker types with their capabilities and configuration.
 | ID | Name | Model Tag | Vision | Web | Tools |
 |----|------|-----------|--------|-----|-------|
 | `vision` | Vision Analyst | `node:vision` | Yes | No | Full |
-| `docs` | Documentation Librarian | `node:docs` | No | Yes | Full |
-| `coder` | Code Implementer | `node` | No | No | Full |
-| `architect` | System Architect | `node` | No | No | **Read-only** |
-| `explorer` | Code Explorer | `node:fast` | No | No | Full |
-| `memory` | Memory Graph Curator | `node` | No | Yes | Full |
+| `docs` | Documentation Librarian | `node:docs` | No | Yes | **Read-only** |
+| `coder` | Code Implementer | `node:code` | No | No | Full |
+| `architect` | System Architect | `node:reasoning` | No | No | **Read-only** |
+| `explorer` | Code Explorer | `node:fast` | No | No | **Read-only** |
+| `memory` | Memory Graph Curator | `node:docs` | No | Yes | Full |
+| `reviewer` | Code Reviewer | `node:reasoning` | No | No | **Read-only** |
+| `qa` | QA Validator | `node:fast` | No | No | **Read-only** |
+| `security` | Security Analyst | `node:reasoning` | No | No | **Read-only** |
+| `product` | Product Spec Writer | `node:docs` | No | No | **Read-only** |
+| `analyst` | Data Analyst | `node:fast` | No | No | **Read-only** |
 
 ### Custom Profile Example
 

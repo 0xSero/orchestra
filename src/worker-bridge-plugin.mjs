@@ -13,6 +13,54 @@ function getBridgeTimeoutMs() {
   return Number.isFinite(value) && value > 0 ? value : 10_000;
 }
 
+function startParentWatchdog() {
+  if (process.env.OPENCODE_ORCH_DISABLE_PARENT_WATCHDOG === "1") return;
+  const parentPid = Number(process.env.OPENCODE_ORCH_PARENT_PID);
+  if (!Number.isFinite(parentPid) || parentPid <= 1) return;
+
+  const intervalMs = (() => {
+    const raw = process.env.OPENCODE_ORCH_PARENT_CHECK_INTERVAL_MS;
+    const parsed = raw ? Number(raw) : undefined;
+    return Number.isFinite(parsed) && parsed >= 250 ? parsed : 1_000;
+  })();
+
+  const maxMisses = 3;
+  let misses = 0;
+
+  const checkParent = () => {
+    const sameParent = process.ppid === parentPid;
+    let alive = false;
+    if (sameParent) {
+      try {
+        process.kill(parentPid, 0);
+        alive = true;
+      } catch {
+        alive = false;
+      }
+    }
+
+    if (alive) {
+      misses = 0;
+      return;
+    }
+
+    misses += 1;
+    if (misses >= maxMisses) {
+      try {
+        process.stderr.write(`[worker-bridge] Parent ${parentPid} missing, exiting worker\\n`);
+      } catch {
+        // ignore
+      }
+      process.exit(0);
+    }
+  };
+
+  const timer = setInterval(checkParent, intervalMs);
+  if (typeof timer.unref === "function") timer.unref();
+}
+
+startParentWatchdog();
+
 async function postJson(path, body) {
   const { url, token } = getBridgeConfig();
   if (!url || !token) throw new Error("Missing orchestrator bridge env (OPENCODE_ORCH_BRIDGE_URL/OPENCODE_ORCH_BRIDGE_TOKEN)");

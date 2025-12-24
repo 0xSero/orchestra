@@ -61,6 +61,7 @@ export const DEFAULT_TEST_CONFIG: OrchestratorConfig = {
   profiles: {},
   spawn: [],
   autoSpawn: false,
+  spawnOnDemand: [],
   startupTimeout: 30_000,
   healthCheckInterval: 10_000,
   ui: {
@@ -415,42 +416,6 @@ export function createMockProviders(scenario: ProviderScenario): Array<{
     default:
       throw new Error(`Unknown provider scenario: ${scenario}`);
   }
-}
-
-/**
- * Create sample device registry entries for testing
- * 
- * @param count - Number of entries to create
- * @returns Array of mock device registry entries
- */
-export function createMockDeviceRegistryEntries(count: number): Array<{
-  profileId: string;
-  port: number;
-  pid: number;
-  startedAt: string;
-  lastSeen: string;
-}> {
-  const entries: Array<{
-    profileId: string;
-    port: number;
-    pid: number;
-    startedAt: string;
-    lastSeen: string;
-  }> = [];
-
-  const now = new Date();
-
-  for (let i = 0; i < count; i++) {
-    entries.push({
-      profileId: `worker-${i}`,
-      port: 18000 + i,
-      pid: 10000 + i,
-      startedAt: new Date(now.getTime() - i * 60000).toISOString(),
-      lastSeen: new Date(now.getTime() - i * 1000).toISOString(),
-    });
-  }
-
-  return entries;
 }
 
 /**

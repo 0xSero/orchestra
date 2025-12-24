@@ -10,7 +10,7 @@ const defaultSteps: WorkflowStepDefinition[] = [
       "You are the architect. Create a concise plan for the task.\n\n" +
       "Task:\n{task}\n\n" +
       "Return a numbered checklist with 3-6 steps.",
-    carry: false,
+    carry: true, // Must carry to pass plan to implement step
   },
   {
     id: "implement",

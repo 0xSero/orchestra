@@ -50,9 +50,9 @@ export interface PerformanceMetrics {
   };
   io: {
     /** File read latencies */
-    deviceRegistryReadMs: number[];
+    fileReadMs: number[];
     /** File write latencies */
-    deviceRegistryWriteMs: number[];
+    fileWriteMs: number[];
     /** Profile lock acquisition time */
     lockAcquireMs: number[];
   };
@@ -221,8 +221,8 @@ export function createMetricsCollector(options?: {
   let heapUsedBytes: number[] = [];
   let externalBytes: number[] = [];
   let peakRssBytes = 0;
-  let deviceRegistryReadMs: number[] = [];
-  let deviceRegistryWriteMs: number[] = [];
+  let fileReadMs: number[] = [];
+  let fileWriteMs: number[] = [];
   let lockAcquireMs: number[] = [];
   let promptCount = 0;
   let jobsCompleted = 0;
@@ -258,10 +258,10 @@ export function createMetricsCollector(options?: {
           spawnLatencyMs.push(duration);
           spawnSuccessCount++;
         } else if (name.startsWith("io:read")) {
-          deviceRegistryReadMs.push(duration);
+          fileReadMs.push(duration);
           fileIoLatencyMs.push(duration);
         } else if (name.startsWith("io:write")) {
-          deviceRegistryWriteMs.push(duration);
+          fileWriteMs.push(duration);
           fileIoLatencyMs.push(duration);
         } else if (name.startsWith("lock")) {
           lockAcquireMs.push(duration);
@@ -339,8 +339,8 @@ export function createMetricsCollector(options?: {
           peakRssBytes,
         },
         io: {
-          deviceRegistryReadMs: [...deviceRegistryReadMs],
-          deviceRegistryWriteMs: [...deviceRegistryWriteMs],
+          fileReadMs: [...fileReadMs],
+          fileWriteMs: [...fileWriteMs],
           lockAcquireMs: [...lockAcquireMs],
         },
         throughput: {
@@ -380,8 +380,8 @@ export function createMetricsCollector(options?: {
       heapUsedBytes = [];
       externalBytes = [];
       peakRssBytes = 0;
-      deviceRegistryReadMs = [];
-      deviceRegistryWriteMs = [];
+      fileReadMs = [];
+      fileWriteMs = [];
       lockAcquireMs = [];
       promptCount = 0;
       jobsCompleted = 0;
