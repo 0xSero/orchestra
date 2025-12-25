@@ -637,15 +637,13 @@ export const workerTrace = tool({
   async execute(args) {
     const instance = workerPool.get(args.workerId);
     if (!instance) return `Worker "${args.workerId}" not found.`;
-    if (!instance.client || !instance.sessionId) return `Worker "${args.workerId}" not initialized.`;
-
     const limit = args.limit ?? 50;
-    const res = await instance.client.session.messages({
-      path: { id: instance.sessionId },
-      query: { directory: instance.directory ?? process.cwd(), limit },
-    });
-
-    const data = res.data as any[];
+    let data: any[];
+    try {
+      data = await workerPool.getWorkerTrace(args.workerId, limit);
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err);
+    }
     const format: "markdown" | "json" = args.format ?? getDefaultListFormat();
     if (format === "json") return JSON.stringify(data, null, 2);
 
@@ -665,7 +663,19 @@ export const workerTrace = tool({
       for (const part of parts) {
         const t = part?.type;
         if (t === "text") lines.push(part.text);
-        else if (t === "tool") lines.push(`- [tool:${part.tool}] ${part.state?.title ?? ""}`.trim());
+        else if (t === "tool") {
+          const toolName = part.tool ?? "unknown";
+          if (toolName === "stream_chunk") {
+            const chunk = part.state?.input?.chunk;
+            const jobId = part.state?.input?.jobId;
+            const prefix = jobId ? `${jobId}: ` : "";
+            const detail = typeof chunk === "string" ? chunk.slice(0, 200) : "";
+            lines.push(`- [tool:${toolName}] ${prefix}${detail}`.trim());
+          } else {
+            const detail = part.state?.title ?? "";
+            lines.push(`- [tool:${toolName}] ${detail}`.trim());
+          }
+        }
         else if (t === "step-start") lines.push("- [step] start");
         else if (t === "step-finish") lines.push(`- [step] finish (${part.reason ?? "stop"})`);
         else if (t === "reasoning") lines.push("(reasoning omitted)");
@@ -674,5 +684,145 @@ export const workerTrace = tool({
     }
 
     return lines.join("\n");
+  },
+});
+
+export const workerDiagnostics = tool({
+  description: "Get detailed diagnostics for a worker (health, activity, errors).",
+  args: {
+    workerId: tool.schema.string().describe("Worker ID to diagnose"),
+    format: tool.schema.enum(["markdown", "json"]).optional().describe("Output format (default: markdown)"),
+  },
+  async execute(args) {
+    const instance = workerPool.get(args.workerId);
+    if (!instance) return `Worker "${args.workerId}" not found.`;
+
+    const health = await workerPool.healthCheck(args.workerId).catch((err) => ({
+      ok: false,
+      workerId: args.workerId,
+      error: err instanceof Error ? err.message : String(err),
+    }));
+    const jobs = workerJobs.list({ workerId: args.workerId, limit: 20 });
+    const activeJobs = jobs.filter((j) => j.status === "running").length;
+    const recentJobs = jobs.slice(0, 5);
+
+    const payload = {
+      worker: {
+        id: instance.profile.id,
+        name: instance.profile.name,
+        model: instance.profile.model,
+        status: instance.status,
+        port: instance.port,
+        pid: instance.pid,
+        startedAt: instance.startedAt.toISOString(),
+        lastActivity: instance.lastActivity?.toISOString(),
+        currentTask: instance.currentTask,
+        error: instance.error,
+        warning: instance.warning,
+      },
+      health,
+      jobs: {
+        active: activeJobs,
+        recent: recentJobs,
+      },
+    };
+
+    const format: "markdown" | "json" = args.format ?? getDefaultListFormat();
+    if (format === "json") return JSON.stringify(payload, null, 2);
+
+    const lines: string[] = [];
+    lines.push(`# Worker Diagnostics: ${instance.profile.name} (${instance.profile.id})`);
+    lines.push("");
+    lines.push("## Status");
+    lines.push(`- Status: ${instance.status}`);
+    lines.push(`- Model: ${instance.profile.model}`);
+    lines.push(`- Port: ${instance.port}`);
+    lines.push(`- PID: ${instance.pid ?? "unknown"}`);
+    lines.push(`- Started: ${instance.startedAt.toISOString()}`);
+    lines.push(`- Last Activity: ${instance.lastActivity?.toISOString() ?? "never"}`);
+    if (instance.currentTask) lines.push(`- Current Task: ${instance.currentTask}`);
+    if (instance.error) lines.push(`- Error: ${instance.error}`);
+    if (instance.warning) lines.push(`- Warning: ${instance.warning}`);
+
+    lines.push("");
+    lines.push("## Health");
+    lines.push(`- OK: ${health.ok ? "yes" : "no"}`);
+    if (health.responseTimeMs !== undefined) lines.push(`- Response Time: ${health.responseTimeMs}ms`);
+    if (health.error) lines.push(`- Error: ${health.error}`);
+
+    lines.push("");
+    lines.push("## Jobs");
+    lines.push(`- Active: ${activeJobs}`);
+    if (recentJobs.length) {
+      lines.push("");
+      lines.push("### Recent");
+      for (const job of recentJobs) {
+        const duration = job.durationMs ? ` (${job.durationMs}ms)` : "";
+        lines.push(`- ${job.status}: ${job.id}${duration}`);
+      }
+    }
+
+    return lines.join("\n");
+  },
+});
+
+const activeStreamWatchers = new Map<string, () => void>();
+
+export const streamWorkerOutput = tool({
+  description: "Stream worker output in real-time (for long-running tasks).",
+  args: {
+    workerId: tool.schema.string().describe("Worker ID to stream"),
+    jobId: tool.schema.string().optional().describe("Optional job ID to filter stream chunks"),
+    timeoutMs: tool.schema.number().optional().describe("Max streaming duration in ms (default: 2 minutes)"),
+  },
+  async execute(args, ctx: ToolContext) {
+    const instance = workerPool.get(args.workerId);
+    if (!instance) return `Worker "${args.workerId}" not found.`;
+
+    const client = getClient();
+    const sessionId = ctx?.sessionID;
+    if (!client || !sessionId) {
+      return "No active session available to stream into.";
+    }
+
+    const key = `${sessionId}:${args.workerId}:${args.jobId ?? "all"}`;
+    const existing = activeStreamWatchers.get(key);
+    if (existing) existing();
+
+    let done = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = () => {
+      if (done) return;
+      done = true;
+      if (timer) clearTimeout(timer);
+      unsubscribe();
+      activeStreamWatchers.delete(key);
+    };
+
+    const unsubscribe = workerPool.subscribeToStream(
+      args.workerId,
+      (chunk) => {
+        const jobLabel = chunk.jobId ? `:${chunk.jobId}` : "";
+        const text = `[${chunk.workerId}${jobLabel}] ${chunk.chunk}`;
+        void client.session
+          .prompt({
+            path: { id: sessionId },
+            body: { noReply: true, parts: [{ type: "text", text }] as any },
+            query: { directory: getDirectory() },
+          } as any)
+          .catch(() => {});
+
+        if (chunk.final && (!args.jobId || chunk.jobId === args.jobId)) {
+          stop();
+        }
+      },
+      { jobId: args.jobId }
+    );
+
+    const timeoutMs = args.timeoutMs ?? 120_000;
+    timer = setTimeout(stop, timeoutMs);
+    activeStreamWatchers.set(key, stop);
+
+    return `Now streaming output from worker "${args.workerId}" for up to ${timeoutMs}ms.`;
   },
 });

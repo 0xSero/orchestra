@@ -2,19 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { randomBytes } from "node:crypto";
 import { URL } from "node:url";
 import { workerPool } from "./worker-pool";
-import { EventEmitter } from "node:events";
-
-// Stream event emitter for real-time worker output
-export const streamEmitter = new EventEmitter();
-streamEmitter.setMaxListeners(100); // Allow many concurrent SSE connections
-
-export type StreamChunk = {
-  workerId: string;
-  jobId?: string;
-  chunk: string;
-  timestamp: number;
-  final?: boolean;
-};
+import { recordStreamChunk, streamEmitter, type StreamChunk } from "./stream-events";
 
 export type BridgeServer = {
   url: string;
@@ -79,6 +67,7 @@ export async function startBridgeServer(): Promise<BridgeServer> {
         timestamp: Date.now(),
         final: body.final,
       };
+      recordStreamChunk(streamChunk);
       streamEmitter.emit("chunk", streamChunk);
 
       return writeJson(res, 200, { ok: true, timestamp: streamChunk.timestamp });

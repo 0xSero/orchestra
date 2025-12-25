@@ -179,6 +179,34 @@ export type TelemetryConfig = {
   host?: string;
 };
 
+export type LinearIntegrationConfig = {
+  enabled?: boolean;
+  apiKey?: string;
+  teamId?: string;
+  apiUrl?: string;
+  projectPrefix?: string;
+};
+
+export type Neo4jIntegrationConfig = {
+  enabled?: boolean;
+  uri?: string;
+  username?: string;
+  password?: string;
+  database?: string;
+};
+
+export type MonitoringIntegrationConfig = {
+  enabled?: boolean;
+  port?: number;
+  metricsPath?: string;
+};
+
+export type IntegrationsConfig = {
+  linear?: LinearIntegrationConfig;
+  neo4j?: Neo4jIntegrationConfig;
+  monitoring?: MonitoringIntegrationConfig;
+};
+
 export type SpawnPolicy = {
   /** Allow auto-spawn at orchestrator startup */
   autoSpawn?: boolean;
@@ -306,6 +334,8 @@ export interface OrchestratorConfig {
   security?: SecurityConfig;
   /** Memory graph settings */
   memory?: MemoryConfig;
+  /** External integration settings */
+  integrations?: IntegrationsConfig;
   /** Telemetry settings (PostHog) */
   telemetry?: TelemetryConfig;
 }
@@ -330,6 +360,7 @@ export type OrchestratorConfigFile = {
   workflows?: OrchestratorConfig["workflows"];
   security?: OrchestratorConfig["security"];
   memory?: OrchestratorConfig["memory"];
+  integrations?: OrchestratorConfig["integrations"];
   telemetry?: OrchestratorConfig["telemetry"];
   /** Profiles available to spawn (overrides/custom). Strings reference built-ins. */
   profiles?: Array<string | WorkerProfile>;

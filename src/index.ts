@@ -13,6 +13,7 @@ import {
   setSpawnDefaults,
   setUiDefaults,
   setWorkflowConfig,
+  setIntegrationsConfig,
   setWorktree,
 } from "./tools";
 import { setSpawnPolicy } from "./tools/state";
@@ -28,6 +29,7 @@ import { ensureRuntime, shutdownAllWorkers } from "./core/runtime";
 import { setLoggerConfig } from "./core/logger";
 import { loadWorkflows } from "./workflows";
 import { recordMessageMemory } from "./memory/auto";
+import { setNeo4jIntegrationsConfig } from "./memory/neo4j";
 import { initTelemetry, flushTelemetry, trackSpawn } from "./core/telemetry";
 import { orchestratorPrompt } from "../prompts/orchestrator";
 import { workerJobs } from "./core/jobs";
@@ -61,9 +63,11 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
   setLoggerConfig({});
   setWorkflowConfig(config.workflows);
   setSecurityConfig(config.security);
+  setIntegrationsConfig(config.integrations);
   setModelSelection(config.modelSelection);
   setModelAliases(config.modelAliases);
   setSpawnPolicy(config.spawnPolicy);
+  setNeo4jIntegrationsConfig(config.integrations?.neo4j);
   loadWorkflows(config);
 
   const getAgentSupportsVision = async (agentId: string | undefined): Promise<boolean> => {
@@ -578,4 +582,4 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
 export default OrchestratorPlugin;
 
 // Re-export types for external consumers (runtime values exported separately to avoid bundler issues)
-export type { StreamChunk } from "./core/bridge-server";
+export type { StreamChunk } from "./core/stream-events";

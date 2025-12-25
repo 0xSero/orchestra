@@ -2,7 +2,7 @@
  * Stream Formatter - Formats worker output with visual distinction
  */
 
-import type { StreamChunk } from "./bridge-server";
+import type { StreamChunk } from "./stream-events";
 
 export interface FormattedChunk {
   workerId: string;

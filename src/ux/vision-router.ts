@@ -114,7 +114,7 @@ export async function analyzeImages(
     visionProgress?.waiting(visionWorker.profile.model);
 
     const waitMs = Math.min(timeout, 5 * 60_000);
-    const ready = await waitForWorkerReady(visionWorker.profile.id, waitMs);
+    const ready = await workerPool.waitForStatus(visionWorker.profile.id, "ready", waitMs);
     if (!ready) {
       const error = `Vision worker did not become ready within ${waitMs}ms`;
       visionProgress?.fail(error);
@@ -145,34 +145,6 @@ export async function analyzeImages(
     ...result,
     workerAge,
   };
-}
-
-// =============================================================================
-// Helpers
-// =============================================================================
-
-async function waitForWorkerReady(workerId: string, timeoutMs: number): Promise<boolean> {
-  const existing = workerPool.get(workerId);
-  if (existing?.status === "ready") return true;
-
-  return new Promise<boolean>((resolve) => {
-    let done = false;
-    const finish = (ok: boolean) => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      workerPool.off("update", onUpdate);
-      resolve(ok);
-    };
-
-    const onUpdate = (instance: any) => {
-      if (instance?.profile?.id !== workerId) return;
-      if (instance?.status === "ready") finish(true);
-    };
-
-    const timer = setTimeout(() => finish(false), timeoutMs);
-    workerPool.on("update", onUpdate);
-  });
 }
 
 // =============================================================================

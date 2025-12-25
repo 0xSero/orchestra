@@ -1,5 +1,5 @@
 import type { Neo4jConfig } from "./neo4j";
-import { loadNeo4jConfigFromEnv } from "./neo4j";
+import { loadNeo4jConfig } from "./neo4j";
 import type { MemoryNode, MemoryScope } from "./graph";
 import * as graph from "./graph";
 import * as fileStore from "./store-file";
@@ -8,7 +8,7 @@ export type MemoryBackend = "neo4j" | "file";
 export type { MemoryNode, MemoryScope };
 
 function resolveBackend(cfg?: Neo4jConfig): { backend: MemoryBackend; cfg?: Neo4jConfig } {
-  const resolved = cfg ?? loadNeo4jConfigFromEnv();
+  const resolved = cfg ?? loadNeo4jConfig();
   if (resolved) return { backend: "neo4j", cfg: resolved };
   return { backend: "file" };
 }

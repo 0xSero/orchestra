@@ -12,7 +12,9 @@
  * - Event-based status updates
  */
 
+import { createOpencodeClient } from "@opencode-ai/sdk";
 import type { WorkerInstance, WorkerProfile, WorkerStatus } from "../types";
+import { streamEmitter, type StreamChunk } from "./stream-events";
 
 // =============================================================================
 // Types
@@ -42,6 +44,15 @@ export interface SendResult {
   response?: string;
   error?: string;
 }
+
+export type WorkerHealth = {
+  ok: boolean;
+  workerId: string;
+  status?: WorkerStatus;
+  responseTimeMs?: number;
+  lastActivity?: string;
+  error?: string;
+};
 
 // =============================================================================
 // Worker Pool Class
@@ -190,6 +201,122 @@ export class WorkerPool {
     }
   }
 
+  /**
+   * Wait for a worker to reach a specific status.
+   */
+  async waitForStatus(workerId: string, status: WorkerStatus, timeoutMs: number): Promise<boolean> {
+    const existing = this.get(workerId);
+    if (existing?.status === status) return true;
+
+    return new Promise<boolean>((resolve) => {
+      let done = false;
+      const finish = (ok: boolean) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        this.off("update", onUpdate);
+        resolve(ok);
+      };
+
+      const onUpdate = (instance: WorkerInstance) => {
+        if (instance.profile.id !== workerId) return;
+        if (instance.status === status) finish(true);
+      };
+
+      const timer = setTimeout(() => finish(false), timeoutMs);
+      this.on("update", onUpdate);
+    });
+  }
+
+  /**
+   * Subscribe to stream chunks for a worker.
+   */
+  subscribeToStream(
+    workerId: string,
+    onChunk: (chunk: StreamChunk) => void,
+    options?: { jobId?: string }
+  ): () => void {
+    const listener = (chunk: StreamChunk) => {
+      if (chunk.workerId !== workerId) return;
+      if (options?.jobId && chunk.jobId && chunk.jobId !== options.jobId) return;
+      onChunk(chunk);
+    };
+
+    streamEmitter.on("chunk", listener);
+    return () => streamEmitter.off("chunk", listener);
+  }
+
+  /**
+   * Get recent worker session messages (raw trace data).
+   */
+  async getWorkerTrace(workerId: string, limit: number = 50): Promise<any[]> {
+    const instance = this.get(workerId);
+    if (!instance?.client || !instance.sessionId) {
+      throw new Error(`Worker "${workerId}" not initialized`);
+    }
+
+    const res = await instance.client.session.messages({
+      path: { id: instance.sessionId },
+      query: { directory: instance.directory ?? process.cwd(), limit },
+    });
+
+    const data = (res as any)?.data;
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(res)) return res as any[];
+    return [];
+  }
+
+  /**
+   * Basic health check (session list ping).
+   */
+  async healthCheck(workerId: string, options?: { timeoutMs?: number }): Promise<WorkerHealth> {
+    const instance = this.get(workerId);
+    if (!instance) {
+      return { ok: false, workerId, error: `Worker "${workerId}" not found` };
+    }
+
+    const client = instance.client ?? (instance.serverUrl ? createOpencodeClient({ baseUrl: instance.serverUrl }) : undefined);
+    if (!client) {
+      return { ok: false, workerId, status: instance.status, error: "Worker not initialized" };
+    }
+
+    const timeoutMs = options?.timeoutMs ?? 3_000;
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(new Error("health check timeout")), timeoutMs);
+    const start = Date.now();
+
+    try {
+      const res = await client.session.list({
+        query: { directory: instance.directory ?? process.cwd() },
+        signal: abort.signal as any,
+      } as any);
+      const sdkError: any = (res as any)?.error;
+      if (sdkError) {
+        const msg =
+          sdkError?.data?.message ??
+          sdkError?.message ??
+          (typeof sdkError === "string" ? sdkError : JSON.stringify(sdkError));
+        return { ok: false, workerId, status: instance.status, error: msg };
+      }
+      return {
+        ok: true,
+        workerId,
+        status: instance.status,
+        responseTimeMs: Date.now() - start,
+        lastActivity: instance.lastActivity?.toISOString(),
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        workerId,
+        status: instance.status,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   // ==========================================================================
   // Session Ownership
   // ==========================================================================
@@ -283,6 +410,15 @@ export class WorkerPool {
       modelResolution: w.modelResolution,
       purpose: w.profile.purpose,
       whenToUse: w.profile.whenToUse,
+      profile: {
+        id: w.profile.id,
+        name: w.profile.name,
+        model: w.profile.model,
+        purpose: w.profile.purpose,
+        whenToUse: w.profile.whenToUse,
+        supportsVision: w.profile.supportsVision ?? false,
+        supportsWeb: w.profile.supportsWeb ?? false,
+      },
       status: w.status,
       port: w.port,
       pid: w.pid,
@@ -291,6 +427,7 @@ export class WorkerPool {
       supportsWeb: w.profile.supportsWeb ?? false,
       lastActivity: w.lastActivity?.toISOString(),
       currentTask: w.currentTask,
+      error: w.error,
       warning: w.warning,
       lastResult: w.lastResult
         ? {
@@ -376,4 +513,13 @@ export const registry = {
     workerPool.trackOwnership(sessionId, workerId),
   getWorkersForSession: (sessionId: string) => workerPool.getWorkersForSession(sessionId),
   clearSessionOwnership: (sessionId: string) => workerPool.clearSessionOwnership(sessionId),
+  waitForStatus: (workerId: string, status: WorkerStatus, timeoutMs: number) =>
+    workerPool.waitForStatus(workerId, status, timeoutMs),
+  subscribeToStream: (
+    workerId: string,
+    onChunk: (chunk: StreamChunk) => void,
+    options?: { jobId?: string }
+  ) => workerPool.subscribeToStream(workerId, onChunk, options),
+  getWorkerTrace: (workerId: string, limit?: number) => workerPool.getWorkerTrace(workerId, limit),
+  healthCheck: (workerId: string, options?: { timeoutMs?: number }) => workerPool.healthCheck(workerId, options),
 };

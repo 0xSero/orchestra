@@ -1,5 +1,5 @@
 import { getMemoryByKey, recentMemory, type MemoryNode, type MemoryScope } from "./store";
-import { loadNeo4jConfigFromEnv, type Neo4jConfig } from "./neo4j";
+import { loadNeo4jConfig, type Neo4jConfig } from "./neo4j";
 import { shortenWithMarker } from "./text";
 
 function clamp(n: number, min: number, max: number): number {
@@ -45,7 +45,7 @@ export async function buildMemoryInjection(input: {
   };
 }): Promise<string | undefined> {
   if (!input.enabled) return undefined;
-  const cfg = input.cfg ?? loadNeo4jConfigFromEnv();
+  const cfg = input.cfg ?? loadNeo4jConfig();
 
   const maxChars = clamp(input.inject?.maxChars ?? 2000, 200, 20000);
   const maxEntries = clamp(input.inject?.maxEntries ?? 8, 0, 50);

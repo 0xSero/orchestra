@@ -1,6 +1,6 @@
 import type { MemoryScope } from "./store";
 import { getMemoryByKey, linkMemory, trimGlobalMessageProjects, trimMemoryByKeyPrefix, upsertMemory } from "./store";
-import { loadNeo4jConfigFromEnv, type Neo4jConfig } from "./neo4j";
+import { loadNeo4jConfig, type Neo4jConfig } from "./neo4j";
 import { appendRollingSummary, normalizeForMemory } from "./text";
 
 export type MessageMemoryInput = {
@@ -31,7 +31,7 @@ function clamp(n: number, min: number, max: number): number {
 }
 
 export async function recordMessageMemory(input: MessageMemoryInput): Promise<void> {
-  const cfg = input.cfg ?? loadNeo4jConfigFromEnv();
+  const cfg = input.cfg ?? loadNeo4jConfig();
 
   const text = input.text.trim();
   if (!text) return;

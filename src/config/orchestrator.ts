@@ -338,6 +338,40 @@ function parseOrchestratorConfigFile(raw: unknown): Partial<OrchestratorConfigFi
     partial.memory = memory as OrchestratorConfig["memory"];
   }
 
+  if (isPlainObject(raw.integrations)) {
+    const integrations: Record<string, unknown> = {};
+    if (isPlainObject(raw.integrations.linear)) {
+      const linear: Record<string, unknown> = {};
+      if (typeof raw.integrations.linear.enabled === "boolean") linear.enabled = raw.integrations.linear.enabled;
+      if (typeof raw.integrations.linear.apiKey === "string") linear.apiKey = raw.integrations.linear.apiKey;
+      if (typeof raw.integrations.linear.teamId === "string") linear.teamId = raw.integrations.linear.teamId;
+      if (typeof raw.integrations.linear.apiUrl === "string") linear.apiUrl = raw.integrations.linear.apiUrl;
+      if (typeof raw.integrations.linear.projectPrefix === "string") {
+        linear.projectPrefix = raw.integrations.linear.projectPrefix;
+      }
+      integrations.linear = linear;
+    }
+    if (isPlainObject(raw.integrations.neo4j)) {
+      const neo4j: Record<string, unknown> = {};
+      if (typeof raw.integrations.neo4j.enabled === "boolean") neo4j.enabled = raw.integrations.neo4j.enabled;
+      if (typeof raw.integrations.neo4j.uri === "string") neo4j.uri = raw.integrations.neo4j.uri;
+      if (typeof raw.integrations.neo4j.username === "string") neo4j.username = raw.integrations.neo4j.username;
+      if (typeof raw.integrations.neo4j.password === "string") neo4j.password = raw.integrations.neo4j.password;
+      if (typeof raw.integrations.neo4j.database === "string") neo4j.database = raw.integrations.neo4j.database;
+      integrations.neo4j = neo4j;
+    }
+    if (isPlainObject(raw.integrations.monitoring)) {
+      const monitoring: Record<string, unknown> = {};
+      if (typeof raw.integrations.monitoring.enabled === "boolean") monitoring.enabled = raw.integrations.monitoring.enabled;
+      if (typeof raw.integrations.monitoring.port === "number") monitoring.port = raw.integrations.monitoring.port;
+      if (typeof raw.integrations.monitoring.metricsPath === "string") {
+        monitoring.metricsPath = raw.integrations.monitoring.metricsPath;
+      }
+      integrations.monitoring = monitoring;
+    }
+    partial.integrations = integrations as OrchestratorConfig["integrations"];
+  }
+
   if (isPlainObject(raw.telemetry)) {
     const telemetry: Record<string, unknown> = {};
     if (typeof raw.telemetry.enabled === "boolean") telemetry.enabled = raw.telemetry.enabled;
@@ -498,6 +532,11 @@ export async function loadOrchestratorConfig(input: {
         maxGlobalEntries: 3,
       },
     },
+    integrations: {
+      linear: { enabled: false },
+      neo4j: { enabled: false },
+      monitoring: { enabled: false },
+    },
     telemetry: {
       enabled: false,
     },
@@ -580,6 +619,7 @@ export async function loadOrchestratorConfig(input: {
     workflows: (mergedFile.workflows ?? defaultsFile.workflows) as OrchestratorConfig["workflows"],
     security: (mergedFile.security ?? defaultsFile.security) as OrchestratorConfig["security"],
     memory: (mergedFile.memory ?? defaultsFile.memory) as OrchestratorConfig["memory"],
+    integrations: (mergedFile.integrations ?? defaultsFile.integrations) as OrchestratorConfig["integrations"],
     telemetry: (mergedFile.telemetry ?? defaultsFile.telemetry) as OrchestratorConfig["telemetry"],
     profiles,
     spawn: spawnList,

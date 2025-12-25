@@ -20,6 +20,7 @@ let securityConfig: OrchestratorConfig["security"] | undefined;
 let modelSelection: OrchestratorConfig["modelSelection"] | undefined;
 let modelAliases: OrchestratorConfig["modelAliases"] | undefined;
 let spawnPolicy: OrchestratorConfig["spawnPolicy"] | undefined;
+let integrationsConfig: OrchestratorConfig["integrations"] | undefined;
 
 export function getDirectory(): string {
   return directory;
@@ -69,6 +70,10 @@ export function getSpawnPolicy(): OrchestratorConfig["spawnPolicy"] | undefined 
   return spawnPolicy;
 }
 
+export function getIntegrationsConfig(): OrchestratorConfig["integrations"] | undefined {
+  return integrationsConfig;
+}
+
 export function setDirectory(dir: string) {
   directory = dir;
 }
@@ -115,4 +120,8 @@ export function setModelAliases(next: OrchestratorConfig["modelAliases"] | undef
 
 export function setSpawnPolicy(next: OrchestratorConfig["spawnPolicy"] | undefined) {
   spawnPolicy = next;
+}
+
+export function setIntegrationsConfig(next: OrchestratorConfig["integrations"] | undefined) {
+  integrationsConfig = next;
 }

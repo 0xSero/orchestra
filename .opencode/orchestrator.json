@@ -13,6 +13,23 @@
     "mode": "primary"
   },
 
+  "memory": {
+    "enabled": true,
+    "autoSpawn": true,
+    "autoRecord": true,
+    "autoInject": true,
+    "scope": "project"
+  },
+
+  "integrations": {
+    "neo4j": {
+      "enabled": true,
+      "uri": "bolt://localhost:7687",
+      "username": "neo4j",
+      "password": "opencode123"
+    }
+  },
+
   "profiles": [
     {
       "id": "vision",
@@ -25,7 +42,7 @@
     {
       "id": "docs",
       "name": "Documentation Librarian",
-      "model": "minimax/MiniMax-M2",
+      "model": "minimax/MiniMax-M2.1",
       "purpose": "Research documentation, find examples, explain APIs and libraries",
       "whenToUse": "When you need to look up official documentation, find code examples, understand library APIs, or research best practices",
       "supportsWeb": true,
@@ -58,7 +75,7 @@
     {
       "id": "explorer",
       "name": "Code Explorer",
-      "model": "zhipuai-coding-plan/glm-4.6",
+      "model": "zhipuai-coding-plan/glm-4.7",
       "purpose": "Quickly search and navigate the codebase",
       "whenToUse": "When you need to quickly find files, search for patterns, or locate specific code without deep analysis",
       "tools": { "write": false, "edit": false },
@@ -66,5 +83,5 @@
     }
   ],
 
-  "workers": ["docs"]
+  "workers": ["docs", "memory"]
 }

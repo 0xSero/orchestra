@@ -15,6 +15,7 @@ export {
   setSpawnDefaults,
   setUiDefaults,
   setWorkflowConfig,
+  setIntegrationsConfig,
   setWorktree,
 } from "./state";
 
@@ -33,6 +34,8 @@ export {
   spawnNewWorker,
   stopWorkerTool,
   workerTrace,
+  workerDiagnostics,
+  streamWorkerOutput,
 } from "./tools-workers";
 export {
   autofillProfileModels,
@@ -45,7 +48,17 @@ export {
   setSpawnPolicy,
   setProfileModel,
 } from "./tools-profiles";
-export { memoryLink, memoryPut, memoryRecentTool, memorySearchTool } from "./tools-memory";
+export { memoryLink, memoryPut, memoryRecentTool, memorySearchTool, memoryStatus } from "./tools-memory";
+export {
+  linearCreateProject,
+  linearCreateIssue,
+  linearUpdateIssue,
+  linearAddComment,
+  linearGetProjectStatus,
+  linearSyncTaskStatus,
+  linearAddLabel,
+  linearSetEstimate,
+} from "./tools-linear";
 export {
   clearPassthroughMode,
   enableDocsPassthrough,
@@ -78,6 +91,8 @@ import {
   spawnNewWorker,
   stopWorkerTool,
   workerTrace,
+  workerDiagnostics,
+  streamWorkerOutput,
 } from "./tools-workers";
 import {
   autofillProfileModels,
@@ -90,7 +105,17 @@ import {
   setSpawnPolicy,
   setProfileModel,
 } from "./tools-profiles";
-import { memoryLink, memoryPut, memoryRecentTool, memorySearchTool } from "./tools-memory";
+import { memoryLink, memoryPut, memoryRecentTool, memorySearchTool, memoryStatus } from "./tools-memory";
+import {
+  linearCreateProject,
+  linearCreateIssue,
+  linearUpdateIssue,
+  linearAddComment,
+  linearGetProjectStatus,
+  linearSyncTaskStatus,
+  linearAddLabel,
+  linearSetEstimate,
+} from "./tools-linear";
 import {
   clearPassthroughMode,
   enableDocsPassthrough,
@@ -138,6 +163,19 @@ export const coreOrchestratorTools = {
   orchestrator_output: orchestratorOutput,
   orchestrator_results: orchestratorResults,
   orchestrator_diagnostics: orchestratorDiagnostics,
+  worker_trace: workerTrace,
+  worker_diagnostics: workerDiagnostics,
+  stream_worker_output: streamWorkerOutput,
+
+  // External integrations (real systems)
+  linear_create_project: linearCreateProject,
+  linear_create_issue: linearCreateIssue,
+  linear_update_issue: linearUpdateIssue,
+  linear_add_comment: linearAddComment,
+  linear_get_project_status: linearGetProjectStatus,
+  linear_sync_task_status: linearSyncTaskStatus,
+  linear_add_label: linearAddLabel,
+  linear_set_estimate: linearSetEstimate,
 
   // Passthrough (session-scoped)
   set_passthrough: setPassthroughMode,
@@ -153,6 +191,8 @@ export const pluginTools = {
   orchestrator_results: orchestratorResults,
   orchestrator_diagnostics: orchestratorDiagnostics,
   worker_trace: workerTrace,
+  worker_diagnostics: workerDiagnostics,
+  stream_worker_output: streamWorkerOutput,
   orchestrator_todo: orchestratorTodoView,
   orchestrator_keybinds_macos: macosKeybindsFix,
   orchestrator_help: orchestratorHelp,
@@ -170,6 +210,7 @@ export const pluginTools = {
   memory_link: memoryLink,
   memory_search: memorySearchTool,
   memory_recent: memoryRecentTool,
+  memory_status: memoryStatus,
 
   // Extra
   get_worker_info: getWorkerInfo,

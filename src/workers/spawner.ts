@@ -9,11 +9,11 @@ import { createOpencodeClient } from "@opencode-ai/sdk";
 import type { WorkerProfile, WorkerInstance } from "../types";
 import { workerPool } from "../core/worker-pool";
 import { hydrateProfileModelsFromOpencode } from "../models/hydrate";
-import { buildPromptParts, extractTextFromPromptResponse, normalizeBase64Image, type WorkerAttachment } from "./prompt";
+import type { WorkerAttachment } from "./prompt";
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
-import { copyFile, mkdir, unlink, writeFile } from "node:fs/promises";
-import { extname, isAbsolute, join, relative, resolve } from "node:path";
+import { join } from "node:path";
+import { WorkerClient, type WorkerStreamUpdate } from "../core/worker-client";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ensureRuntime } from "../core/runtime";
 import { getUserConfigDir } from "../helpers/format";
@@ -91,94 +91,6 @@ function resolveWorkerBridgePluginSpecifier(): string | undefined {
     }
   }
   return undefined;
-}
-
-function isPathInside(baseDir: string, targetPath: string): boolean {
-  const base = resolve(baseDir);
-  const target = resolve(targetPath);
-  const rel = relative(base, target);
-  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
-}
-
-async function prepareWorkerAttachments(input: {
-  attachments?: WorkerAttachment[];
-  baseDir: string;
-  workerId: string;
-}): Promise<{ attachments?: WorkerAttachment[]; cleanup: () => Promise<void> }> {
-  if (!input.attachments || input.attachments.length === 0) {
-    return { attachments: input.attachments, cleanup: async () => {} };
-  }
-
-  const tempDir = join(input.baseDir, ".opencode", "attachments");
-  const created: string[] = [];
-  const normalized: WorkerAttachment[] = [];
-
-  const ensureTempDir = async () => {
-    await mkdir(tempDir, { recursive: true });
-  };
-
-  const extForMime = (mimeType?: string, fallbackPath?: string): string => {
-    if (fallbackPath) {
-      const ext = extname(fallbackPath);
-      if (ext) return ext;
-    }
-    if (!mimeType) return ".png";
-    if (mimeType.includes("png")) return ".png";
-    if (mimeType.includes("jpeg") || mimeType.includes("jpg")) return ".jpg";
-    if (mimeType.includes("webp")) return ".webp";
-    if (mimeType.includes("gif")) return ".gif";
-    return ".bin";
-  };
-
-  let counter = 0;
-  for (const attachment of input.attachments) {
-    if (attachment.type !== "image") {
-      normalized.push(attachment);
-      continue;
-    }
-
-    if (attachment.path) {
-      if (isPathInside(input.baseDir, attachment.path)) {
-        normalized.push(attachment);
-        continue;
-      }
-      await ensureTempDir();
-      const ext = extForMime(attachment.mimeType, attachment.path);
-      const dest = join(tempDir, `${input.workerId}-${Date.now()}-${counter++}${ext}`);
-      await copyFile(attachment.path, dest);
-      created.push(dest);
-      normalized.push({ ...attachment, path: dest, base64: undefined });
-      continue;
-    }
-
-    if (attachment.base64) {
-      await ensureTempDir();
-      const ext = extForMime(attachment.mimeType);
-      const dest = join(tempDir, `${input.workerId}-${Date.now()}-${counter++}${ext}`);
-      const decoded = Buffer.from(normalizeBase64Image(attachment.base64), "base64");
-      await writeFile(dest, decoded);
-      created.push(dest);
-      normalized.push({ type: "image", path: dest, mimeType: attachment.mimeType });
-      continue;
-    }
-
-    normalized.push(attachment);
-  }
-
-  return {
-    attachments: normalized,
-    cleanup: async () => {
-      await Promise.all(
-        created.map(async (path) => {
-          try {
-            await unlink(path);
-          } catch {
-            // ignore
-          }
-        })
-      );
-    },
-  };
 }
 
 const workerBridgeToolIds = ["stream_chunk"] as const;
@@ -442,6 +354,7 @@ async function _spawnWorkerCore(
         OPENCODE_ORCH_BRIDGE_URL: rt.bridge.url,
         OPENCODE_ORCH_BRIDGE_TOKEN: rt.bridge.token,
         OPENCODE_ORCH_WORKER_ID: resolvedProfile.id,
+        OPENCODE_ORCH_PROJECT_DIR: options.directory,
       },
     });
 
@@ -670,211 +583,31 @@ export async function sendToWorker(
     jobId?: string;
     /** Source worker ID (for worker-to-worker communication) */
     from?: string;
+    onProgress?: (stage: string, percent?: number) => void;
+    onStreamChunk?: (update: WorkerStreamUpdate) => void;
   }
 ): Promise<{ success: boolean; response?: string; error?: string }> {
-  const extractStreamChunks = (value: any): string => {
-    const parts = Array.isArray(value?.parts)
-      ? value.parts
-      : Array.isArray(value?.message?.parts)
-        ? value.message.parts
-        : [];
-    if (!Array.isArray(parts) || parts.length === 0) return "";
-    const chunks = parts
-      .filter((part: any) => part?.type === "tool" && part?.tool === "stream_chunk")
-      .map((part: any) => {
-        const input = part?.state?.input;
-        return typeof input?.chunk === "string" ? input.chunk : "";
-      })
-      .filter((chunk: string) => chunk.length > 0);
-    return chunks.join("");
-  };
-
-  const instance = workerPool.get(workerId);
-
-  if (!instance) {
-    return { success: false, error: `Worker "${workerId}" not found` };
-  }
-
-  if (instance.status !== "ready") {
-    return { success: false, error: `Worker "${workerId}" is ${instance.status}, not ready` };
-  }
-
-  if (!instance.client || !instance.sessionId) {
-    return { success: false, error: `Worker "${workerId}" not properly initialized` };
-  }
-
-  // Mark as busy
-  workerPool.updateStatus(workerId, "busy");
-  instance.currentTask = message.slice(0, 140);
-
-  let cleanupAttachments: (() => Promise<void>) | undefined;
   try {
-    const startedAt = Date.now();
-    
-    // Build source identification for the message
-    const sourceFrom = options?.from ?? "orchestrator";
-    const jobIdStr = options?.jobId ?? "none";
-    const sourceInfo = `<message-source from="${sourceFrom}" jobId="${jobIdStr}">\nThis message was sent by ${sourceFrom === "orchestrator" ? "the orchestrator" : `worker "${sourceFrom}"`}.\n</message-source>\n\n`;
-    
-    // Build the full task text with source info and job instructions
-    let taskText = sourceInfo + message;
-    if (options?.jobId) {
-      taskText +=
-        `\n\n<orchestrator-job id="${options.jobId}">\n` +
-        `IMPORTANT:\n` +
-        `- Include your full result as plain text in your assistant response.\n` +
-        `- For long tasks, stream progress with stream_chunk and include this jobId.\n` +
-        `</orchestrator-job>`;
-    } else {
-      taskText +=
-        `\n\n<orchestrator-sync>\n` +
-        `IMPORTANT: Reply with your final answer as plain text in your assistant response.\n` +
-        `Stream with stream_chunk if the response is long or incremental.\n` +
-        `If you do call any tools, still include the full answer as plain text.\n` +
-        `</orchestrator-sync>`;
-    }
-    
-    const prepared = await prepareWorkerAttachments({
-      attachments: options?.attachments,
-      baseDir: instance.directory ?? process.cwd(),
+    const client = new WorkerClient(workerPool, {
       workerId,
+      timeoutMs: options?.timeout,
+      onProgress: options?.onProgress,
+      onStreamChunk: options?.onStreamChunk,
     });
-    cleanupAttachments = prepared.cleanup;
-    const parts = await buildPromptParts({ message: taskText, attachments: prepared.attachments });
 
-    const abort = new AbortController();
-    const timeoutMs = options?.timeout ?? 600_000;
-    const timer = setTimeout(() => abort.abort(new Error("worker prompt timed out")), timeoutMs);
+    const result = await client.send(message, {
+      attachments: options?.attachments,
+      timeoutMs: options?.timeout,
+      jobId: options?.jobId,
+      from: options?.from,
+      onProgress: options?.onProgress,
+      onStreamChunk: options?.onStreamChunk,
+    });
 
-    // Send prompt and wait for response - SDK returns { data, error }
-    const result = await instance.client.session
-      .prompt({
-        path: { id: instance.sessionId },
-        body: {
-          parts: parts as any,
-        },
-        query: { directory: instance.directory ?? process.cwd() },
-        signal: abort.signal as any,
-      } as any)
-      .finally(() => clearTimeout(timer));
-
-    const sdkError: any = (result as any)?.error;
-    if (sdkError) {
-      const msg =
-        sdkError?.data?.message ??
-        sdkError?.message ??
-        (typeof sdkError === "string" ? sdkError : JSON.stringify(sdkError));
-      instance.warning = `Last request failed: ${msg}`;
-      throw new Error(msg);
-    }
-
-    const promptData = result.data as any;
-    const extracted = extractTextFromPromptResponse(promptData);
-    let responseText = extracted.text.trim();
-    if (responseText.length === 0) {
-      // Fallback: some providers emit only reasoning parts.
-      const parts = Array.isArray(promptData?.parts) ? promptData.parts : [];
-      const reasoning = parts.filter((p: any) => p?.type === "reasoning" && typeof p.text === "string").map((p: any) => p.text).join("\n");
-      responseText = reasoning.trim();
-    }
-    if (responseText.length === 0) {
-      const streamed = extractStreamChunks(promptData).trim();
-      if (streamed.length > 0) responseText = streamed;
-    }
-    if (responseText.length === 0) {
-      const messageId = promptData?.info?.id ?? promptData?.message?.info?.id;
-      if (messageId) {
-        // Fallback: fetch the prompt message by id (sometimes parts arrive after the prompt response).
-        for (let attempt = 0; attempt < 3 && responseText.length === 0; attempt += 1) {
-          const messageRes = await instance.client.session.message({
-            path: { id: instance.sessionId, messageID: messageId },
-            query: { directory: instance.directory ?? process.cwd() },
-          });
-          const messageData = (messageRes as any)?.data ?? messageRes;
-          const extractedMessage = extractTextFromPromptResponse(messageData);
-          responseText = extractedMessage.text.trim();
-          if (responseText.length === 0) {
-            const streamed = extractStreamChunks(messageData).trim();
-            if (streamed.length > 0) responseText = streamed;
-          }
-          if (responseText.length > 0) break;
-          await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
-        }
-      }
-    }
-    if (responseText.length === 0) {
-      // Fallback: poll for the latest assistant message (prompt may return before output is stored).
-      const pollDeadline = Date.now() + Math.min(10_000, timeoutMs);
-      while (responseText.length === 0 && Date.now() < pollDeadline) {
-        const messagesRes = await instance.client.session.messages({
-          path: { id: instance.sessionId },
-          query: { directory: instance.directory ?? process.cwd(), limit: 10 },
-        });
-        const messages = Array.isArray((messagesRes as any)?.data) ? (messagesRes as any).data : Array.isArray(messagesRes) ? messagesRes : [];
-        const assistant = [...messages].reverse().find((m: any) => m?.info?.role === "assistant");
-        if (assistant) {
-          const extractedMessage = extractTextFromPromptResponse(assistant);
-          responseText = extractedMessage.text.trim();
-          if (responseText.length === 0) {
-            const streamed = extractStreamChunks(assistant).trim();
-            if (streamed.length > 0) responseText = streamed;
-          }
-        }
-        if (responseText.length > 0) break;
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
-    }
-    if (responseText.length === 0) {
-      if (process.env.OPENCODE_ORCH_SPAWNER_DEBUG === "1") {
-        try {
-          const messagesRes = await instance.client.session.messages({
-            path: { id: instance.sessionId },
-            query: { directory: instance.directory ?? process.cwd(), limit: 20 },
-          });
-          const messages = Array.isArray((messagesRes as any)?.data) ? (messagesRes as any).data : Array.isArray(messagesRes) ? messagesRes : [];
-          const summary = messages.map((m: any) => ({
-            role: m?.info?.role,
-            id: m?.info?.id,
-            finish: m?.info?.finish,
-            error: m?.info?.error,
-            parts: Array.isArray(m?.parts) ? m.parts.map((p: any) => p?.type).filter(Boolean) : [],
-          }));
-          console.error(`[spawner] empty response summary`, JSON.stringify(summary, null, 2));
-        } catch (error) {
-          console.error(`[spawner] empty response debug failed`, error);
-        }
-      }
-      throw new Error(
-        `Worker returned no text output (${extracted.debug ?? "unknown"}). ` +
-          `This usually means the worker model/provider is misconfigured or unavailable.`
-      );
-    }
-
-    // Mark as ready again
-    workerPool.updateStatus(workerId, "ready");
-    instance.lastActivity = new Date();
-    instance.currentTask = undefined;
-    instance.warning = undefined;
-    const durationMs = Date.now() - startedAt;
-    instance.lastResult = {
-      at: new Date(),
-      jobId: options?.jobId ?? instance.lastResult?.jobId,
-      response: responseText,
-      report: instance.lastResult?.report,
-      durationMs,
-    };
-
-    return { success: true, response: responseText };
+    return { success: result.success, response: result.response, error: result.error };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    workerPool.updateStatus(workerId, "ready"); // Reset to ready so it can be used again
-    instance.currentTask = undefined;
-    instance.warning = instance.warning ?? `Last request failed: ${errorMsg}`;
     return { success: false, error: errorMsg };
-  } finally {
-    if (cleanupAttachments) {
-      await cleanupAttachments();
-    }
   }
 }
 

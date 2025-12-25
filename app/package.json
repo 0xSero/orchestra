@@ -1,35 +1,31 @@
 {
-  "name": "@opencode-orchestrator/control-panel",
-  "version": "0.3.0",
+  "name": "@opencode-boomerang/control-panel",
+  "version": "0.1.0",
   "type": "module",
-  "private": true,
   "scripts": {
-    "dev": "bun run dev:server & bun run dev:web",
-    "dev:server": "bun --watch server/index.ts",
-    "dev:web": "vite --config web/vite.config.ts",
-    "build": "vite build --config web/vite.config.ts && bun build server/index.ts --outdir dist/server --target bun",
-    "start": "NODE_ENV=production bun dist/server/index.js",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "hono": "^4.6.0",
-    "ai": "^4.0.0",
-    "@ai-sdk/react": "^1.0.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "zustand": "^5.0.0",
-    "clsx": "^2.1.0",
-    "tailwind-merge": "^2.5.0"
+    "@kobalte/core": "^0.13.7",
+    "@opencode-ai/sdk": "^1.0.200",
+    "@solid-primitives/audio": "^1.3.10",
+    "@solid-primitives/keyboard": "^1.2.8",
+    "@solid-primitives/resize-observer": "^2.0.27",
+    "@solid-primitives/storage": "^4.3.1",
+    "@solidjs/router": "^0.14.10",
+    "clsx": "^2.1.1",
+    "solid-js": "^1.9.3",
+    "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^4.3.0",
-    "autoprefixer": "^10.4.0",
-    "postcss": "^8.4.0",
-    "tailwindcss": "^3.4.0",
-    "typescript": "^5.7.0",
-    "vite": "^6.0.0"
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vite-plugin-solid": "^2.10.2"
   }
 }
