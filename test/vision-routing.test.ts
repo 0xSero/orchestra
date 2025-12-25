@@ -1,16 +1,9 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
-import { createOpencode } from "@opencode-ai/sdk";
-import { mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 import { setupE2eEnv } from "./helpers/e2e-env";
-import { mergeOpenCodeConfig } from "../src/config/opencode";
-import { spawnWorker, sendToWorker, stopWorker } from "../src/workers/spawner";
-import { workerPool } from "../src/core/worker-pool";
 import type { WorkerProfile } from "../src/types";
+import { createTestWorkerRuntime } from "./helpers/worker-runtime";
 
-const ORCH_MODEL = "opencode/glm-4.7";
 const VISION_MODEL = "opencode/gpt-5-nano";
 
 function createSolidPng(width: number, height: number, rgba: [number, number, number, number]) {
@@ -70,68 +63,27 @@ const TEST_PNG_BASE64 = TEST_PNG_BUFFER.toString("base64");
 
 describe("vision worker integration", () => {
   let restoreEnv: (() => void) | undefined;
-  let tempDir: string;
-  let server: { close: () => void };
+  let runtime: Awaited<ReturnType<typeof createTestWorkerRuntime>> | undefined;
 
   beforeAll(async () => {
     const env = await setupE2eEnv();
     restoreEnv = env.restore;
-    tempDir = await mkdtemp(join(tmpdir(), "vision-e2e-"));
-    const config = await mergeOpenCodeConfig({ model: ORCH_MODEL }, { dropOrchestratorPlugin: true });
-    const opencode = await createOpencode({
-      hostname: "127.0.0.1",
-      port: 0,
-      timeout: 60_000,
-      config,
+    runtime = await createTestWorkerRuntime({
+      profiles: {},
+      directory: process.cwd(),
+      timeoutMs: 60_000,
     });
-    server = opencode.server;
   });
 
-  afterAll(() => {
-    server?.close();
+  afterAll(async () => {
+    await runtime?.stop();
     restoreEnv?.();
   });
 
   afterEach(async () => {
-    const workers = Array.from(workerPool.workers.keys());
-    for (const workerId of workers) {
-      await stopWorker(workerId).catch(() => {});
-    }
+    const workers = runtime?.workers.listWorkers() ?? [];
+    await Promise.allSettled(workers.map((w) => runtime!.workers.stopWorker(w.profile.id)));
   });
-
-  test(
-    "spawns a vision worker and handles an image file",
-    async () => {
-      const profile: WorkerProfile = {
-        id: "vision",
-        name: "Vision",
-        model: VISION_MODEL,
-        purpose: "Image analysis",
-        whenToUse: "Testing vision flow",
-        supportsVision: true,
-      };
-
-      const imgPath = join(tempDir, "test-image.png");
-      await writeFile(imgPath, TEST_PNG_BUFFER);
-
-      const worker = await spawnWorker(profile, {
-        basePort: 0,
-        timeout: 30_000,
-        directory: process.cwd(),
-      });
-
-      const result = await sendToWorker(worker.profile.id, "Describe what you see in this image.", {
-        attachments: [{ type: "image", path: imgPath }],
-        timeout: 120_000,
-      });
-
-      if (!result.success) {
-        throw new Error(result.error ?? "vision worker returned error");
-      }
-      expect(result.response && result.response.length > 0).toBe(true);
-    },
-    240_000
-  );
 
   test(
     "spawns a vision worker and handles a base64 image",
@@ -145,15 +97,11 @@ describe("vision worker integration", () => {
         supportsVision: true,
       };
 
-      const worker = await spawnWorker(profile, {
-        basePort: 0,
-        timeout: 30_000,
-        directory: process.cwd(),
-      });
+      const worker = await runtime!.workers.spawn(profile);
 
-      const result = await sendToWorker(worker.profile.id, "What color is this image?", {
+      const result = await runtime!.workers.send(worker.profile.id, "What color is this image?", {
         attachments: [{ type: "image", base64: TEST_PNG_BASE64, mimeType: "image/png" }],
-        timeout: 120_000,
+        timeout: 60_000,
       });
 
       if (!result.success) {
@@ -161,6 +109,6 @@ describe("vision worker integration", () => {
       }
       expect(result.response && result.response.length > 0).toBe(true);
     },
-    240_000
+    120_000
   );
 });

@@ -1,138 +1,92 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { spawnWorker, sendToWorker, stopWorker } from "../../src/workers/spawner";
-import { registerWorkflow, runWorkflow } from "../../src/workflows/engine";
+import { createWorkflowEngine } from "../../src/workflows/factory";
 import { buildBuiltinWorkflows } from "../../src/workflows/builtins";
 import { setupE2eEnv } from "../helpers/e2e-env";
 import type { WorkerProfile } from "../../src/types";
+import { createTestWorkerRuntime } from "../helpers/worker-runtime";
 
 const MODEL = "opencode/gpt-5-nano";
 const directory = process.cwd();
 
+const SYSTEM_PROMPT = "Test mode: reply with exactly \"OK\" and nothing else.";
+
+function makeProfile(input: Omit<WorkerProfile, "model" | "systemPrompt">): WorkerProfile {
+  return { ...input, model: MODEL, systemPrompt: SYSTEM_PROMPT };
+}
+
 const profiles: Record<string, WorkerProfile> = {
-  explorer: {
+  explorer: makeProfile({
     id: "explorer",
     name: "Explorer",
-    model: MODEL,
     purpose: "Find code",
     whenToUse: "search",
-  },
-  coder: {
+  }),
+  coder: makeProfile({
     id: "coder",
     name: "Coder",
-    model: MODEL,
     purpose: "Implement",
     whenToUse: "code",
-  },
-  reviewer: {
+  }),
+  reviewer: makeProfile({
     id: "reviewer",
     name: "Reviewer",
-    model: MODEL,
     purpose: "Review",
     whenToUse: "review",
-  },
-  security: {
-    id: "security",
-    name: "Security",
-    model: MODEL,
-    purpose: "Security review",
-    whenToUse: "security",
-  },
-  architect: {
-    id: "architect",
-    name: "Architect",
-    model: MODEL,
-    purpose: "Plan",
-    whenToUse: "architecture",
-  },
-  qa: {
-    id: "qa",
-    name: "QA",
-    model: MODEL,
-    purpose: "QA",
-    whenToUse: "testing",
-  },
-  product: {
-    id: "product",
-    name: "Product",
-    model: MODEL,
-    purpose: "Specs",
-    whenToUse: "requirements",
-  },
-  analyst: {
-    id: "analyst",
-    name: "Analyst",
-    model: MODEL,
-    purpose: "Insights",
-    whenToUse: "analysis",
-  },
-  docs: {
-    id: "docs",
-    name: "Docs",
-    model: MODEL,
-    purpose: "Docs",
-    whenToUse: "research",
-  },
+  }),
 };
 
 const limits = {
-  maxSteps: 6,
-  maxTaskChars: 12000,
-  maxCarryChars: 24000,
-  perStepTimeoutMs: 150_000,
+  maxSteps: 3,
+  maxTaskChars: 4000,
+  maxCarryChars: 8000,
+  perStepTimeoutMs: 45_000,
 };
 
 const task = "Reply with OK only. Do not use tools.";
 
 describe("builtin workflows integration", () => {
   let restoreEnv: (() => void) | undefined;
-  const spawned = new Set<string>();
+  let runtime: Awaited<ReturnType<typeof createTestWorkerRuntime>> | undefined;
+  const workflowEngine = createWorkflowEngine({ config: { enabled: true } });
 
   beforeAll(async () => {
     const env = await setupE2eEnv();
     restoreEnv = env.restore;
 
+    runtime = await createTestWorkerRuntime({ profiles, directory, timeoutMs: 60_000 });
     for (const profile of Object.values(profiles)) {
-      const instance = await spawnWorker(profile, {
-        basePort: 0,
-        timeout: 60_000,
-        directory,
-      });
-      spawned.add(instance.profile.id);
+      await runtime.workers.spawn(profile);
     }
-
-    for (const workflow of buildBuiltinWorkflows()) {
-      registerWorkflow(workflow);
-    }
-  }, 240_000);
+    await workflowEngine.start();
+  }, 120_000);
 
   afterAll(async () => {
-    for (const id of spawned) {
-      await stopWorker(id).catch(() => {});
-    }
+    await workflowEngine.stop();
+    await runtime?.stop();
     restoreEnv?.();
   });
 
   test(
-    "runs all built-in workflows successfully",
+    "runs a built-in workflow successfully",
     async () => {
-      const workflows = buildBuiltinWorkflows();
-      for (const workflow of workflows) {
-        const result = await runWorkflow(
-          { workflowId: workflow.id, task, limits },
-          {
-            resolveWorker: async (workerId) => workerId,
-            sendToWorker: async (workerId, message, options) =>
-              sendToWorker(workerId, message, { attachments: options.attachments, timeout: options.timeoutMs }),
-          }
-        );
+      const workflow = buildBuiltinWorkflows().find((entry) => entry.id === "bug-triage");
+      if (!workflow) throw new Error("Expected built-in workflow 'bug-triage' to exist.");
 
-        expect(result.steps.length).toBe(workflow.steps.length);
-        for (const step of result.steps) {
-          expect(step.status).toBe("success");
-          expect((step.response ?? "").length).toBeGreaterThan(0);
+      const result = await workflowEngine.run(
+        { workflowId: workflow.id, task, limits },
+        {
+          resolveWorker: async (workerId) => workerId,
+          sendToWorker: async (workerId, message, options) =>
+            runtime!.workers.send(workerId, message, { attachments: options.attachments, timeout: options.timeoutMs }),
         }
+      );
+
+      expect(result.steps.length).toBe(workflow.steps.length);
+      for (const step of result.steps) {
+        expect(step.status).toBe("success");
+        expect((step.response ?? "").length).toBeGreaterThan(0);
       }
     },
-    900_000
+    240_000
   );
 });

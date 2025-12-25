@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { registerWorkflow, runWorkflow } from "../src/workflows/engine";
-import { spawnWorker, sendToWorker, stopWorker } from "../src/workers/spawner";
+import { createWorkflowEngine } from "../src/workflows/factory";
 import type { WorkerProfile } from "../src/types";
+import { createTestWorkerRuntime } from "./helpers/worker-runtime";
 
 const MODEL = "opencode/gpt-5-nano";
 
@@ -22,7 +22,9 @@ const profiles: Record<string, WorkerProfile> = {
   },
 };
 
-registerWorkflow({
+const workflowEngine = createWorkflowEngine({ config: { enabled: true } });
+
+workflowEngine.register({
   id: "test-flow",
   name: "Test Flow",
   description: "Integration workflow",
@@ -48,38 +50,34 @@ const limits = {
   maxSteps: 4,
   maxTaskChars: 1000,
   maxCarryChars: 1000,
-  perStepTimeoutMs: 120_000,
+  perStepTimeoutMs: 60_000,
 };
 
 describe("workflow engine integration", () => {
-  const spawned = new Set<string>();
+  let runtime: Awaited<ReturnType<typeof createTestWorkerRuntime>> | undefined;
 
   beforeAll(async () => {
+    runtime = await createTestWorkerRuntime({ profiles, directory: process.cwd(), timeoutMs: 60_000 });
     for (const profile of Object.values(profiles)) {
-      const instance = await spawnWorker(profile, {
-        basePort: 0,
-        timeout: 60_000,
-        directory: process.cwd(),
-      });
-      spawned.add(instance.profile.id);
+      await runtime.workers.spawn(profile);
     }
-  }, 180_000);
+    await workflowEngine.start();
+  }, 120_000);
 
   afterAll(async () => {
-    for (const id of spawned) {
-      await stopWorker(id).catch(() => {});
-    }
+    await workflowEngine.stop();
+    await runtime?.stop();
   });
 
   test(
     "runs steps sequentially and carries output via real workers",
     async () => {
-      const result = await runWorkflow(
+      const result = await workflowEngine.run(
         { workflowId: "test-flow", task: "do the thing", limits },
         {
           resolveWorker: async (workerId) => workerId,
           sendToWorker: async (workerId, message, options) =>
-            sendToWorker(workerId, message, { attachments: options.attachments, timeout: options.timeoutMs }),
+            runtime!.workers.send(workerId, message, { attachments: options.attachments, timeout: options.timeoutMs }),
         }
       );
 
@@ -89,6 +87,6 @@ describe("workflow engine integration", () => {
       expect(result.steps[0]?.response ?? "").toContain("STEP_ONE_OK");
       expect(result.steps[1]?.response ?? "").toContain("STEP_TWO_OK");
     },
-    180_000
+    120_000
   );
 });

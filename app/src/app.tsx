@@ -2,7 +2,7 @@
  * App Component - Root application with providers
  *
  * Connects to OpenCode server (localhost:4096) for session/agent data.
- * Falls back to Supervisor SDK for orchestrator-specific features.
+ * Uses the OpenCode SDK for session/agent data.
  */
 
 import { type Component } from "solid-js";

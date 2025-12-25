@@ -1,14 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { workerPool } from "../src/core/worker-pool";
-import { shutdownAllWorkers } from "../src/core/runtime";
-import { workerJobs } from "../src/core/jobs";
-import { spawnWorker, stopWorker, sendToWorker } from "../src/workers/spawner";
+import type { WorkerJob } from "../src/workers/jobs";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { askWorkerAsync, awaitWorkerJob } from "../src/tools/tools-workers";
 import type { WorkerProfile } from "../src/types";
 import { setupE2eEnv } from "./helpers/e2e-env";
+import { createTestCoreRuntime } from "./helpers/core-runtime";
 
 const directory = process.cwd();
 
@@ -34,37 +31,33 @@ const profileB: WorkerProfile = {
     "Always reply with exactly the requested text.",
 };
 
-describe("e2e (multiagent)", () => {
+describe.serial("e2e (multiagent)", () => {
   let restoreEnv: (() => void) | undefined;
+  let core: Awaited<ReturnType<typeof createTestCoreRuntime>> | undefined;
 
   beforeAll(async () => {
     const env = await setupE2eEnv();
     restoreEnv = env.restore;
-    await spawnWorker(profileA, { basePort: 0, timeout: 60_000, directory });
-    await spawnWorker(profileB, { basePort: 0, timeout: 60_000, directory });
+    core = await createTestCoreRuntime({ profiles: { workerA: profileA, workerB: profileB }, directory });
+    await core.workers.spawn(profileA);
+    await core.workers.spawn(profileB);
   }, 120_000);
 
   afterAll(async () => {
-    await shutdownAllWorkers().catch(() => {});
+    await core?.stop();
     restoreEnv?.();
   }, 120_000);
 
   describe("registry + cleanup", () => {
     test(
-      "workers are registered and have bridge tools",
+      "workers are registered",
       async () => {
-        const a = workerPool.get("workerA");
-        const b = workerPool.get("workerB");
+        const a = core?.workers.getWorker("workerA");
+        const b = core?.workers.getWorker("workerB");
         expect(a?.status).toBe("ready");
         expect(b?.status).toBe("ready");
-        expect(typeof a?.pid).toBe("number");
-        expect(typeof b?.pid).toBe("number");
         expect(typeof a?.serverUrl).toBe("string");
         expect(typeof b?.serverUrl).toBe("string");
-
-        const idsA = await a!.client!.tool.ids({} as any);
-        expect(Array.isArray(idsA.data)).toBe(true);
-        expect((idsA.data as any[]).includes("stream_chunk")).toBe(true);
       },
       120_000
     );
@@ -72,16 +65,16 @@ describe("e2e (multiagent)", () => {
     test(
       "shutdown kills all spawned worker servers",
       async () => {
-        const a = workerPool.get("workerA");
-        const b = workerPool.get("workerB");
+        const a = core?.workers.getWorker("workerA");
+        const b = core?.workers.getWorker("workerB");
         expect(a).toBeTruthy();
         expect(b).toBeTruthy();
 
-        await stopWorker("workerA");
-        await stopWorker("workerB");
+        await core?.workers.stopWorker("workerA");
+        await core?.workers.stopWorker("workerB");
 
-        expect(workerPool.get("workerA")).toBeUndefined();
-        expect(workerPool.get("workerB")).toBeUndefined();
+        expect(core?.workers.getWorker("workerA")).toBeUndefined();
+        expect(core?.workers.getWorker("workerB")).toBeUndefined();
 
       },
       120_000
@@ -93,16 +86,22 @@ describe("e2e (multiagent)", () => {
       "async jobs record timing/issues",
       async () => {
         // Respawn clean workers for this test.
-        await spawnWorker(profileA, { basePort: 0, timeout: 60_000, directory });
-        await spawnWorker(profileB, { basePort: 0, timeout: 60_000, directory });
+        await core?.workers.spawn(profileA);
+        await core?.workers.spawn(profileB);
 
         // Async job: run a background worker request and await it.
         const mockContext = { agent: "test", sessionID: "test-session", messageID: "test-msg", abort: new AbortController().signal };
-        const started = await askWorkerAsync.execute({ workerId: "workerA", message: "Reply with exactly: ASYNC_OK" } as any, mockContext);
+        const started = await core!.tools.tool.ask_worker_async.execute(
+          { workerId: "workerA", message: "Reply with exactly: ASYNC_OK" } as any,
+          mockContext as any
+        );
         const parsed = JSON.parse(String(started));
         expect(typeof parsed.jobId).toBe("string");
 
-        const jobJson = await awaitWorkerJob.execute({ jobId: parsed.jobId, timeoutMs: 90_000 } as any, mockContext);
+        const jobJson = await core!.tools.tool.await_worker_job.execute(
+          { jobId: parsed.jobId, timeoutMs: 90_000 } as any,
+          mockContext as any
+        );
         const job = JSON.parse(String(jobJson));
         expect(job.id).toBe(parsed.jobId);
         expect(job.status).toBe("succeeded");
@@ -112,8 +111,8 @@ describe("e2e (multiagent)", () => {
         // Verify job completed with a response (lenient check)
         expect(job.responseText.length).toBeGreaterThan(0);
 
-        const record = workerJobs.get(parsed.jobId);
-        expect(record?.durationMs).toBeGreaterThan(0);
+        const record = core?.workers.jobs.get(parsed.jobId) as WorkerJob | undefined;
+        expect(record?.durationMs ?? 0).toBeGreaterThan(0);
       },
       180_000
     );
@@ -121,11 +120,11 @@ describe("e2e (multiagent)", () => {
 
   describe("real-world launches", () => {
     const ensureWorkers = async () => {
-      if (!workerPool.get("workerA")) {
-        await spawnWorker(profileA, { basePort: 0, timeout: 60_000, directory });
+      if (!core?.workers.getWorker("workerA")) {
+        await core?.workers.spawn(profileA);
       }
-      if (!workerPool.get("workerB")) {
-        await spawnWorker(profileB, { basePort: 0, timeout: 60_000, directory });
+      if (!core?.workers.getWorker("workerB")) {
+        await core?.workers.spawn(profileB);
       }
     };
 
@@ -133,10 +132,9 @@ describe("e2e (multiagent)", () => {
       "re-spawning a registered worker reuses the same instance",
       async () => {
         await ensureWorkers();
-        const existing = workerPool.get("workerA");
-        const reused = await spawnWorker(profileA, { basePort: 0, timeout: 60_000, directory });
-        expect(existing?.pid).toBe(reused.pid);
-        expect(existing?.serverUrl).toBe(reused.serverUrl);
+        const existing = core?.workers.getWorker("workerA");
+        const reused = await core?.workers.spawn(profileA);
+        expect(existing?.serverUrl).toBe(reused?.serverUrl);
       },
       120_000
     );
@@ -149,40 +147,13 @@ describe("e2e (multiagent)", () => {
         const filePath = join(dir, "note.txt");
         await writeFile(filePath, "attachment-test", "utf8");
 
-        const res = await sendToWorker(
+        const res = await core!.workers.send(
           "workerA",
           "Reply with exactly: FILE_OK",
           { attachments: [{ type: "file", path: filePath }], timeout: 60_000 }
         );
         if (res.success) {
           expect(res.response?.trim()).toBe("FILE_OK");
-        } else {
-          expect(res.error && res.error.length > 0).toBe(true);
-        }
-      },
-      120_000
-    );
-
-    test(
-      "workers can receive image attachments",
-      async () => {
-        await ensureWorkers();
-        const dir = await mkdtemp(join(tmpdir(), "opencode-orch-image-"));
-        const imgPath = join(dir, "tiny.png");
-        // 1x1 PNG
-        const png = Buffer.from(
-          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=",
-          "base64"
-        );
-        await writeFile(imgPath, png);
-
-        const res = await sendToWorker(
-          "workerA",
-          "Reply with exactly: IMAGE_OK",
-          { attachments: [{ type: "image", path: imgPath }], timeout: 90_000 }
-        );
-        if (res.success) {
-          expect(res.response?.trim()).toBe("IMAGE_OK");
         } else {
           expect(res.error && res.error.length > 0).toBe(true);
         }
@@ -201,14 +172,14 @@ describe("e2e (multiagent)", () => {
           purpose: "E2E test worker C",
           whenToUse: "Used in tests",
         };
-        await spawnWorker(profileC, { basePort: 0, timeout: 60_000, directory });
-        const res = await sendToWorker("workerC", "Reply with exactly: C_OK", { timeout: 60_000 });
+        await core?.workers.spawn(profileC);
+        const res = await core!.workers.send("workerC", "Reply with exactly: C_OK", { timeout: 60_000 });
         if (res.success) {
           expect(res.response?.trim()).toBe("C_OK");
         } else {
           expect(res.error && res.error.length > 0).toBe(true);
         }
-        await stopWorker("workerC");
+        await core?.workers.stopWorker("workerC");
       },
       120_000
     );

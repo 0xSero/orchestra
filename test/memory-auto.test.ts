@@ -9,15 +9,41 @@ import { join } from "node:path";
 describe("memory auto record (file)", () => {
   let tempDir = "";
   const originalXdg = process.env.XDG_CONFIG_HOME;
+  const originalHome = process.env.HOME;
+  const originalProjectDir = process.env.OPENCODE_ORCH_PROJECT_DIR;
+  const originalNeo4j = {
+    uri: process.env.OPENCODE_NEO4J_URI,
+    username: process.env.OPENCODE_NEO4J_USERNAME,
+    password: process.env.OPENCODE_NEO4J_PASSWORD,
+    database: process.env.OPENCODE_NEO4J_DATABASE,
+  };
 
   beforeAll(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "opencode-mem-"));
     process.env.XDG_CONFIG_HOME = tempDir;
+    process.env.HOME = tempDir;
+    process.env.OPENCODE_ORCH_PROJECT_DIR = tempDir;
+    delete process.env.OPENCODE_NEO4J_URI;
+    delete process.env.OPENCODE_NEO4J_USERNAME;
+    delete process.env.OPENCODE_NEO4J_PASSWORD;
+    delete process.env.OPENCODE_NEO4J_DATABASE;
   });
 
   afterAll(async () => {
     if (originalXdg) process.env.XDG_CONFIG_HOME = originalXdg;
     else delete process.env.XDG_CONFIG_HOME;
+    if (originalHome) process.env.HOME = originalHome;
+    else delete process.env.HOME;
+    if (originalProjectDir) process.env.OPENCODE_ORCH_PROJECT_DIR = originalProjectDir;
+    else delete process.env.OPENCODE_ORCH_PROJECT_DIR;
+    if (originalNeo4j.uri) process.env.OPENCODE_NEO4J_URI = originalNeo4j.uri;
+    else delete process.env.OPENCODE_NEO4J_URI;
+    if (originalNeo4j.username) process.env.OPENCODE_NEO4J_USERNAME = originalNeo4j.username;
+    else delete process.env.OPENCODE_NEO4J_USERNAME;
+    if (originalNeo4j.password) process.env.OPENCODE_NEO4J_PASSWORD = originalNeo4j.password;
+    else delete process.env.OPENCODE_NEO4J_PASSWORD;
+    if (originalNeo4j.database) process.env.OPENCODE_NEO4J_DATABASE = originalNeo4j.database;
+    else delete process.env.OPENCODE_NEO4J_DATABASE;
     if (tempDir) {
       await rm(tempDir, { recursive: true, force: true }).catch(() => {});
     }

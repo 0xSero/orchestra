@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { loadNeo4jConfigFromEnv, withNeo4jSession } from "../../src/memory/neo4j";
+import { loadNeo4jConfig, withNeo4jSession } from "../../src/memory/neo4j";
 
 describe("neo4j real integration", () => {
-  const cfg = loadNeo4jConfigFromEnv();
+  const cfg = loadNeo4jConfig();
 
   if (!cfg) {
-    test.skip("requires OPENCODE_NEO4J_* environment variables", () => {});
+    test.skip("requires Neo4j config (env or .opencode/orchestrator.json)", () => {});
     return;
   }
 

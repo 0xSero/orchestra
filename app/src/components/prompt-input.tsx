@@ -4,7 +4,6 @@
 
 import { type Component, createSignal, Show, For } from "solid-js";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/input";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { cn, formatShortcut } from "@/lib/utils";
 

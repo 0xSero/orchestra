@@ -26,7 +26,6 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "test:real": "bun test test/integration/linear-real.test.ts test/integration/neo4j-real.test.ts",
-    "supervisor": "bun run scripts/supervisor.ts",
     "bench": "bun test ./test/performance/*.bench.ts",
     "app:dev": "cd app && bun run dev",
     "app:build": "cd app && bun run build",

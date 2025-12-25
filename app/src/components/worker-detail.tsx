@@ -3,13 +3,13 @@
  */
 
 import { type Component, Show, For, createMemo, createEffect } from "solid-js";
-import { useOpenCode, type Session, type Message } from "@/context/opencode";
+import { useOpenCode, type Message } from "@/context/opencode";
 import { useLayout } from "@/context/layout";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn, formatRelativeTime, truncate } from "@/lib/utils";
+import { cn, formatRelativeTime } from "@/lib/utils";
 
 // Icons
 const XIcon = () => (
@@ -67,7 +67,7 @@ const BotIcon = () => (
 );
 
 export const WorkerDetail: Component = () => {
-  const { getSession, getSessionMessages, deleteSession, client } = useOpenCode();
+  const { getSession, getSessionMessages, deleteSession } = useOpenCode();
   const { selectedWorkerId, selectWorker } = useLayout();
 
   const session = createMemo(() => {
@@ -77,23 +77,39 @@ export const WorkerDetail: Component = () => {
 
   const messages = createMemo(() => {
     const id = selectedWorkerId();
-    return id ? getSessionMessages(id) : [];
+    const msgs = id ? getSessionMessages(id) : [];
+    console.log(`🔍 [worker-detail] messages memo for ${id}:`, { 
+      count: msgs.length, 
+      messages: msgs.map(m => ({ id: m.id, role: m.role }))
+    });
+    return msgs;
   });
 
   // Fetch messages when session changes
-  createEffect(() => {
+  createEffect(async () => {
     const id = selectedWorkerId();
     if (id) {
-      client.session.messages({ path: { id } }).catch(console.error);
+      console.log(`🔍 [worker-detail] Session selected, fetching messages for: ${id}`);
+      try {
+        const { fetchMessages } = useOpenCode();
+        await fetchMessages(id);
+        console.log(`🔍 [worker-detail] Messages fetched for: ${id}`);
+      } catch (err) {
+        console.error(`🔍 [worker-detail] Failed to fetch messages:`, err);
+      }
     }
   });
 
   const handleDelete = async () => {
     const s = session();
     if (!s) return;
+    console.log(`🔍 [worker-detail] Deleting session: ${s.id}`);
     if (!confirm(`Delete session "${s.title}"?`)) return;
-    await deleteSession(s.id);
-    selectWorker(null);
+    const success = await deleteSession(s.id);
+    console.log(`🔍 [worker-detail] Delete result:`, success);
+    if (success) {
+      selectWorker(null);
+    }
   };
 
   return (

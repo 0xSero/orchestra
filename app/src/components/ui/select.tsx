@@ -3,7 +3,7 @@
  */
 
 import { type Component, type JSX, splitProps } from "solid-js";
-import { Select as KobalteSelect } from "@kobalte/core/select";
+import { Select as KobalteSelect, type CollectionNode } from "@kobalte/core";
 import { cn } from "@/lib/utils";
 
 // Icons
@@ -96,7 +96,7 @@ export const SelectContent: Component<SelectContentProps> = (props) => {
 
 // Select Item
 interface SelectItemProps extends JSX.HTMLAttributes<HTMLDivElement> {
-  item: { value: string; label: string };
+  item: CollectionNode<any>;
 }
 
 export const SelectItem: Component<SelectItemProps> = (props) => {
@@ -118,7 +118,7 @@ export const SelectItem: Component<SelectItemProps> = (props) => {
           <Check />
         </KobalteSelect.ItemIndicator>
       </span>
-      <KobalteSelect.ItemLabel>{local.item.label}</KobalteSelect.ItemLabel>
+      <KobalteSelect.ItemLabel>{local.item.rawValue.label}</KobalteSelect.ItemLabel>
     </KobalteSelect.Item>
   );
 };

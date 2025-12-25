@@ -1,236 +1,43 @@
-/**
- * Orchestrator tool exports
- *
- * This file is intentionally small: tool implementations live in per-area modules.
- */
+import type { Factory, ServiceLifecycle } from "../types";
+import type { OrchestratorConfig } from "../types";
+import type { OrchestratorService } from "../orchestrator";
+import type { WorkerManager } from "../workers";
+import type { WorkflowEngine } from "../workflows/factory";
+import { createWorkerTools } from "./worker-tools";
+import { createWorkflowTools } from "./workflow-tools";
+import { createToolGuard, createSystemTransform } from "./hooks";
 
-export {
-  setClient,
-  setDirectory,
-  setModelAliases,
-  setModelSelection,
-  setProfiles,
-  setProjectId,
-  setSecurityConfig,
-  setSpawnDefaults,
-  setUiDefaults,
-  setWorkflowConfig,
-  setIntegrationsConfig,
-  setWorktree,
-} from "./state";
+export type ToolsConfig = OrchestratorConfig;
 
-export {
-  askWorker,
-  askWorkerAsync,
-  awaitWorkerJob,
-  delegateTask,
-  ensureWorkers,
-  findWorker,
-  suggestWorker,
-  getWorkerJob,
-  getWorkerInfo,
-  listWorkers,
-  listWorkerJobs,
-  spawnNewWorker,
-  stopWorkerTool,
-  workerTrace,
-  workerDiagnostics,
-  streamWorkerOutput,
-} from "./tools-workers";
-export {
-  autofillProfileModels,
-  listModels,
-  listProfiles,
-  orchestratorConfig,
-  resetProfileModels,
-  setAutoSpawn,
-  setOrchestratorAgent,
-  setSpawnPolicy,
-  setProfileModel,
-} from "./tools-profiles";
-export { memoryLink, memoryPut, memoryRecentTool, memorySearchTool, memoryStatus } from "./tools-memory";
-export {
-  linearCreateProject,
-  linearCreateIssue,
-  linearUpdateIssue,
-  linearAddComment,
-  linearGetProjectStatus,
-  linearSyncTaskStatus,
-  linearAddLabel,
-  linearSetEstimate,
-} from "./tools-linear";
-export {
-  clearPassthroughMode,
-  enableDocsPassthrough,
-  macosKeybindsFix,
-  orchestratorDashboard,
-  orchestratorOutput,
-  orchestratorDemo,
-  orchestratorHelp,
-  orchestratorResults,
-  orchestratorStart,
-  orchestratorTodoView,
-  setPassthroughMode,
-} from "./tools-ux";
-export { orchestratorDiagnostics } from "./tools-diagnostics";
-export { listWorkflowsTool, runWorkflowTool } from "./tools-workflows";
-export { enableWorkerAgent, disableWorkerAgent, listWorkerAgents } from "./tools-agents";
-
-import {
-  askWorker,
-  askWorkerAsync,
-  awaitWorkerJob,
-  delegateTask,
-  ensureWorkers,
-  findWorker,
-  suggestWorker,
-  getWorkerJob,
-  getWorkerInfo,
-  listWorkers,
-  listWorkerJobs,
-  spawnNewWorker,
-  stopWorkerTool,
-  workerTrace,
-  workerDiagnostics,
-  streamWorkerOutput,
-} from "./tools-workers";
-import {
-  autofillProfileModels,
-  listModels,
-  listProfiles,
-  orchestratorConfig,
-  resetProfileModels,
-  setAutoSpawn,
-  setOrchestratorAgent,
-  setSpawnPolicy,
-  setProfileModel,
-} from "./tools-profiles";
-import { memoryLink, memoryPut, memoryRecentTool, memorySearchTool, memoryStatus } from "./tools-memory";
-import {
-  linearCreateProject,
-  linearCreateIssue,
-  linearUpdateIssue,
-  linearAddComment,
-  linearGetProjectStatus,
-  linearSyncTaskStatus,
-  linearAddLabel,
-  linearSetEstimate,
-} from "./tools-linear";
-import {
-  clearPassthroughMode,
-  enableDocsPassthrough,
-  macosKeybindsFix,
-  orchestratorDashboard,
-  orchestratorOutput,
-  orchestratorDemo,
-  orchestratorHelp,
-  orchestratorResults,
-  orchestratorStart,
-  orchestratorTodoView,
-  setPassthroughMode,
-} from "./tools-ux";
-import { orchestratorDiagnostics } from "./tools-diagnostics";
-import { listWorkflowsTool, runWorkflowTool } from "./tools-workflows";
-import { enableWorkerAgent, disableWorkerAgent, listWorkerAgents } from "./tools-agents";
-
-/**
- * Core tools exported for the plugin.
- */
-export const coreOrchestratorTools = {
-  // Core worker lifecycle + messaging
-  spawn_worker: spawnNewWorker,
-  ask_worker: askWorker,
-  ask_worker_async: askWorkerAsync,
-  await_worker_job: awaitWorkerJob,
-  get_worker_job: getWorkerJob,
-  list_worker_jobs: listWorkerJobs,
-  delegate_task: delegateTask,
-  stop_worker: stopWorkerTool,
-  enable_worker_agent: enableWorkerAgent,
-  disable_worker_agent: disableWorkerAgent,
-  list_worker_agents: listWorkerAgents,
-
-  // Discovery
-  list_profiles: listProfiles,
-  list_workers: listWorkers,
-  list_models: listModels,
-  suggest_worker: suggestWorker,
-  orchestrator_status: orchestratorConfig,
-  list_workflows: listWorkflowsTool,
-  run_workflow: runWorkflowTool,
-
-  // Observability (useful for orchestration + debugging)
-  orchestrator_output: orchestratorOutput,
-  orchestrator_results: orchestratorResults,
-  orchestrator_diagnostics: orchestratorDiagnostics,
-  worker_trace: workerTrace,
-  worker_diagnostics: workerDiagnostics,
-  stream_worker_output: streamWorkerOutput,
-
-  // External integrations (real systems)
-  linear_create_project: linearCreateProject,
-  linear_create_issue: linearCreateIssue,
-  linear_update_issue: linearUpdateIssue,
-  linear_add_comment: linearAddComment,
-  linear_get_project_status: linearGetProjectStatus,
-  linear_sync_task_status: linearSyncTaskStatus,
-  linear_add_label: linearAddLabel,
-  linear_set_estimate: linearSetEstimate,
-
-  // Passthrough (session-scoped)
-  set_passthrough: setPassthroughMode,
-  clear_passthrough: clearPassthroughMode,
-  enable_docs_passthrough: enableDocsPassthrough,
+export type ToolsDeps = {
+  orchestrator: OrchestratorService;
+  workers: WorkerManager;
+  workflows?: WorkflowEngine;
 };
 
-export const pluginTools = {
-  // UX helpers
-  orchestrator_start: orchestratorStart,
-  orchestrator_demo: orchestratorDemo,
-  orchestrator_dashboard: orchestratorDashboard,
-  orchestrator_results: orchestratorResults,
-  orchestrator_diagnostics: orchestratorDiagnostics,
-  worker_trace: workerTrace,
-  worker_diagnostics: workerDiagnostics,
-  stream_worker_output: streamWorkerOutput,
-  orchestrator_todo: orchestratorTodoView,
-  orchestrator_keybinds_macos: macosKeybindsFix,
-  orchestrator_help: orchestratorHelp,
-  enable_docs_passthrough: enableDocsPassthrough,
-
-  // Config tools (manual by design)
-  set_profile_model: setProfileModel,
-  reset_profile_models: resetProfileModels,
-  set_autospawn: setAutoSpawn,
-  set_spawn_policy: setSpawnPolicy,
-  set_orchestrator_agent: setOrchestratorAgent,
-
-  // Memory tools
-  memory_put: memoryPut,
-  memory_link: memoryLink,
-  memory_search: memorySearchTool,
-  memory_recent: memoryRecentTool,
-  memory_status: memoryStatus,
-
-  // Extra
-  get_worker_info: getWorkerInfo,
-  ensure_workers: ensureWorkers,
-  find_worker: findWorker,
-  suggest_worker: suggestWorker,
-  autofill_profile_models: autofillProfileModels,
-  
+export type ToolsService = ServiceLifecycle & {
+  tool: Record<string, any>;
+  guard: ReturnType<typeof createToolGuard>;
+  systemTransform: ReturnType<typeof createSystemTransform>;
+  compaction: ReturnType<typeof createSystemTransform>;
 };
 
-export const orchestratorTools = {
-  ...coreOrchestratorTools,
-  ...pluginTools,
-};
+export const createTools: Factory<ToolsConfig, ToolsDeps, ToolsService> = ({ config, deps }) => {
+  const workerTools = createWorkerTools({ orchestrator: deps.orchestrator, workers: deps.workers });
+  const workflowTools = createWorkflowTools({ orchestrator: deps.orchestrator, workflows: deps.workflows });
 
-/**
- * Advanced/internal tools (not exported to LLM by default, but available for power users)
- * These can be accessed programmatically if needed.
- */
-export const advancedTools = {
-  // Back-compat alias; everything is now exported in `orchestratorTools`.
-  ...orchestratorTools,
+  const tool = {
+    ...workerTools,
+    ...workflowTools,
+  };
+
+  return {
+    tool,
+    guard: createToolGuard(config),
+    systemTransform: createSystemTransform(config, deps.workers),
+    compaction: createSystemTransform(config, deps.workers),
+    start: async () => {},
+    stop: async () => {},
+    health: async () => ({ ok: true }),
+  };
 };

@@ -60,6 +60,7 @@ export interface OpenCodeContextValue {
   // Actions
   refresh: () => Promise<void>;
   refreshSessions: () => Promise<void>; // alias for refresh
+  fetchMessages: (id: string) => Promise<void>;
   createSession: () => Promise<Session | null>;
   deleteSession: (id: string) => Promise<boolean>;
   sendMessage: (sessionId: string, content: string) => Promise<void>;
@@ -134,11 +135,34 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
   };
 
   const fetchMessages = async (sessionId: string) => {
+    console.log(`🔍 [fetchMessages] Starting fetch for session: ${sessionId}`);
     try {
       const res = await client.session.messages({ path: { id: sessionId } });
+      console.log(`🔍 [fetchMessages] SDK response for ${sessionId}:`, {
+        status: res.response?.status,
+        hasData: !!res.data,
+        dataKeys: res.data ? Object.keys(res.data) : 'no-data'
+      });
+      
       const data = res.data as { messages?: Message[]; parts?: Part[] } | undefined;
 
       if (data) {
+        console.log(`🔍 [fetchMessages] Processing data for ${sessionId}:`, {
+          messageCount: data.messages?.length || 0,
+          partCount: data.parts?.length || 0,
+          sampleMessage: data.messages?.[0] ? {
+            id: data.messages[0].id,
+            role: data.messages[0].role,
+            hasParts: !!(data.parts && data.messages && data.parts.find(p => p.messageID === data.messages![0].id))
+          } : 'no-messages'
+        });
+
+        const oldState = { 
+          messageCount: state.messages[sessionId]?.length || 0,
+          partCount: Object.keys(state.parts).reduce((acc, msgId) => 
+            msgId.startsWith(sessionId) ? acc + 1 : acc, 0)
+        };
+
         setState(
           produce((s) => {
             s.messages[sessionId] = data.messages ?? [];
@@ -151,6 +175,20 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
             }
           })
         );
+
+        const newState = { 
+          messageCount: state.messages[sessionId]?.length || 0,
+          partCount: Object.keys(state.parts).reduce((acc, msgId) => 
+            msgId.startsWith(sessionId) ? acc + 1 : acc, 0)
+        };
+
+        console.log(`🔍 [fetchMessages] State updated for ${sessionId}:`, {
+          before: oldState,
+          after: newState,
+          messages: state.messages[sessionId]?.map(m => ({ id: m.id, role: m.role })) || 'no-messages'
+        });
+      } else {
+        console.log(`🔍 [fetchMessages] No data returned for session: ${sessionId}`);
       }
     } catch (err) {
       console.error(`[opencode] Failed to fetch messages for ${sessionId}:`, err);
@@ -215,13 +253,24 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     }
   };
 
-  const sendMessage = async (sessionId: string, content: string): Promise<void> => {
+const sendMessage = async (sessionId: string, content: string): Promise<void> => {
+    console.log(`🔍 [sendMessage] Sending to session ${sessionId}:`, { contentLength: content.length, preview: content.slice(0, 50) });
     try {
-      // Use promptAsync to send without blocking
-      await client.session.promptAsync({
+      // Use correct SDK format for prompt
+      await client.session.prompt({
         path: { id: sessionId },
-        body: { content },
+        body: {
+          model: { providerID: "auto", modelID: "auto" },
+          parts: [{ type: "text", text: content }],
+        },
       });
+      console.log(`🔍 [sendMessage] Message sent successfully to ${sessionId}, fetching messages...`);
+      
+      // Trigger message fetch after sending
+      setTimeout(() => {
+        console.log(`🔍 [sendMessage] Auto-fetching messages for ${sessionId}`);
+        fetchMessages(sessionId);
+      }, 1000);
     } catch (err) {
       console.error("[opencode] Failed to send message:", err);
       throw err;
@@ -251,13 +300,14 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
         (a, b) => b.time.updated - a.time.updated
       ),
 
-    agents: () => state.agents.filter((a) => !a.hidden),
+    agents: () => state.agents,
 
     getSession: (id) => state.sessions[id],
     getSessionMessages: (id) => state.messages[id] ?? [],
 
     refresh: fetchAll,
     refreshSessions: fetchAll, // alias for refresh
+    fetchMessages, // Export this for use in components
     createSession,
     deleteSession,
     sendMessage,

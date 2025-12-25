@@ -6,9 +6,8 @@ import { type Component, For, Show, createMemo } from "solid-js";
 import { useOpenCode, type Session } from "@/context/opencode";
 import { useLayout } from "@/context/layout";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn, formatRelativeTime, truncate } from "@/lib/utils";
+import { cn, formatRelativeTime } from "@/lib/utils";
 
 // Icons
 const PlusIcon = () => (

@@ -1,13 +1,15 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { spawnWorker, stopWorker } from "../../src/workers/spawner";
+import { createTestWorkerRuntime } from "../helpers/worker-runtime";
 import type { WorkerProfile } from "../../src/types";
 
 const directory = process.cwd();
 const MODEL = "opencode/gpt-5-nano";
 
 describe("permissions integration", () => {
+  let runtime: Awaited<ReturnType<typeof createTestWorkerRuntime>> | undefined;
+
   afterAll(async () => {
-    await stopWorker("perm-check").catch(() => {});
+    await runtime?.stop();
   });
 
   test(
@@ -26,7 +28,8 @@ describe("permissions integration", () => {
         },
       };
 
-      const instance = await spawnWorker(profile, { basePort: 0, timeout: 60_000, directory });
+      runtime = await createTestWorkerRuntime({ profiles: { "perm-check": profile }, directory, timeoutMs: 60_000 });
+      const instance = await runtime.workers.spawn(profile);
       const res = await instance.client!.config.get({ query: { directory } } as any);
       const tools = (res.data as any)?.tools ?? {};
 

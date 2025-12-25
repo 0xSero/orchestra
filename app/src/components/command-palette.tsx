@@ -9,13 +9,10 @@ import {
   For,
   Show,
   onMount,
-  onCleanup,
 } from "solid-js";
 import { useLayout } from "@/context/layout";
 import { useOpenCode } from "@/context/opencode";
-import { Dialog, DialogContent, DialogOverlay } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn, formatShortcut } from "@/lib/utils";
 
@@ -31,12 +28,6 @@ const PlusIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M5 12h14" />
     <path d="M12 5v14" />
-  </svg>
-);
-
-const StopIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <rect width="18" height="18" x="3" y="3" rx="2" />
   </svg>
 );
 
@@ -93,7 +84,7 @@ interface Command {
 
 export const CommandPalette: Component = () => {
   const { state, closeCommandPalette, toggleSidebar, toggleJobQueue, toggleLogs, selectWorker } = useLayout();
-  const { sessions, refreshSessions, deleteSession } = useOpenCode();
+  const { sessions, refreshSessions } = useOpenCode();
 
   const [query, setQuery] = createSignal("");
   const [selectedIndex, setSelectedIndex] = createSignal(0);
@@ -293,7 +284,7 @@ export const CommandPalette: Component = () => {
                     Workers
                   </p>
                   <For each={groupedCommands().worker}>
-                    {(cmd, index) => {
+                    {(cmd, _) => {
                       const globalIndex = () => {
                         let i = 0;
                         for (const c of filteredCommands()) {

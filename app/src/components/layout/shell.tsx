@@ -36,7 +36,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: Component<SidebarProps> = (props) => {
-  const { state, setSidebarOpen, isMobile, isDesktop } = useLayout();
+  const { state, setSidebarOpen, isMobile } = useLayout();
 
   return (
     <>
