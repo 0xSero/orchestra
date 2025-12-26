@@ -1,7 +1,8 @@
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  base: command === "build" ? "./" : "/",
   plugins: [solid()],
   server: {
     port: 3000,
@@ -9,7 +10,7 @@ export default defineConfig({
     proxy: {
       // Proxy API requests to OpenCode server (dev only)
       "/api": {
-        target: "http://localhost:4080",
+        target: "http://localhost:4096",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ""),
       },
@@ -24,4 +25,4 @@ export default defineConfig({
       "@": "/src",
     },
   },
-});
+}));

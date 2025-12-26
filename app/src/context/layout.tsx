@@ -18,7 +18,7 @@ interface LayoutState {
   selectedWorkerId: string | null;
   showJobQueue: boolean;
   showLogs: boolean;
-  activePanel: "workers" | "jobs" | "logs" | "settings";
+  activePanel: "workers" | "skills" | "jobs" | "logs" | "settings";
   commandPaletteOpen: boolean;
 }
 

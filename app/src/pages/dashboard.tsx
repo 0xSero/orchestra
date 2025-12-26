@@ -1,174 +1,191 @@
 /**
- * Dashboard Page - Main control panel view
+ * Dashboard - vLLM Studio-style layout
  *
- * Connected to OpenCode server for real session data.
+ * Top nav with tabs, collapsible sidebar, centered content area
  */
 
-import { type Component, createSignal, Show } from "solid-js";
-import { AppHeader } from "@/components/header";
-import { WorkerList } from "@/components/sidebar/worker-list";
-import { WorkerDetail } from "@/components/worker-detail";
-import { JobQueue } from "@/components/job-queue";
-import { LogStream } from "@/components/log-stream";
-import { PromptInput } from "@/components/prompt-input";
+import { type Component, createSignal, Show, createEffect, For } from "solid-js";
+import { SessionList } from "@/components/sidebar/worker-list";
+import { ChatView } from "@/components/worker-detail";
+import { LogsPanel } from "@/components/log-stream";
+import { SkillList, SkillsWorkspace } from "@/components/skills";
 import { CommandPalette } from "@/components/command-palette";
-import { SpawnDialog } from "@/components/spawn-dialog";
 import { useLayout } from "@/context/layout";
 import { useOpenCode } from "@/context/opencode";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
-// Icons
-const MenuIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <line x1="4" x2="20" y1="12" y2="12" />
-    <line x1="4" x2="20" y1="6" y2="6" />
-    <line x1="4" x2="20" y1="18" y2="18" />
-  </svg>
-);
-
-const XIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M18 6 6 18" />
-    <path d="m6 6 12 12" />
-  </svg>
-);
+type Tab = "chat" | "skills" | "logs";
 
 export const Dashboard: Component = () => {
-  const { state, isMobile, isDesktop, selectedWorkerId, toggleSidebar, setSidebarOpen } = useLayout();
-  const { sendMessage } = useOpenCode();
-  const [spawnDialogOpen, setSpawnDialogOpen] = createSignal(false);
-  const [isSubmitting, setIsSubmitting] = createSignal(false);
+  const { connected, sessions } = useOpenCode();
+  const [activeTab, setActiveTab] = createSignal<Tab>("chat");
+  const [sidebarOpen, setSidebarOpen] = createSignal(true);
 
-  const handlePromptSubmit = async (message: string, attachments: any[]) => {
-    const sessionId = selectedWorkerId();
-    if (!sessionId) {
-      console.warn("No session selected");
-      return;
-    }
+  // Keyboard shortcuts
+  createEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey) {
+        if (e.key === "b") { e.preventDefault(); setSidebarOpen(v => !v); }
+        if (e.key === "1") { e.preventDefault(); setActiveTab("chat"); }
+        if (e.key === "2") { e.preventDefault(); setActiveTab("skills"); }
+        if (e.key === "3") { e.preventDefault(); setActiveTab("logs"); }
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  });
 
-    setIsSubmitting(true);
-    try {
-      await sendMessage(sessionId, message);
-    } catch (err) {
-      console.error("Failed to send message:", err);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const tabs: { id: Tab; label: string; icon: Component }[] = [
+    {
+      id: "chat",
+      label: "Chat",
+      icon: () => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+        </svg>
+      ),
+    },
+    {
+      id: "skills",
+      label: "Recipes",
+      icon: () => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 6h13" />
+          <path d="M8 12h13" />
+          <path d="M8 18h13" />
+          <path d="M3 6h.01" />
+          <path d="M3 12h.01" />
+          <path d="M3 18h.01" />
+        </svg>
+      ),
+    },
+    {
+      id: "logs",
+      label: "Logs",
+      icon: () => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 6h16" />
+          <path d="M4 12h16" />
+          <path d="M4 18h16" />
+        </svg>
+      ),
+    },
+  ];
 
   return (
-    <div class="h-screen flex flex-col bg-background text-foreground overflow-hidden">
-      {/* Mobile overlay */}
-      <Show when={!isDesktop() && state.sidebarOpen}>
-        <div
-          class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      </Show>
+    <div class="h-full flex flex-col bg-background">
+      {/* Top navigation bar */}
+      <nav class="nav-tabs">
+        {/* Brand */}
+        <div class="flex items-center gap-2 px-2 mr-4">
+          <span class="font-medium text-foreground">OpenCode Studio</span>
+        </div>
 
-      {/* Main layout */}
-      <div class="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <aside
-          class={cn(
-            "fixed inset-y-0 left-0 z-50 w-72 flex-shrink-0 bg-card border-r border-border transition-transform duration-300 lg:relative lg:translate-x-0",
-            state.sidebarOpen ? "translate-x-0" : "-translate-x-full"
-          )}
-        >
-          {/* Mobile close button */}
-          <Show when={!isDesktop()}>
-            <button
-              class="absolute right-3 top-3 p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent z-10"
-              onClick={() => setSidebarOpen(false)}
-            >
-              <XIcon />
-            </button>
-          </Show>
-          <WorkerList />
-        </aside>
-
-        {/* Main content */}
-        <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {/* Header */}
-          <header class="flex h-14 items-center gap-4 border-b border-border bg-card px-4 flex-shrink-0">
-            {/* Mobile menu button */}
-            <Show when={!isDesktop()}>
+        {/* Tabs */}
+        <For each={tabs}>
+          {(tab) => {
+            const Icon = tab.icon;
+            return (
               <button
-                class="p-2 -ml-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent"
-                onClick={toggleSidebar}
+                class={`nav-tab ${activeTab() === tab.id ? "active" : ""}`}
+                onClick={() => setActiveTab(tab.id)}
               >
-                <MenuIcon />
+                <span class="nav-tab-icon">
+                  <Icon />
+                </span>
+                {tab.label}
               </button>
-            </Show>
-            <AppHeader />
-          </header>
+            );
+          }}
+        </For>
 
-          {/* Content area */}
+        {/* Spacer */}
+        <div class="flex-1" />
+
+        {/* Right controls */}
+        <div class="nav-controls px-2">
+          <div class="nav-pill">
+            <span class={`dot ${connected() ? "dot-online" : "dot-offline"}`} />
+            <span>{connected() ? "Connected" : "Offline"}</span>
+          </div>
+
+          <div class="nav-pill">
+            <span class="text-muted-foreground">Model</span>
+            <select class="bg-transparent text-xs text-foreground outline-none">
+              <option>gpt-4.1-mini</option>
+              <option>gpt-4.1</option>
+              <option>o4-mini</option>
+            </select>
+          </div>
+
+          <button class="btn btn-compact">Set Key</button>
+
+          <div class="nav-pill">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            <input class="nav-input" type="text" placeholder="Search" />
+          </div>
+
+          <button class="btn btn-compact btn-ghost">Actions ▾</button>
+
+          <div class="nav-pill">
+            <span>{sessions().length} sessions</span>
+          </div>
+        </div>
+      </nav>
+
+      {/* Main content */}
+      <div class="flex-1 flex overflow-hidden">
+        {/* Chat tab */}
+        <Show when={activeTab() === "chat"}>
+          {/* Sidebar toggle + sidebar */}
+          <div class="flex">
+            {/* Collapse button */}
+            <button
+              class="w-6 flex items-center justify-center border-r border-border hover:bg-accent text-muted-foreground hover:text-foreground"
+              onClick={() => setSidebarOpen(v => !v)}
+              title={sidebarOpen() ? "Collapse sidebar" : "Expand sidebar"}
+            >
+              <span class="text-xs">{sidebarOpen() ? "‹" : "›"}</span>
+            </button>
+
+            {/* Sidebar */}
+            <Show when={sidebarOpen()}>
+              <aside class="w-64 border-r border-border overflow-hidden flex flex-col">
+                <SessionList />
+              </aside>
+            </Show>
+          </div>
+
+          {/* Chat area */}
+          <div class="flex-1 overflow-hidden">
+            <ChatView />
+          </div>
+        </Show>
+
+        {/* Skills tab */}
+        <Show when={activeTab() === "skills"}>
           <div class="flex-1 flex overflow-hidden">
-            {/* Main panel - Worker detail */}
-            <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
-              <div class="flex-1 overflow-auto">
-                <WorkerDetail />
-              </div>
-
-              {/* Prompt input (when worker selected) */}
-              <Show when={selectedWorkerId()}>
-                <PromptInput
-                  onSubmit={handlePromptSubmit}
-                  isLoading={isSubmitting()}
-                  onCancel={() => setIsSubmitting(false)}
-                  placeholder={`Send a message to ${selectedWorkerId()}...`}
-                />
-              </Show>
+            <aside class="w-64 border-r border-border overflow-hidden">
+              <SkillList />
+            </aside>
+            <div class="flex-1 overflow-auto">
+              <SkillsWorkspace />
             </div>
-
-            {/* Right panel - Job queue (desktop only) */}
-            <Show when={isDesktop() && state.showJobQueue}>
-              <div class="w-80 flex-shrink-0 border-l border-border overflow-hidden">
-                <JobQueue />
-              </div>
-            </Show>
           </div>
+        </Show>
 
-          {/* Bottom panel - Logs */}
-          <Show when={isDesktop() && state.showLogs}>
-            <div class="h-48 flex-shrink-0 border-t border-border overflow-hidden">
-              <LogStream />
-            </div>
-          </Show>
-        </div>
+        {/* Logs tab */}
+        <Show when={activeTab() === "logs"}>
+          <div class="flex-1 overflow-hidden">
+            <LogsPanel />
+          </div>
+        </Show>
       </div>
-
-      {/* Mobile bottom sheet for logs/jobs */}
-      <Show when={!isDesktop() && (state.showLogs || state.showJobQueue)}>
-        <div class="fixed inset-x-0 bottom-0 z-40 h-[50vh] bg-card border-t border-border rounded-t-xl shadow-lg">
-          <div class="h-full flex flex-col">
-            {/* Handle */}
-            <div class="flex justify-center py-2">
-              <div class="w-12 h-1 rounded-full bg-border" />
-            </div>
-            {/* Content */}
-            <div class="flex-1 overflow-hidden">
-              <Show when={state.showLogs}>
-                <LogStream />
-              </Show>
-              <Show when={state.showJobQueue && !state.showLogs}>
-                <JobQueue />
-              </Show>
-            </div>
-          </div>
-        </div>
-      </Show>
 
       {/* Command palette */}
       <CommandPalette />
-
-      {/* Spawn dialog */}
-      <SpawnDialog
-        open={spawnDialogOpen()}
-        onClose={() => setSpawnDialogOpen(false)}
-      />
     </div>
   );
 };

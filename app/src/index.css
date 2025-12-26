@@ -3,91 +3,52 @@
 @tailwind utilities;
 
 /**
- * Warm Paper Design System
- *
- * A papery, warm aesthetic with HSL colors anchored in the 30-40° hue range.
- * Light mode: warm cream background, soft tan cards, deep brown-charcoal text.
- * Dark mode: rich charcoal base, elevated surfaces, warm off-white text.
- * Feel: minimal, tactile, like quality stationery.
+ * vLLM Studio-inspired dark theme
+ * Very dark background, subtle borders, clean typography
  */
 
 @layer base {
   :root {
-    /* Light Mode - Warm Cream */
-    --background: 40 30% 97%;
-    --foreground: 30 15% 15%;
+    color-scheme: dark;
 
-    --card: 40 25% 95%;
-    --card-foreground: 30 15% 15%;
+    /* Very dark base - almost black */
+    --background: 0 0% 5%;
+    --foreground: 0 0% 87%;
 
-    --popover: 40 25% 95%;
-    --popover-foreground: 30 15% 15%;
+    /* Slightly elevated surfaces */
+    --card: 0 0% 8%;
+    --card-foreground: 0 0% 87%;
 
-    --primary: 30 25% 25%;
-    --primary-foreground: 40 30% 97%;
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 87%;
 
-    --secondary: 35 20% 90%;
-    --secondary-foreground: 30 15% 20%;
+    /* Muted teal/gray accent - subtle */
+    --primary: 162 10% 52%;
+    --primary-foreground: 0 0% 100%;
 
-    --muted: 35 15% 92%;
-    --muted-foreground: 30 10% 45%;
+    /* Even more subtle secondary */
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 70%;
 
-    --accent: 35 20% 88%;
-    --accent-foreground: 30 15% 20%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 43%;
 
-    --destructive: 0 65% 50%;
-    --destructive-foreground: 40 30% 97%;
+    --accent: 0 0% 14%;
+    --accent-foreground: 0 0% 87%;
 
-    --border: 35 15% 85%;
-    --input: 35 15% 85%;
-    --ring: 30 20% 25%;
-    --shadow: 30 10% 20%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
 
-    /* Status colors - warm tinted */
-    --status-ready: 140 50% 40%;
-    --status-busy: 40 85% 55%;
-    --status-error: 0 65% 50%;
-    --status-stopped: 30 5% 50%;
-    --status-starting: 210 60% 55%;
-  }
+    /* Very subtle borders */
+    --border: 0 0% 10%;
+    --input: 0 0% 10%;
+    --ring: 160 6% 50%;
 
-  .dark {
-    /* Dark Mode - Rich Charcoal */
-    --background: 30 5% 10.5%;
-    --foreground: 40 20% 92%;
-
-    --card: 30 5% 12%;
-    --card-foreground: 40 20% 92%;
-
-    --popover: 30 5% 14%;
-    --popover-foreground: 40 20% 92%;
-
-    --primary: 35 20% 75%;
-    --primary-foreground: 30 5% 10%;
-
-    --secondary: 30 8% 18%;
-    --secondary-foreground: 40 15% 85%;
-
-    --muted: 30 5% 18%;
-    --muted-foreground: 35 10% 60%;
-
-    --accent: 30 8% 20%;
-    --accent-foreground: 40 15% 90%;
-
-    --destructive: 0 55% 45%;
-    --destructive-foreground: 40 20% 95%;
-
-    --border: 30 5% 20%;
-    --input: 30 5% 20%;
-    --ring: 35 15% 70%;
-    --shadow: 0 0% 0%;
-
-    /* Status colors - dark mode */
-    --status-ready: 140 55% 45%;
-    --status-busy: 40 80% 50%;
-    --status-error: 0 60% 50%;
-    --status-stopped: 30 5% 45%;
-    --status-starting: 210 55% 50%;
+    /* Status */
+    --status-ready: 142 70% 45%;
+    --status-busy: 38 90% 50%;
+    --status-error: 0 70% 50%;
+    --status-stopped: 0 0% 40%;
   }
 }
 
@@ -96,232 +57,193 @@
     @apply border-border;
   }
 
+  html, body, #root {
+    @apply h-full;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: "Geist", system-ui, -apple-system, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
   }
 
-  /* Typography hierarchy */
-  h1 {
-    @apply text-2xl font-semibold tracking-tight;
-  }
-
-  h2 {
-    @apply text-xl font-semibold tracking-tight;
-  }
-
-  h3 {
-    @apply text-lg font-medium;
-  }
-
-  /* Focus styles - warm brown ring */
+  /* Minimal focus ring */
   :focus-visible {
-    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+    @apply outline-none ring-1 ring-ring/40;
   }
 
-  /* Selection - warm tint */
   ::selection {
     @apply bg-primary/20;
   }
 }
 
 @layer components {
-  /* Card component base */
-  .card {
-    @apply rounded-lg border bg-card p-6 shadow-sm;
+  /* Top nav tabs - like vLLM Studio */
+  .nav-tabs {
+    @apply flex items-center gap-1 h-12 px-3 border-b border-border bg-card;
   }
 
-  /* Button base */
+  .nav-tab {
+    @apply flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground rounded;
+    @apply hover:text-foreground hover:bg-accent transition-colors;
+  }
+
+  .nav-tab.active {
+    @apply text-foreground bg-accent;
+  }
+
+  .nav-tab-icon {
+    @apply text-muted-foreground;
+  }
+
+  .nav-tab.active .nav-tab-icon {
+    @apply text-foreground;
+  }
+
+  .nav-controls {
+    @apply flex items-center gap-2;
+  }
+
+  .nav-pill {
+    @apply flex items-center gap-2 rounded-md bg-background border border-border px-2 py-1 text-xs text-muted-foreground;
+  }
+
+  .nav-input {
+    @apply bg-transparent text-xs text-foreground placeholder:text-muted-foreground outline-none;
+    min-width: 120px;
+  }
+
+  /* Simple flat buttons */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
-    @apply disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5;
+    @apply px-3 py-1.5 text-sm rounded;
+    @apply bg-secondary text-secondary-foreground;
+    @apply hover:bg-accent transition-colors;
+    @apply disabled:opacity-40 disabled:pointer-events-none;
   }
 
   .btn-primary {
-    @apply btn bg-primary text-primary-foreground hover:bg-primary/90;
-  }
-
-  .btn-secondary {
-    @apply btn bg-secondary text-secondary-foreground hover:bg-secondary/80;
+    @apply bg-primary/20 text-primary hover:bg-primary/30;
   }
 
   .btn-ghost {
-    @apply btn hover:bg-accent hover:text-accent-foreground;
+    @apply bg-transparent text-muted-foreground hover:text-foreground hover:bg-accent;
   }
 
-  .btn-destructive {
-    @apply btn bg-destructive text-destructive-foreground hover:bg-destructive/90;
+  .btn-sm {
+    @apply px-2 py-1 text-xs;
   }
 
-  /* Input base */
+  .btn-compact {
+    @apply h-7 px-2 text-xs rounded-md;
+  }
+
+  /* Input - dark, minimal border */
   .input {
-    @apply flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm;
+    @apply w-full px-3 py-2 text-sm rounded bg-background border border-border;
     @apply placeholder:text-muted-foreground;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
-    @apply disabled:cursor-not-allowed disabled:opacity-50;
+    @apply focus:border-border focus:ring-0;
   }
 
-  /* Status badges */
-  .status-badge {
-    @apply inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium;
+  /* Sidebar list items */
+  .sidebar-item {
+    @apply flex flex-col gap-0.5 px-3 py-2 cursor-pointer rounded-md mx-2;
+    @apply hover:bg-accent transition-colors;
   }
 
-  .status-badge-ready {
-    @apply status-badge bg-status-ready/15 text-status-ready;
+  .sidebar-item.selected {
+    @apply bg-accent;
   }
 
-  .status-badge-busy {
-    @apply status-badge bg-status-busy/15 text-status-busy;
+  .sidebar-subtitle {
+    @apply text-xs text-muted-foreground;
   }
 
-  .status-badge-error {
-    @apply status-badge bg-status-error/15 text-status-error;
+  .status-dot {
+    @apply h-1.5 w-1.5 rounded-full bg-primary/80;
   }
 
-  .status-badge-stopped {
-    @apply status-badge bg-status-stopped/15 text-status-stopped;
+  /* Message styling */
+  .message {
+    @apply px-4 py-3;
   }
 
-  .status-badge-starting {
-    @apply status-badge bg-status-starting/15 text-status-starting;
+  .message-user {
+    @apply bg-transparent;
+  }
+
+  .message-assistant {
+    @apply bg-card/50;
   }
 
   /* Status dots */
-  .status-dot {
-    @apply h-2 w-2 rounded-full;
+  .dot {
+    @apply w-2 h-2 rounded-full;
   }
 
-  .status-dot-ready {
-    @apply status-dot bg-status-ready;
+  .dot-online { @apply bg-status-ready; }
+  .dot-busy { @apply bg-status-busy animate-pulse; }
+  .dot-error { @apply bg-status-error; }
+  .dot-offline { @apply bg-status-stopped; }
+
+  /* Subtle badge */
+  .badge {
+    @apply inline-flex items-center px-1.5 py-0.5 text-xs rounded bg-secondary text-secondary-foreground;
   }
 
-  .status-dot-busy {
-    @apply status-dot bg-status-busy animate-pulse-soft;
+  .badge-success {
+    @apply bg-status-ready/20 text-status-ready;
   }
 
-  .status-dot-error {
-    @apply status-dot bg-status-error;
+  .skill-item {
+    @apply w-full text-left rounded-md px-3 py-2 border border-transparent;
+    @apply hover:bg-accent transition-colors;
   }
 
-  .status-dot-stopped {
-    @apply status-dot bg-status-stopped;
+  .skill-item.selected {
+    @apply bg-accent border-border;
   }
 
-  .status-dot-starting {
-    @apply status-dot bg-status-starting animate-pulse-soft;
+  .composer {
+    @apply flex items-end gap-2 bg-card border border-border rounded-xl px-3 py-2;
+  }
+
+  .composer-icon {
+    @apply text-muted-foreground hover:text-foreground transition-colors;
   }
 }
 
 @layer utilities {
-  /* Custom scrollbar - warm paper style */
-  .scrollbar-warm {
+  .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--border)) transparent;
   }
 
-  .scrollbar-warm::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
   }
 
-  .scrollbar-warm::-webkit-scrollbar-track {
+  .scrollbar-thin::-webkit-scrollbar-track {
     background: transparent;
   }
 
-  .scrollbar-warm::-webkit-scrollbar-thumb {
+  .scrollbar-thin::-webkit-scrollbar-thumb {
     background: hsl(var(--border));
-    border-radius: 9999px;
+    border-radius: 3px;
   }
 
-  .scrollbar-warm::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.3);
-  }
-
-  /* Hide scrollbar but keep functionality */
-  .scrollbar-none {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-
-  .scrollbar-none::-webkit-scrollbar {
-    display: none;
-  }
-
-  /* Line clamp */
-  .line-clamp-1 {
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .line-clamp-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .line-clamp-3 {
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  /* Safe area insets for mobile */
-  .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-
-  .pt-safe {
-    padding-top: env(safe-area-inset-top);
-  }
-
-  /* Gradient mask for overflow fade */
-  .mask-fade-bottom {
-    mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
-  }
-
-  .mask-fade-right {
-    mask-image: linear-gradient(to right, black 90%, transparent 100%);
+  .text-mono {
+    font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
+    font-size: 12px;
   }
 }
 
-/* Log stream monospace styling */
-.log-stream {
-  font-family: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
-  font-size: 13px;
-  line-height: 1.5;
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
-.log-stream pre {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* Touch-friendly targets on mobile */
-@media (pointer: coarse) {
-  .touch-target {
-    min-height: 44px;
-    min-width: 44px;
-  }
-}
-
-/* Reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-
-/* Default to dark mode */
-:root {
-  color-scheme: dark;
+.animate-pulse {
+  animation: pulse 2s ease-in-out infinite;
 }

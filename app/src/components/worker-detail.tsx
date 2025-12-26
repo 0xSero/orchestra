@@ -1,74 +1,64 @@
 /**
- * SessionDetail Component - Detailed view of a selected OpenCode session
+ * ChatView - vLLM Studio style chat interface
+ *
+ * Messages in the center, input at the bottom (also centered)
  */
 
-import { type Component, Show, For, createMemo, createEffect } from "solid-js";
-import { useOpenCode, type Message } from "@/context/opencode";
+import { type Component, Show, For, createMemo, createEffect, createSignal } from "solid-js";
+import { useOpenCode, type Message, type Part } from "@/context/opencode";
 import { useLayout } from "@/context/layout";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn, formatRelativeTime } from "@/lib/utils";
 
-// Icons
-const XIcon = () => (
+const AttachmentIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M18 6 6 18" />
-    <path d="m6 6 12 12" />
+    <path d="M21.44 11.05l-8.49 8.49a5 5 0 0 1-7.07-7.07l8.49-8.49a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.49a2 2 0 0 1-2.83-2.83l7.78-7.78" />
   </svg>
 );
 
-const TrashIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M3 6h18" />
-    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+const ToolIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14.7 6.3a1 1 0 0 0-1.4 0l-1.9 1.9-3-3a2.1 2.1 0 0 0-3 3l3 3-1.9 1.9a1 1 0 0 0 0 1.4l2.8 2.8a1 1 0 0 0 1.4 0l1.9-1.9 3 3a2.1 2.1 0 0 0 3-3l-3-3 1.9-1.9a1 1 0 0 0 0-1.4Z" />
   </svg>
 );
 
-const ShareIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-    <polyline points="16 6 12 2 8 6" />
-    <line x1="12" x2="12" y1="2" y2="15" />
+const PreviewIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6Z" />
+    <circle cx="12" cy="12" r="3" />
   </svg>
 );
 
-const MessageIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+const NetworkIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.9 19.1a9 9 0 0 1 0-12.2" />
+    <path d="M7.8 16.2a5 5 0 0 1 0-8.4" />
+    <circle cx="12" cy="12" r="1" />
+    <path d="M16.2 16.2a5 5 0 0 0 0-8.4" />
+    <path d="M19.1 19.1a9 9 0 0 0 0-12.2" />
   </svg>
 );
 
-const FileIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
-    <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+const SystemIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 3h18v14H3z" />
+    <path d="M8 21h8" />
+    <path d="M12 17v4" />
   </svg>
 );
 
-const UserIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-    <circle cx="12" cy="7" r="4" />
+const EmptyChatIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
   </svg>
 );
 
-const BotIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M12 8V4H8" />
-    <rect width="16" height="12" x="4" y="8" rx="2" />
-    <path d="M2 14h2" />
-    <path d="M20 14h2" />
-    <path d="M15 13v2" />
-    <path d="M9 13v2" />
-  </svg>
-);
-
-export const WorkerDetail: Component = () => {
-  const { getSession, getSessionMessages, deleteSession } = useOpenCode();
+export const ChatView: Component = () => {
+  const { getSession, getSessionMessages, getMessageParts, deleteSession, fetchMessages, sendMessage } =
+    useOpenCode();
   const { selectedWorkerId, selectWorker } = useLayout();
+
+  const [message, setMessage] = createSignal("");
+  const [isLoading, setIsLoading] = createSignal(false);
+  let inputRef: HTMLTextAreaElement | undefined;
 
   const session = createMemo(() => {
     const id = selectedWorkerId();
@@ -77,246 +67,190 @@ export const WorkerDetail: Component = () => {
 
   const messages = createMemo(() => {
     const id = selectedWorkerId();
-    const msgs = id ? getSessionMessages(id) : [];
-    console.log(`🔍 [worker-detail] messages memo for ${id}:`, { 
-      count: msgs.length, 
-      messages: msgs.map(m => ({ id: m.id, role: m.role }))
-    });
-    return msgs;
+    return id ? getSessionMessages(id) : [];
   });
 
   // Fetch messages when session changes
   createEffect(async () => {
     const id = selectedWorkerId();
-    if (id) {
-      console.log(`🔍 [worker-detail] Session selected, fetching messages for: ${id}`);
-      try {
-        const { fetchMessages } = useOpenCode();
-        await fetchMessages(id);
-        console.log(`🔍 [worker-detail] Messages fetched for: ${id}`);
-      } catch (err) {
-        console.error(`🔍 [worker-detail] Failed to fetch messages:`, err);
-      }
-    }
+    if (id) await fetchMessages(id);
   });
 
-  const handleDelete = async () => {
-    const s = session();
-    if (!s) return;
-    console.log(`🔍 [worker-detail] Deleting session: ${s.id}`);
-    if (!confirm(`Delete session "${s.title}"?`)) return;
-    const success = await deleteSession(s.id);
-    console.log(`🔍 [worker-detail] Delete result:`, success);
-    if (success) {
-      selectWorker(null);
+  const getMessageText = (parts: Part[]): string => {
+    const textParts = parts.filter(
+      (p) => p.type === "text" || p.type === "reasoning"
+    ) as Array<{ type: "text" | "reasoning"; text: string }>;
+    return textParts
+      .map((p) => p.text.trim())
+      .filter(Boolean)
+      .join("\n");
+  };
+
+  const getMessageContent = (msg: Message): string => {
+    const parts = getMessageParts(msg.id);
+    const text = getMessageText(parts);
+    return text || `[${msg.role} message]`;
+  };
+
+  const handleSubmit = async () => {
+    const text = message().trim();
+    const id = selectedWorkerId();
+    if (!text || !id || isLoading()) return;
+
+    setIsLoading(true);
+    try {
+      await sendMessage(id, text, []);
+      setMessage("");
+      if (inputRef) inputRef.style.height = "auto";
+    } catch (err) {
+      console.error("Failed to send:", err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  return (
-    <Show when={session()} fallback={<EmptyState />}>
-      {(s) => (
-        <div class="flex flex-col h-full bg-background">
-          {/* Header */}
-          <div class="flex items-center justify-between p-4 border-b border-border">
-            <div class="flex items-center gap-3 min-w-0">
-              <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
-                <MessageIcon />
-              </div>
-              <div class="min-w-0">
-                <h2 class="font-semibold text-foreground truncate">{s().title || "Untitled"}</h2>
-                <p class="text-xs text-muted-foreground">{formatRelativeTime(s().time.updated)}</p>
-              </div>
-            </div>
-            <div class="flex items-center gap-2 flex-shrink-0">
-              <Show when={s().share}>
-                <Badge variant="secondary" class="text-[10px]">Shared</Badge>
-              </Show>
-              <Button variant="ghost" size="icon" onClick={() => selectWorker(null)}>
-                <XIcon />
-              </Button>
-            </div>
-          </div>
-
-          <ScrollArea class="flex-1">
-            <div class="p-4 space-y-4">
-              {/* Session info */}
-              <Card>
-                <CardHeader class="pb-2">
-                  <CardTitle class="text-sm">Session Info</CardTitle>
-                </CardHeader>
-                <CardContent class="space-y-2">
-                  <InfoRow label="ID" value={s().id} mono />
-                  <InfoRow label="Version" value={s().version} />
-                  <InfoRow label="Created" value={new Date(s().time.created).toLocaleString()} />
-                  <Show when={s().parentID}>
-                    <InfoRow label="Parent" value={s().parentID!} mono />
-                  </Show>
-                </CardContent>
-              </Card>
-
-              {/* Changes summary */}
-              <Show when={s().summary}>
-                <Card>
-                  <CardHeader class="pb-2">
-                    <CardTitle class="text-sm flex items-center gap-2">
-                      <FileIcon />
-                      Changes
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div class="flex items-center gap-4">
-                      <div class="flex items-center gap-1.5">
-                        <span class="text-sm text-muted-foreground">Files:</span>
-                        <Badge variant="secondary">{s().summary!.files}</Badge>
-                      </div>
-                      <div class="flex items-center gap-1.5">
-                        <span class="text-sm text-green-500">+{s().summary!.additions}</span>
-                        <span class="text-sm text-red-500">-{s().summary!.deletions}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Show>
-
-              {/* Messages */}
-              <Card>
-                <CardHeader class="pb-2">
-                  <CardTitle class="text-sm flex items-center gap-2">
-                    <MessageIcon />
-                    Messages ({messages().length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Show
-                    when={messages().length > 0}
-                    fallback={
-                      <p class="text-sm text-muted-foreground">No messages in this session</p>
-                    }
-                  >
-                    <div class="space-y-3">
-                      <For each={messages().slice(0, 10)}>
-                        {(msg) => (
-                          <div
-                            class={cn(
-                              "flex gap-3 p-3 rounded-lg",
-                              msg.role === "user" ? "bg-muted" : "bg-primary/5"
-                            )}
-                          >
-                            <div class={cn(
-                              "w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0",
-                              msg.role === "user" ? "bg-muted-foreground/20" : "bg-primary/20"
-                            )}>
-                              {msg.role === "user" ? <UserIcon /> : <BotIcon />}
-                            </div>
-                            <div class="flex-1 min-w-0">
-                              <div class="flex items-center gap-2 mb-1">
-                                <span class="text-xs font-medium text-foreground capitalize">
-                                  {msg.role}
-                                </span>
-                                <span class="text-xs text-muted-foreground">
-                                  {formatRelativeTime(msg.time.created)}
-                                </span>
-                              </div>
-                              <p class="text-sm text-muted-foreground line-clamp-3">
-                                {getMessagePreview(msg)}
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </For>
-                      <Show when={messages().length > 10}>
-                        <p class="text-xs text-muted-foreground text-center">
-                          + {messages().length - 10} more messages
-                        </p>
-                      </Show>
-                    </div>
-                  </Show>
-                </CardContent>
-              </Card>
-            </div>
-          </ScrollArea>
-
-          {/* Actions */}
-          <div class="p-4 border-t border-border">
-            <div class="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                class="flex-1 gap-1.5"
-                onClick={() => {
-                  // TODO: Share session
-                }}
-              >
-                <ShareIcon />
-                Share
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                class="gap-1.5"
-                onClick={handleDelete}
-              >
-                <TrashIcon />
-                Delete
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </Show>
-  );
-};
-
-// Get a preview of message content
-function getMessagePreview(msg: Message): string {
-  if (msg.role === "user") {
-    // User messages might have summary with title
-    const userMsg = msg as { summary?: { title?: string } };
-    if (userMsg.summary?.title) {
-      return userMsg.summary.title;
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
     }
-  }
-  // For assistant messages or fallback
-  return `Message from ${msg.role}`;
-}
+  };
 
-// Empty state when no session is selected
-const EmptyState: Component = () => {
+  const handleInput = (e: Event) => {
+    const ta = e.target as HTMLTextAreaElement;
+    setMessage(ta.value);
+    ta.style.height = "auto";
+    ta.style.height = `${Math.min(ta.scrollHeight, 150)}px`;
+  };
+
+  const handleDelete = async () => {
+    const s = session();
+    if (!s || !confirm(`Delete this session?`)) return;
+    await deleteSession(s.id);
+    selectWorker(null);
+  };
+
   return (
-    <div class="flex flex-col items-center justify-center h-full p-8 text-center">
-      <div class="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        </svg>
-      </div>
-      <h3 class="font-medium text-foreground mb-1">No Session Selected</h3>
-      <p class="text-sm text-muted-foreground max-w-[200px]">
-        Select a session from the sidebar to view its details
-      </p>
-    </div>
-  );
-};
+    <div class="flex flex-col h-full">
+      <Show when={session()} fallback={<EmptyState />}>
+        {(s) => (
+          <>
+            {/* Header */}
+            <div class="flex items-center justify-between px-4 py-2 border-b border-border">
+              <div class="flex items-center gap-3 min-w-0">
+                <span class="text-sm font-medium truncate">
+                  {s().title || "New Chat"}
+                </span>
+              </div>
+              <button class="btn btn-ghost btn-sm text-muted-foreground" onClick={handleDelete}>
+                Delete
+              </button>
+            </div>
 
-// Info row helper
-interface InfoRowProps {
-  label: string;
-  value: string;
-  mono?: boolean;
-}
+            {/* Messages area */}
+            <div class="flex-1 overflow-auto scrollbar-thin">
+              <Show
+                when={messages().length > 0}
+                fallback={
+                  <div class="flex flex-col items-center justify-center h-full text-center">
+                    <div class="text-muted-foreground mb-3">
+                      <EmptyChatIcon />
+                    </div>
+                    <p class="text-lg text-foreground mb-1">Start a conversation</p>
+                    <p class="text-sm text-muted-foreground">Send a message to begin chatting.</p>
+                  </div>
+                }
+              >
+                <div class="max-w-3xl mx-auto">
+                  <For each={messages()}>
+                    {(msg) => (
+                      <div class={`message ${msg.role === "user" ? "message-user" : "message-assistant"}`}>
+                        <div class="flex items-center gap-2 mb-1">
+                          <span class="text-xs font-medium text-muted-foreground uppercase">
+                            {msg.role}
+                          </span>
+                        </div>
+                        <div class="text-sm whitespace-pre-wrap">
+                          {getMessageContent(msg)}
+                        </div>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </div>
 
-const InfoRow: Component<InfoRowProps> = (props) => {
-  return (
-    <div class="flex items-start justify-between gap-4">
-      <span class="text-sm text-muted-foreground">{props.label}</span>
-      <span
-        class={cn(
-          "text-sm text-foreground text-right truncate max-w-[60%]",
-          props.mono && "font-mono text-xs"
+            {/* Input area - centered at bottom */}
+            <div class="border-t border-border p-4">
+              <div class="max-w-3xl mx-auto">
+                <div class="composer">
+                  <button class="composer-icon" title="Attach">
+                    <AttachmentIcon />
+                  </button>
+                  <button class="composer-icon" title="Tools">
+                    <ToolIcon />
+                  </button>
+                  <button class="composer-icon" title="Preview">
+                    <PreviewIcon />
+                  </button>
+                  <button class="composer-icon" title="MCP">
+                    <NetworkIcon />
+                  </button>
+                  <button class="composer-icon" title="System">
+                    <SystemIcon />
+                  </button>
+                  <textarea
+                    ref={inputRef}
+                    value={message()}
+                    onInput={handleInput}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Message..."
+                    disabled={isLoading()}
+                    rows={1}
+                    class="flex-1 bg-transparent text-sm resize-none outline-none min-h-[24px] max-h-[150px] py-1 px-2"
+                  />
+                  <button
+                    class="btn btn-sm"
+                    onClick={handleSubmit}
+                    disabled={!message().trim() || isLoading()}
+                  >
+                    {isLoading() ? "..." : "Send"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
         )}
-        title={props.value}
-      >
-        {props.value}
-      </span>
+      </Show>
     </div>
   );
 };
+
+const EmptyState: Component = () => {
+  const { createSession } = useOpenCode();
+  const { selectWorker } = useLayout();
+
+  const handleNew = async () => {
+    const session = await createSession();
+    if (session) selectWorker(session.id);
+  };
+
+  return (
+    <div class="flex flex-col items-center justify-center h-full text-center p-8">
+      <div class="text-muted-foreground mb-3">
+        <EmptyChatIcon />
+      </div>
+      <p class="text-lg text-foreground mb-1">Start a conversation</p>
+      <p class="text-sm text-muted-foreground mb-4">
+        Select a session or create a new one.
+      </p>
+      <button class="btn" onClick={handleNew}>
+        New Chat
+      </button>
+    </div>
+  );
+};
+
+// Aliases for backward compatibility
+export { ChatView as SessionDetail };
+export { ChatView as WorkerDetail };

@@ -12,6 +12,7 @@ import {
 } from "solid-js";
 import { useLayout } from "@/context/layout";
 import { useOpenCode } from "@/context/opencode";
+import { useSkills } from "@/context/skills";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn, formatShortcut } from "@/lib/utils";
@@ -78,13 +79,15 @@ interface Command {
   description?: string;
   icon: Component;
   shortcut?: string;
-  category: "worker" | "view" | "settings";
+  category: "worker" | "skills" | "view" | "settings";
   action: () => void;
 }
 
 export const CommandPalette: Component = () => {
-  const { state, closeCommandPalette, toggleSidebar, toggleJobQueue, toggleLogs, selectWorker } = useLayout();
-  const { sessions, refreshSessions } = useOpenCode();
+  const { state, closeCommandPalette, toggleSidebar, toggleJobQueue, toggleLogs, selectWorker, setActivePanel } =
+    useLayout();
+  const { sessions, refresh } = useOpenCode();
+  const { refresh: refreshSkills, openCreateDialog } = useSkills();
 
   const [query, setQuery] = createSignal("");
   const [selectedIndex, setSelectedIndex] = createSignal(0);
@@ -112,7 +115,41 @@ export const CommandPalette: Component = () => {
         icon: RefreshIcon,
         category: "worker",
         action: async () => {
-          await refreshSessions();
+          await refresh();
+          closeCommandPalette();
+        },
+      },
+      {
+        id: "open-skills",
+        title: "Open Recipes",
+        description: "Switch to recipes management",
+        icon: ListIcon,
+        category: "skills",
+        action: () => {
+          setActivePanel("skills");
+          closeCommandPalette();
+        },
+      },
+      {
+        id: "refresh-skills",
+        title: "Refresh Recipes",
+        description: "Reload recipes from the API",
+        icon: RefreshIcon,
+        category: "skills",
+        action: async () => {
+          await refreshSkills();
+          closeCommandPalette();
+        },
+      },
+      {
+        id: "create-skill",
+        title: "Create Recipe",
+        description: "Start a new recipe profile",
+        icon: PlusIcon,
+        category: "skills",
+        action: () => {
+          setActivePanel("skills");
+          openCreateDialog();
           closeCommandPalette();
         },
       },
@@ -131,7 +168,7 @@ export const CommandPalette: Component = () => {
       },
       {
         id: "toggle-jobs",
-        title: "Toggle Job Queue",
+        title: "Toggle Activity",
         icon: ListIcon,
         category: "view",
         action: () => {
@@ -157,8 +194,8 @@ export const CommandPalette: Component = () => {
         icon: SettingsIcon,
         category: "settings",
         action: () => {
+          setActivePanel("settings");
           closeCommandPalette();
-          // TODO: Open settings
         },
       },
     ];
@@ -199,6 +236,7 @@ export const CommandPalette: Component = () => {
   const groupedCommands = createMemo(() => {
     const groups: Record<string, Command[]> = {
       worker: [],
+      skills: [],
       view: [],
       settings: [],
     };
@@ -285,6 +323,36 @@ export const CommandPalette: Component = () => {
                   </p>
                   <For each={groupedCommands().worker}>
                     {(cmd, _) => {
+                      const globalIndex = () => {
+                        let i = 0;
+                        for (const c of filteredCommands()) {
+                          if (c.id === cmd.id) return i;
+                          i++;
+                        }
+                        return -1;
+                      };
+
+                      return (
+                        <CommandItem
+                          command={cmd}
+                          isSelected={selectedIndex() === globalIndex()}
+                          onSelect={cmd.action}
+                          onHover={() => setSelectedIndex(globalIndex())}
+                        />
+                      );
+                    }}
+                  </For>
+                </div>
+              </Show>
+
+              {/* View section */}
+              <Show when={groupedCommands().skills.length > 0}>
+                <div class="mb-2">
+                  <p class="px-2 py-1 text-xs text-muted-foreground uppercase tracking-wider">
+                    Recipes
+                  </p>
+                  <For each={groupedCommands().skills}>
+                    {(cmd) => {
                       const globalIndex = () => {
                         let i = 0;
                         for (const c of filteredCommands()) {

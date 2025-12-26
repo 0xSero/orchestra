@@ -30,6 +30,30 @@ import {
 
 export type { Session, Message, Part, Agent };
 
+export type OpenCodeEventItem = {
+  id: string;
+  type: string;
+  payload: any;
+  at: number;
+};
+
+export type WorkerStatus = "starting" | "ready" | "busy" | "error" | "stopped";
+
+export type WorkerRuntime = {
+  id: string;
+  name: string;
+  status: WorkerStatus;
+  sessionId?: string;
+  model?: string;
+  port?: number;
+  serverUrl?: string;
+  supportsVision?: boolean;
+  supportsWeb?: boolean;
+  lastActivity?: string;
+  error?: string;
+  warning?: string;
+};
+
 // =============================================================================
 // State Types
 // =============================================================================
@@ -41,6 +65,8 @@ export interface OpenCodeState {
   messages: Record<string, Message[]>; // sessionId -> messages
   parts: Record<string, Part[]>; // messageId -> parts
   agents: Agent[];
+  events: OpenCodeEventItem[];
+  workers: Record<string, WorkerRuntime>;
   lastUpdate: number;
 }
 
@@ -52,10 +78,14 @@ export interface OpenCodeContextValue {
   // Data accessors
   sessions: Accessor<Session[]>;
   agents: Accessor<Agent[]>;
+  events: Accessor<OpenCodeEventItem[]>;
+  workers: Accessor<WorkerRuntime[]>;
+  activeWorkerSessionIds: Accessor<Set<string>>;
 
   // Session helpers
   getSession: (id: string) => Session | undefined;
   getSessionMessages: (id: string) => Message[];
+  getMessageParts: (messageId: string) => Part[];
 
   // Actions
   refresh: () => Promise<void>;
@@ -63,7 +93,18 @@ export interface OpenCodeContextValue {
   fetchMessages: (id: string) => Promise<void>;
   createSession: () => Promise<Session | null>;
   deleteSession: (id: string) => Promise<boolean>;
-  sendMessage: (sessionId: string, content: string) => Promise<void>;
+  sendMessage: (
+    sessionId: string,
+    content: string,
+    attachments?: Array<{
+      id?: string;
+      type: "file" | "image";
+      name?: string;
+      size?: number;
+      url?: string;
+      file?: File;
+    }>
+  ) => Promise<void>;
   abortSession: (id: string) => Promise<boolean>;
 
   // Direct client access for advanced use
@@ -89,6 +130,8 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     messages: {},
     parts: {},
     agents: [],
+    events: [],
+    workers: {},
     lastUpdate: 0,
   });
 
@@ -166,7 +209,10 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
         setState(
           produce((s) => {
             s.messages[sessionId] = data.messages ?? [];
-            // Index parts by messageId
+            const messageIds = new Set((data.messages ?? []).map((m) => m.id));
+            for (const id of messageIds) {
+              delete s.parts[id];
+            }
             for (const part of data.parts ?? []) {
               if (!s.parts[part.messageID]) {
                 s.parts[part.messageID] = [];
@@ -213,6 +259,108 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     });
   });
 
+  const pushEvent = (payload: any) => {
+    const item: OpenCodeEventItem = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      type: payload?.type ?? "event",
+      payload,
+      at: Date.now(),
+    };
+    setState(
+      produce((s) => {
+        s.events = [item, ...s.events].slice(0, 200);
+      })
+    );
+  };
+
+  const upsertSession = (session?: Session) => {
+    if (!session?.id) return;
+    setState(
+      produce((s) => {
+        s.sessions[session.id] = session;
+        s.lastUpdate = Date.now();
+      })
+    );
+  };
+
+  const removeSession = (sessionId: string) => {
+    setState(
+      produce((s) => {
+        delete s.sessions[sessionId];
+        delete s.messages[sessionId];
+        s.lastUpdate = Date.now();
+      })
+    );
+  };
+
+  const upsertWorker = (raw: any) => {
+    const profile = raw?.profile ?? {};
+    const id = profile.id ?? raw?.id;
+    if (!id) return;
+    const next: WorkerRuntime = {
+      id,
+      name: profile.name ?? raw?.name ?? id,
+      status: raw?.status ?? "starting",
+      sessionId: raw?.sessionId,
+      model: profile.model ?? raw?.model,
+      port: raw?.port,
+      serverUrl: raw?.serverUrl,
+      supportsVision: profile.supportsVision,
+      supportsWeb: profile.supportsWeb,
+      lastActivity: raw?.lastActivity,
+      error: raw?.error,
+      warning: raw?.warning,
+    };
+    setState(
+      produce((s) => {
+        s.workers[id] = next;
+      })
+    );
+  };
+
+  const handleOrchestraEvent = (payload: any) => {
+    if (!payload || payload.type !== "orchestra.event") return;
+    const inner = payload.payload ?? payload.properties?.payload ?? payload.properties;
+    if (!inner || !inner.type) return;
+    if (inner.type.startsWith("orchestra.worker.")) {
+      const worker = inner.data?.worker ?? inner.worker;
+      if (worker) upsertWorker(worker);
+    }
+  };
+
+  createEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+
+    const run = async () => {
+      try {
+        const result = await client.event.subscribe({ signal: controller.signal } as any);
+        for await (const event of result.stream) {
+          if (!active) break;
+          pushEvent(event);
+
+          if (event?.type === "session.created" || event?.type === "session.updated") {
+            upsertSession(event?.properties?.info);
+          }
+          if (event?.type === "session.deleted") {
+            const info = event?.properties?.info;
+            if (info?.id) removeSession(info.id);
+          }
+          handleOrchestraEvent(event);
+        }
+      } catch (err) {
+        if (active) console.error("[opencode] Event stream error:", err);
+      }
+    };
+
+    run();
+
+    onCleanup(() => {
+      active = false;
+      controller.abort();
+    });
+  });
+
   // ---------------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------------
@@ -253,15 +401,63 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     }
   };
 
-const sendMessage = async (sessionId: string, content: string): Promise<void> => {
+  const fileToDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ""));
+      reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
+      reader.readAsDataURL(file);
+    });
+
+  const buildAttachmentParts = async (
+    attachments?: Array<{
+      type: "file" | "image";
+      name?: string;
+      url?: string;
+      file?: File;
+    }>
+  ) => {
+    if (!attachments || attachments.length === 0) return [];
+    const parts = [];
+    for (const attachment of attachments) {
+      if (!attachment.file) continue;
+      const url = await fileToDataUrl(attachment.file);
+      parts.push({
+        type: "file",
+        mime: attachment.file.type || "application/octet-stream",
+        filename: attachment.name ?? attachment.file.name,
+        url,
+      });
+    }
+    return parts;
+  };
+
+  const sendMessage = async (
+    sessionId: string,
+    content: string,
+    attachments?: Array<{
+      id?: string;
+      type: "file" | "image";
+      name?: string;
+      size?: number;
+      url?: string;
+      file?: File;
+    }>
+  ): Promise<void> => {
     console.log(`🔍 [sendMessage] Sending to session ${sessionId}:`, { contentLength: content.length, preview: content.slice(0, 50) });
     try {
-      // Use correct SDK format for prompt
+      const attachmentParts = await buildAttachmentParts(attachments);
+      const parts = [];
+      if (content.trim()) {
+        parts.push({ type: "text", text: content });
+      }
+      parts.push(...attachmentParts);
+
       await client.session.prompt({
         path: { id: sessionId },
         body: {
           model: { providerID: "auto", modelID: "auto" },
-          parts: [{ type: "text", text: content }],
+          parts,
         },
       });
       console.log(`🔍 [sendMessage] Message sent successfully to ${sessionId}, fetching messages...`);
@@ -301,9 +497,18 @@ const sendMessage = async (sessionId: string, content: string): Promise<void> =>
       ),
 
     agents: () => state.agents,
+    events: () => state.events,
+    workers: () => Object.values(state.workers),
+    activeWorkerSessionIds: () =>
+      new Set(
+        Object.values(state.workers)
+          .filter((w) => w.sessionId && (w.status === "ready" || w.status === "busy"))
+          .map((w) => w.sessionId as string)
+      ),
 
     getSession: (id) => state.sessions[id],
     getSessionMessages: (id) => state.messages[id] ?? [],
+    getMessageParts: (id) => state.parts[id] ?? [],
 
     refresh: fetchAll,
     refreshSessions: fetchAll, // alias for refresh

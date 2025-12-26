@@ -1,104 +1,529 @@
-# OpenCode-Aligned Refactor Scope
+# Refactor Scope
+
+OpenCode-aligned refactoring scope with goals, patterns, and implementation details.
 
 ## Goals
 
-- Standardize factories (`createX`) across core, API, communication, workers, memory, workflows, tools, orchestrator.
-- Replace custom transport/streaming with OpenCode SDK events.
-- Unify worker lifecycle, job lifecycle, and model selection into one worker manager.
-- Delete duplicated or obsolete components as soon as replacements are wired.
-- Reduce total code size by ~40% without breaking behavior.
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                      Refactoring Goals                               │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  1. Standardize Factories                                            │
+│     └── All services use Factory<TConfig, TDeps, TService>          │
+│                                                                      │
+│  2. SDK-First Transport                                              │
+│     └── Replace custom streaming with OpenCode SDK events           │
+│                                                                      │
+│  3. Unified Worker Management                                        │
+│     └── Single WorkerManager owns spawn/send/stop/jobs              │
+│                                                                      │
+│  4. Clean Deletions                                                  │
+│     └── Remove duplicated/obsolete code immediately                 │
+│                                                                      │
+│  5. Code Reduction                                                   │
+│     └── Target ~40% reduction without breaking behavior             │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
 
 ## Non-Negotiables
 
-- No module-level globals for runtime config.
-- All IO goes through `src/api/` or `src/communication/`.
-- Prefer OpenCode SDK + server endpoints before custom servers.
-- Real-data tests only (no mocking).
-- Enforce file size limits (split early and often).
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Architectural Rules                               │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ✗ No module-level globals for runtime config                       │
+│                                                                      │
+│  ✗ No direct IO outside designated modules:                         │
+│      - src/api/          → SDK calls                                │
+│      - src/communication/→ Event subscriptions                      │
+│      - src/memory/       → Storage operations                       │
+│      - src/workers/spawn → Process management                       │
+│                                                                      │
+│  ✗ No custom servers (prefer SDK + endpoints)                       │
+│                                                                      │
+│  ✗ No mocked tests (real-data only)                                 │
+│                                                                      │
+│  ✗ No files exceeding size limits (split early)                     │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
-## Target Topology (under `src/`)
+---
 
-- `orchestrator/`  - orchestration and session routing
-- `memory/`        - memory store, inject, trim
-- `workflows/`     - workflow engine + built-ins
-- `workers/`       - worker lifecycle + profiles
-- `tools/`         - OpenCode tool adapters + hooks
-- `communication/` - SDK event subscribe + adapters
-- `api/`           - OpenCode SDK client wrapper
-- `core/`          - dependency container + lifecycle
-- `docs/`          - runbooks and architecture notes (root docs)
+## Target Topology
 
-## Standard Factory Shape
+### Directory Structure
 
 ```
+orchestra/src/
+├── index.ts                   # Plugin entry (thin)
+├── api/                       # SDK wrapper
+│   └── index.ts
+├── communication/             # Event system
+│   ├── index.ts
+│   └── events.ts
+├── config/                    # Configuration
+│   ├── orchestrator.ts
+│   ├── orchestrator/
+│   │   ├── defaults.ts
+│   │   ├── parse.ts
+│   │   ├── parse-extra.ts
+│   │   └── paths.ts
+│   ├── opencode.ts
+│   ├── profiles.ts
+│   └── profile-inheritance.ts
+├── core/                      # Container + lifecycle
+│   ├── index.ts
+│   ├── container.ts
+│   ├── spawn-policy.ts
+│   └── jobs.ts
+├── helpers/                   # Utilities
+├── integrations/              # External services
+├── memory/                    # Memory store
+│   ├── index.ts
+│   ├── store.ts
+│   ├── store-file.ts
+│   ├── neo4j.ts
+│   ├── graph.ts
+│   ├── inject.ts
+│   ├── auto.ts
+│   └── text.ts
+├── models/                    # Model selection
+├── orchestrator/              # Routing + coordination
+│   ├── index.ts
+│   └── router.ts
+├── permissions/               # Tool permissions
+├── profiles/                  # Profile discovery
+├── tools/                     # OpenCode tools
+│   ├── index.ts
+│   ├── worker-tools.ts
+│   ├── workflow-tools.ts
+│   └── hooks.ts
+├── types/                     # TypeScript types
+├── ux/                        # UX helpers
+├── workers/                   # Worker management
+│   ├── index.ts
+│   ├── manager.ts
+│   ├── registry.ts
+│   ├── spawn.ts
+│   ├── send.ts
+│   ├── jobs.ts
+│   ├── prompt.ts
+│   ├── attachments.ts
+│   └── profiles/
+└── workflows/                 # Workflow engine
+    ├── index.ts
+    ├── factory.ts
+    ├── engine.ts
+    ├── roocode-boomerang.ts
+    ├── builtins.ts
+    └── types.ts
+```
+
+---
+
+## Standard Factory Pattern
+
+### Factory Shape
+
+```typescript
+/**
+ * Factory function signature for all services
+ */
 export type Factory<TConfig, TDeps, TService> = (input: {
   config: TConfig;
   deps: TDeps;
 }) => TService;
+
+/**
+ * Required lifecycle interface for all services
+ */
+export interface ServiceLifecycle {
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  health(): Promise<{ ok: boolean; info?: any }>;
+}
 ```
 
-All services must expose:
-- `start(): Promise<void>`
-- `stop(): Promise<void>`
-- `health(): Promise<{ ok: boolean; info?: any }>`
+### Implementation Pattern
 
-## Known Distractions Removed
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                   Factory Implementation                             │
+└─────────────────────────────────────────────────────────────────────┘
 
-- Custom bridge server + worker streaming plugin
-- Custom supervisor HTTP server
-- Legacy worker-pool/spawner/client stack
+    // Example: createApiService
+    export const createApiService: Factory<ApiConfig, {}, ApiService> = ({
+      config,
+      deps,
+    }) => {
+      // Private state
+      let client: ReturnType<typeof createOpencodeClient>;
 
-## Phased Scope (repo-specific)
+      // Service methods
+      const session = { ... };
+      const event = { ... };
+      const tui = { ... };
 
-### Phase 0: Inventory and Guardrails
+      // Lifecycle
+      const start = async () => { ... };
+      const stop = async () => { ... };
+      const health = async () => ({ ok: true });
 
-- Map `src/` modules to target topology.
-- Identify oversized files and split plan.
-- Define deletion list and ordering.
-- Validate OpenCode server connectivity (real data).
+      return {
+        session,
+        event,
+        tui,
+        start,
+        stop,
+        health,
+      };
+    };
+```
 
-### Phase 1: API Layer Standardization
+---
 
-- Add `src/api/` wrapper for `createOpencodeClient` and `createOpencode`.
-- Replace direct SDK usage in `src/workers/*`, `src/core/*`.
+## Service Contracts
 
-### Phase 2: Communication and Events
+### ApiService
 
-- `src/communication/` wraps `client.event.subscribe()`.
-- Custom bridge server + worker streaming plugin removed.
+```typescript
+interface ApiService extends ServiceLifecycle {
+  session: {
+    create(opts: { model: string; system?: string }): Promise<{ id: string }>;
+    prompt(id: string, body: PromptBody, opts?: PromptOpts): Promise<Response>;
+    cancel(id: string): Promise<void>;
+  };
+  event: {
+    subscribe(opts?: SubscribeOpts): AsyncIterable<Event>;
+  };
+  tui: {
+    publish(type: string, message: string): Promise<void>;
+  };
+  project: {
+    current(): Promise<{ id: string } | undefined>;
+  };
+  health(): Promise<{ ok: boolean }>;
+}
+```
 
-### Phase 3: Worker Manager (single factory)
+### WorkerManager
 
-- `createWorkerManager()` owns spawn/send/stop/health/job.
-- Old worker-pool/client/spawner removed.
+```typescript
+interface WorkerManager extends ServiceLifecycle {
+  spawnById(id: string): Promise<WorkerInstance>;
+  stopWorker(id: string): Promise<void>;
+  getWorker(id: string): WorkerInstance | undefined;
+  listWorkers(): WorkerInstance[];
+  send(id: string, message: string, opts?: SendOpts): Promise<SendResult>;
+  jobs: JobQueue;
+}
+```
 
-### Phase 4: Memory Isolation
+### OrchestratorService
 
-- Move memory injection/record/search/trim into `src/memory/*` factories.
-- Ensure injection uses `client.session.prompt({ noReply: true })`.
+```typescript
+interface OrchestratorService extends ServiceLifecycle {
+  ensureWorker(input: {
+    workerId: string;
+    reason: "manual" | "on-demand";
+  }): Promise<WorkerInstance>;
 
-### Phase 5: Workflow Engine
+  delegateTask(input: {
+    task: string;
+    attachments?: WorkerAttachment[];
+    autoSpawn?: boolean;
+  }): Promise<{ workerId: string; response: string }>;
 
-- Keep workflows pure; only call worker manager + tools.
-- Remove direct SDK calls from workflows.
+  runWorkflow(input: {
+    workflowId: string;
+    task: string;
+    attachments?: WorkerAttachment[];
+    autoSpawn?: boolean;
+  }): Promise<any>;
+}
+```
 
-### Phase 6: Tools and Plugin Wiring
+---
 
-- Move tools into small files under `src/tools/`.
-- Implement `tool.execute.before` and compaction hook.
-- Tools call API/Workers/Memory only.
+## Phased Refactoring
 
-### Phase 7: Orchestrator + Core Assembly
+### Phase 0: Inventory & Guardrails (DONE)
 
-- `createCore()` wires all factories and lifecycle.
-- Orchestrator is coordination only; no IO.
+```
+☑ Map src/ modules to target topology
+☑ Identify oversized files and split plan
+☑ Define deletion list and ordering
+☑ Validate OpenCode server connectivity
+```
 
-### Phase 8: Docs + Runbooks
+### Phase 1: API Layer (DONE)
 
-- Split oversized docs to meet limits.
-- Add runbooks for real-data testing and server ops.
+```
+☑ Create src/api/ wrapper
+☑ Centralize createOpencodeClient usage
+☑ Replace direct SDK calls in workers/core
+```
 
-## Remaining Cleanup
+### Phase 2: Communication (DONE)
 
-- Split oversized docs to meet limits.
-- Finish frontend wiring to OpenCode SDK (remove supervisor client/proxy).
+```
+☑ Create src/communication/ service
+☑ Wrap client.event.subscribe()
+☑ Remove custom bridge server
+☑ Remove worker streaming plugin
+```
+
+### Phase 3: Worker Manager (DONE)
+
+```
+☑ Create unified createWorkerManager()
+☑ Consolidate spawn/send/stop/health/jobs
+☑ Remove old worker-pool/client/spawner
+```
+
+### Phase 4: Memory Isolation (DONE)
+
+```
+☑ Move injection/record/search to factories
+☑ Use client.session.prompt({ noReply: true })
+☑ Support file and Neo4j backends
+```
+
+### Phase 5: Workflow Engine (DONE)
+
+```
+☑ Keep workflows pure (no direct IO)
+☑ Call worker manager + tools only
+☑ Remove direct SDK calls
+```
+
+### Phase 6: Tools & Wiring (DONE)
+
+```
+☑ Split tools into small files
+☑ Implement tool.execute.before hook
+☑ Implement compaction hook
+☑ Tools call API/Workers/Memory only
+```
+
+### Phase 7: Orchestrator & Core (DONE)
+
+```
+☑ createCore() wires all factories
+☑ Orchestrator handles coordination only
+☑ No IO in orchestrator module
+```
+
+### Phase 8: Documentation (IN PROGRESS)
+
+```
+☑ Update architecture.md
+☑ Update configuration.md
+☑ Update inventory.md
+☑ Update migration-map.md
+☑ Update refactor-scope.md
+☐ Add runbooks (testing, ops, troubleshooting)
+```
+
+---
+
+## Removed Components
+
+### Custom Transport (Deleted)
+
+```
+src/worker-bridge-plugin.mjs  → DELETED
+src/core/bridge-server.ts     → DELETED
+src/core/stream-events.ts     → DELETED
+```
+
+### Custom Supervisor (Deleted)
+
+```
+src/supervisor/server.ts      → DELETED
+```
+
+### Legacy Worker Stack (Deleted)
+
+```
+src/core/worker-pool.ts       → DELETED
+src/workers/client.ts         → DELETED
+```
+
+---
+
+## Data Flow Patterns
+
+### Tool Execution Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     Tool Execution Flow                              │
+└─────────────────────────────────────────────────────────────────────┘
+
+    OpenCode CLI                    Orchestra Plugin
+         │                               │
+         │  tool.execute.before          │
+         ▼                               ▼
+    ┌─────────┐                   ┌─────────────┐
+    │  Tool   │────intercept────▶│ ToolsService│
+    │  Call   │                   └──────┬──────┘
+    └─────────┘                          │
+                                         ▼
+                              ┌──────────────────┐
+                              │  Dispatch to:    │
+                              │  - WorkerManager │
+                              │  - Orchestrator  │
+                              │  - WorkflowEngine│
+                              └──────────────────┘
+```
+
+### Event Forwarding Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     Event Forwarding Flow                            │
+└─────────────────────────────────────────────────────────────────────┘
+
+    Worker Process              Communication           Frontend
+         │                           │                      │
+         │ status change             │                      │
+         ▼                           ▼                      │
+    ┌──────────┐              ┌─────────────┐              │
+    │  Emit    │──────────────▶│  EventBus   │              │
+    │  Event   │              │  (internal) │              │
+    └──────────┘              └──────┬──────┘              │
+                                     │                      │
+                                     ▼                      │
+                              ┌─────────────┐              │
+                              │ api.tui     │              │
+                              │ .publish()  │──SSE────────▶│
+                              └─────────────┘              │
+                                                           ▼
+                                                    ┌─────────────┐
+                                                    │  UI Update  │
+                                                    └─────────────┘
+```
+
+---
+
+## File Size Guidelines
+
+| Type | Limit | Reason |
+|------|-------|--------|
+| Core runtime | ≤350 LOC | Performance-critical |
+| Feature module | ≤300 LOC | Maintainability |
+| Documentation | ≤250 LOC | Readability |
+| Type definitions | ≤200 LOC | Focus |
+| Worker profile | ≤100 LOC | Simplicity |
+
+### Split Triggers
+
+- File exceeds limit → Split by concern
+- Module has >3 responsibilities → Extract services
+- Test file >500 LOC → Split by feature
+
+---
+
+## Testing Strategy
+
+### Real-Data Testing Only
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     Testing Requirements                             │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ✓ Run against live `opencode serve`                                │
+│  ✓ Use real API endpoints                                           │
+│  ✓ Spawn actual worker processes                                    │
+│  ✓ Test full lifecycle (start → operate → stop)                     │
+│                                                                      │
+│  ✗ No mocked SDK responses                                          │
+│  ✗ No fake worker processes                                         │
+│  ✗ No simulated events                                              │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Test Categories
+
+| Category | Location | Purpose |
+|----------|----------|---------|
+| Unit | `test/unit/` | Pure function tests |
+| Integration | `test/integration/` | Service interaction |
+| E2E | `test/e2e*.test.ts` | Full system flows |
+
+---
+
+## Future Scope (v0.4+)
+
+### Skills-Based Configuration
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                  Skills-Based Workers (Future)                       │
+└─────────────────────────────────────────────────────────────────────┘
+
+    .opencode/
+    └── skills/
+        ├── coder/
+        │   └── SKILL.md         # Agent Skills Standard format
+        ├── reviewer/
+        │   └── SKILL.md
+        └── custom-worker/
+            └── SKILL.md
+
+    Discovery Flow:
+    ┌────────────┐    ┌──────────────┐    ┌───────────────┐
+    │  Scan for  │───▶│  Parse       │───▶│  Generate     │
+    │  SKILL.md  │    │  Frontmatter │    │  WorkerProfile│
+    └────────────┘    └──────────────┘    └───────────────┘
+```
+
+### Enhanced Memory
+
+```
+Future Memory Backends:
+├── File store (current)
+├── Neo4j (current)
+├── Vector store (planned)
+└── Semantic search (planned)
+```
+
+### Workflow Improvements
+
+```
+Future Workflow Features:
+├── Parallel step execution
+├── Conditional branching
+├── Error recovery strategies
+└── Workflow templates
+```
+
+---
+
+## Cleanup Checklist
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Final Cleanup Items                               │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ☑ All factories follow standard pattern                            │
+│  ☑ All services implement ServiceLifecycle                          │
+│  ☑ No direct SDK usage outside api/                                 │
+│  ☑ No custom servers remaining                                       │
+│  ☑ All deleted files removed                                         │
+│  ☑ Tests pass against live server                                    │
+│  ☐ Documentation reflects current state                              │
+│  ☐ Runbooks written for operations                                   │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```

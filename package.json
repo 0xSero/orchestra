@@ -1,57 +1,25 @@
 {
-  "name": "opencode-orchestrator",
+  "name": "opencode-boomerang",
   "version": "0.2.3",
-  "description": "Multi-agent orchestrator plugin for OpenCode - spawn, manage, and coordinate specialized AI workers",
-  "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
-  },
-  "files": [
-    "dist",
-    "src",
-    "schema",
-    "docs",
-    "README.md",
-    "HEADLESS_TESTING.md",
-    "scripts"
+  "private": true,
+  "description": "OpenCode Orchestrator monorepo - plugin and dashboard",
+  "workspaces": [
+    "orchestra",
+    "app"
   ],
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target node --external @opencode-ai/sdk --external @opencode-ai/plugin --external zod && tsc --emitDeclarationOnly --declaration --outDir dist",
-    "dev": "bun --watch src/index.ts",
-    "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "test:real": "bun test test/integration/linear-real.test.ts test/integration/neo4j-real.test.ts",
-    "bench": "bun test ./test/performance/*.bench.ts",
+    "build": "cd orchestra && bun run build",
+    "dev": "cd orchestra && bun run dev",
+    "typecheck": "cd orchestra && bun run typecheck",
+    "test": "cd orchestra && bun run test",
     "app:dev": "cd app && bun run dev",
     "app:build": "cd app && bun run build",
     "app:install": "cd app && bun install"
-  },
-  "dependencies": {
-    "@opencode-ai/plugin": "^1.0.164",
-    "@opencode-ai/sdk": "^1.0.164",
-    "neo4j-driver": "^6.0.1",
-    "posthog-node": "^5.17.4"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "typescript": "^5.0.0"
   },
-  "peerDependencies": {
-    "bun": ">=1.0.0"
-  },
-  "keywords": [
-    "opencode",
-    "ai",
-    "agents",
-    "orchestrator",
-    "multi-agent",
-    "plugin"
-  ],
   "license": "MIT",
   "repository": {
     "type": "git",
