@@ -4,6 +4,13 @@ import { join } from "node:path";
 import { deepMerge, getUserConfigDir, isPlainObject } from "../helpers/format";
 
 const ORCHESTRATOR_PLUGIN_SUFFIXES = ["orchestrator.js", "orchestrator.mjs", "orchestrator.cjs", "orchestrator.ts"];
+const ORCHESTRATOR_PLUGIN_PACKAGE = "opencode-orchestrator";
+
+function isOrchestratorPlugin(entry: string): boolean {
+  const normalized = entry.toLowerCase();
+  if (normalized.includes(ORCHESTRATOR_PLUGIN_PACKAGE)) return true;
+  return ORCHESTRATOR_PLUGIN_SUFFIXES.some((suffix) => normalized.includes(suffix));
+}
 
 function normalizePlugins(value: unknown, dropOrchestrator: boolean): string[] {
   if (!Array.isArray(value)) return [];
@@ -11,7 +18,7 @@ function normalizePlugins(value: unknown, dropOrchestrator: boolean): string[] {
     .filter((entry) => typeof entry === "string")
     .filter((entry) => {
       if (!dropOrchestrator) return true;
-      return !ORCHESTRATOR_PLUGIN_SUFFIXES.some((suffix) => entry.includes(suffix));
+      return !isOrchestratorPlugin(entry);
     });
 }
 

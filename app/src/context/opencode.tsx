@@ -22,6 +22,8 @@ import {
   type Message,
   type Part,
   type Agent,
+  type TextPartInput,
+  type FilePartInput,
 } from "@opencode-ai/sdk/client";
 
 // =============================================================================
@@ -416,9 +418,9 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
       url?: string;
       file?: File;
     }>
-  ) => {
+  ): Promise<FilePartInput[]> => {
     if (!attachments || attachments.length === 0) return [];
-    const parts = [];
+    const parts: FilePartInput[] = [];
     for (const attachment of attachments) {
       if (!attachment.file) continue;
       const url = await fileToDataUrl(attachment.file);
@@ -447,7 +449,7 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     console.log(`🔍 [sendMessage] Sending to session ${sessionId}:`, { contentLength: content.length, preview: content.slice(0, 50) });
     try {
       const attachmentParts = await buildAttachmentParts(attachments);
-      const parts = [];
+      const parts: Array<TextPartInput | FilePartInput> = [];
       if (content.trim()) {
         parts.push({ type: "text", text: content });
       }

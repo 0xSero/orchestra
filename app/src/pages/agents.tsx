@@ -3,7 +3,7 @@
  */
 
 import { type Component, For, Show, createSignal, createMemo } from "solid-js";
-import { useOpenCode, type WorkerRuntime, type Session } from "@/context/opencode";
+import { useOpenCode } from "@/context/opencode";
 import { useLayout } from "@/context/layout";
 import { A } from "@solidjs/router";
 
@@ -25,13 +25,6 @@ const ServerIcon = () => (
     <rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
     <line x1="6" x2="6.01" y1="6" y2="6" />
     <line x1="6" x2="6.01" y1="18" y2="18" />
-  </svg>
-);
-
-const ClockIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="10" />
-    <polyline points="12,6 12,12 16,14" />
   </svg>
 );
 
@@ -87,24 +80,7 @@ const getStatusLabel = (status: string): string => {
 export const AgentsPage: Component = () => {
   const { agents, sessions, workers, abortSession } = useOpenCode();
   const { selectWorker } = useLayout();
-  const [selectedAgent, setSelectedAgent] = createSignal<string | null>(null);
   const [selectedWorker, setSelectedWorker] = createSignal<string | null>(null);
-
-  // Map sessions by agent
-  const sessionsByAgent = createMemo(() => {
-    const map = new Map<string, Session[]>();
-    for (const session of sessions()) {
-      const agentId = session.agentId || "default";
-      if (!map.has(agentId)) map.set(agentId, []);
-      map.get(agentId)!.push(session);
-    }
-    return map;
-  });
-
-  // Get active workers
-  const activeWorkers = createMemo(() =>
-    workers().filter(w => w.status === "running" || w.status === "busy" || w.status === "ready")
-  );
 
   // Get selected worker details
   const workerDetails = createMemo(() => {
@@ -118,7 +94,7 @@ export const AgentsPage: Component = () => {
     const w = workers();
     return {
       total: w.length,
-      active: w.filter(x => x.status === "busy" || x.status === "running").length,
+      active: w.filter(x => x.status === "busy" || x.status === "starting").length,
       ready: w.filter(x => x.status === "ready").length,
       error: w.filter(x => x.status === "error").length,
     };
@@ -400,8 +376,6 @@ export const AgentsPage: Component = () => {
         <div class="flex-1 overflow-auto scrollbar-thin">
           <For each={agents()}>
             {(agent) => {
-              const agentSessions = createMemo(() => sessionsByAgent().get(agent.id) || []);
-
               return (
                 <div class="p-3 border-b border-border hover:bg-accent/50 transition-colors">
                   <div class="flex items-center gap-2 mb-1">
@@ -409,11 +383,11 @@ export const AgentsPage: Component = () => {
                       <BotIcon />
                     </div>
                     <span class="text-sm font-medium text-foreground truncate">
-                      {agent.name || agent.id}
+                      {agent.name}
                     </span>
                   </div>
                   <div class="text-xs text-muted-foreground ml-8">
-                    {agentSessions().length} sessions
+                    {agent.mode === "primary" ? "Primary" : agent.mode === "subagent" ? "Subagent" : "Shared"}
                   </div>
                 </div>
               );

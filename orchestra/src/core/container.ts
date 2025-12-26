@@ -29,6 +29,7 @@ export type CoreConfig = {
 
 export type CoreHooks = {
   tool: Record<string, any>;
+  config: any;
   "tool.execute.before": any;
   "chat.message": any;
   "experimental.chat.messages.transform": any;
@@ -123,7 +124,9 @@ export const createCore: Factory<CoreConfig, {}, CoreService> = ({ config }) => 
   };
 
   const refreshProfiles = async () => {
-    const merged = await getAllProfiles(projectDir);
+    // Pass existing profiles from config as base, then merge with any SKILL.md overrides
+    const configProfilesArray = Object.values(baseProfiles).map((p) => ({ ...p }));
+    const merged = await getAllProfiles(projectDir, configProfilesArray);
     syncProfiles(merged);
   };
 
@@ -274,6 +277,21 @@ export const createCore: Factory<CoreConfig, {}, CoreService> = ({ config }) => 
 
   const hooks: CoreHooks = {
     tool: tools.tool,
+    config: async (input: { agent?: Record<string, unknown> }) => {
+      // Inject the orchestrator agent if enabled in config
+      const agentCfg = config.config.agent;
+      if (agentCfg?.enabled !== false) {
+        const agentName = agentCfg?.name ?? "orchestrator";
+        input.agent = input.agent ?? {};
+        input.agent[agentName] = {
+          model: agentCfg?.model ?? "anthropic/claude-opus-4-5",
+          mode: agentCfg?.mode ?? "primary",
+          description: "OpenCode Orchestrator - Coordinates specialized AI workers for complex tasks",
+          prompt: agentCfg?.prompt ?? undefined,
+          ...(agentCfg?.color ? { color: agentCfg.color } : {}),
+        };
+      }
+    },
     "tool.execute.before": tools.guard,
     "chat.message": async (input: VisionChatInput, output: VisionChatOutput) => {
       await routeVisionMessage(

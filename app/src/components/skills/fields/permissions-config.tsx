@@ -14,10 +14,12 @@ const parsePaths = (value: string) =>
     .map((line) => line.trim())
     .filter(Boolean);
 
+type PermissionCategory = NonNullable<ToolPermissions["categories"]>;
+
 export function PermissionsConfig(props: { value: ToolPermissions; onChange: (v: ToolPermissions) => void }) {
   const categories = createMemo(() => props.value.categories ?? {});
 
-  const updateCategory = (key: keyof ToolPermissions["categories"], value: string) => {
+  const updateCategory = (key: keyof PermissionCategory, value: string) => {
     props.onChange({
       ...props.value,
       categories: {

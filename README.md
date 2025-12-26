@@ -86,7 +86,7 @@ bun --version && opencode --version
 }
 ```
 
-See the [Quickstart Guide](./docs/quickstart.md) for detailed setup instructions.
+See [docs/configuration.md](./docs/configuration.md) for detailed setup instructions.
 
 ### Key Features
 
@@ -157,7 +157,16 @@ bun add -g opencode-orchestrator
 
 ### Configuration
 
-**1. Add the plugin to OpenCode:**
+**1. Create a plugin entry (OpenCode 1.0+):**
+
+```bash
+mkdir -p .opencode/plugin
+cat > .opencode/plugin/orchestrator.js <<'EOF'
+export { OrchestratorPlugin as default } from "opencode-orchestrator";
+EOF
+```
+
+**Alternative (config-based plugins):**
 
 ```json
 // opencode.json or ~/.config/opencode/opencode.json

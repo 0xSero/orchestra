@@ -89,7 +89,7 @@ export const AppLayout: Component<{ children: JSX.Element }> = (props) => {
       const worker = workerBySession.get(session.id);
 
       // Check worker status first
-      if (worker && (worker.status === "busy" || worker.status === "running")) {
+      if (worker && worker.status === "busy") {
         activeCount++;
         continue;
       }

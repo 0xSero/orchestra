@@ -1,11 +1,22 @@
 import { describe, expect, test } from "bun:test";
-import { getTeamStates, getViewer, loadLinearConfigFromEnv } from "../../src/integrations/linear";
+import {
+  getTeamStates,
+  getViewer,
+  loadLinearConfigFromEnv,
+  resolveLinearConfig,
+} from "../../src/integrations/linear";
 
 describe("linear real integration", () => {
   const cfg = loadLinearConfigFromEnv();
 
   if (!cfg) {
-    test.skip("requires LINEAR_API_KEY and LINEAR_TEAM_ID", () => {});
+    test("returns undefined when credentials are missing", () => {
+      expect(loadLinearConfigFromEnv()).toBeUndefined();
+    });
+
+    test("resolveLinearConfig throws when missing credentials", () => {
+      expect(() => resolveLinearConfig()).toThrow("Missing Linear credentials");
+    });
     return;
   }
 

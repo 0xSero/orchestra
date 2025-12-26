@@ -11,7 +11,7 @@ import type { CommunicationService } from "../communication";
 import { startEventForwarding, stopEventForwarding } from "./event-forwarding";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 export type ModelResolutionResult = {
   profile: WorkerProfile;
@@ -58,9 +58,9 @@ function resolveWorkerBridgePluginPath(): string | undefined {
 
 function normalizePluginPath(path: string | undefined): string | undefined {
   if (!path) return undefined;
-  if (path.startsWith("file://")) return path;
+  if (!path.startsWith("file://")) return path;
   try {
-    return pathToFileURL(path).href;
+    return fileURLToPath(path);
   } catch {
     return path;
   }

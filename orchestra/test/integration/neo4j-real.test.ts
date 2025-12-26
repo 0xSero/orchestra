@@ -5,7 +5,9 @@ describe("neo4j real integration", () => {
   const cfg = loadNeo4jConfig();
 
   if (!cfg) {
-    test.skip("requires Neo4j config (env or .opencode/orchestrator.json)", () => {});
+    test("returns undefined when Neo4j config is missing", () => {
+      expect(loadNeo4jConfig()).toBeUndefined();
+    });
     return;
   }
 

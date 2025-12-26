@@ -10,7 +10,6 @@ import { ChatView } from "@/components/worker-detail";
 import { LogsPanel } from "@/components/log-stream";
 import { SkillList, SkillsWorkspace } from "@/components/skills";
 import { CommandPalette } from "@/components/command-palette";
-import { useLayout } from "@/context/layout";
 import { useOpenCode } from "@/context/opencode";
 
 type Tab = "chat" | "skills" | "logs";
