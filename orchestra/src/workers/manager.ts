@@ -5,8 +5,9 @@ import type { CommunicationService } from "../communication";
 import type { MemoryService } from "../memory";
 import { WorkerRegistry } from "./registry";
 import { WorkerJobRegistry, type WorkerJob } from "./jobs";
-import { spawnWorker, type SpawnWorkerCallbacks } from "./spawn";
+import { spawnWorker, cleanupWorkerInstance, type SpawnWorkerCallbacks } from "./spawn";
 import { sendWorkerMessage, type WorkerSendOptions } from "./send";
+import { createSessionManager, type WorkerSessionManager } from "./session-manager";
 
 export type WorkerManagerConfig = {
   basePort: number;
@@ -42,6 +43,8 @@ export type WorkerManager = ServiceLifecycle & {
   getWorker: (id: string) => WorkerInstance | undefined;
   listWorkers: () => WorkerInstance[];
   getSummary: (options?: { maxWorkers?: number }) => string;
+  /** Session manager for tracking worker sessions and activity */
+  sessionManager: WorkerSessionManager;
   jobs: {
     create: (input: { workerId: string; message: string; sessionId?: string; requestedBy?: string }) => WorkerJob;
     get: (id: string) => WorkerJob | undefined;
@@ -59,10 +62,17 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
   if (!deps.api) {
     throw new Error("WorkerManager requires api dependency");
   }
+  const api = deps.api;
   const communication = deps.communication;
   const registry = new WorkerRegistry();
   const jobs = new WorkerJobRegistry();
   const inFlight = new Map<string, Promise<WorkerInstance>>();
+
+  // Create session manager for centralized session tracking
+  const sessionManager = createSessionManager({
+    api,
+    communication: communication!,
+  });
 
   const emitJobEvent = (job: WorkerJob | undefined, status: "created" | "succeeded" | "failed") => {
     if (!communication || !job) return;
@@ -82,7 +92,7 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
     if (inFlightSpawn) return await inFlightSpawn;
 
     const spawnPromise = spawnWorker({
-      api: deps.api as ApiService,
+      api,
       registry,
       directory: config.directory,
       profile,
@@ -90,6 +100,8 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
       modelAliases: config.modelAliases,
       timeoutMs: config.timeout,
       callbacks: spawnCallbacks,
+      sessionManager,
+      communication,
     });
     inFlight.set(profile.id, spawnPromise);
     try {
@@ -149,6 +161,8 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
       const instance = registry.get(workerId);
       if (!instance) return false;
       try {
+        // Clean up session manager and event forwarding
+        cleanupWorkerInstance(instance, sessionManager);
         await instance.shutdown?.();
       } finally {
         instance.status = "stopped";
@@ -206,6 +220,7 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
     getWorker: (id) => registry.get(id),
     listWorkers: () => registry.list(),
     getSummary: (options) => registry.getSummary(options),
+    sessionManager,
     jobs: {
       create: (input) => {
         const job = jobs.create(input);

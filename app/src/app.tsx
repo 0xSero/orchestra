@@ -5,12 +5,13 @@
  * Uses the OpenCode SDK for session/agent data.
  */
 
-import { type Component, ErrorBoundary } from "solid-js";
-import { Router, Route } from "@solidjs/router";
+import { type Component, type JSX, ErrorBoundary } from "solid-js";
+import { Router, Route, Navigate } from "@solidjs/router";
 import { OpenCodeProvider } from "@/context/opencode";
 import { LayoutProvider } from "@/context/layout";
 import { SkillsProvider } from "@/context/skills";
-import { Dashboard } from "@/pages/dashboard";
+import { AppLayout } from "@/components/layout/app-layout";
+import { ChatPage, AgentsPage, ProfilesPage, LogsPage } from "@/pages";
 
 const ErrorFallback: Component<{ error: Error }> = (props) => {
   console.error("[App] Render error:", props.error);
@@ -26,8 +27,12 @@ const ErrorFallback: Component<{ error: Error }> = (props) => {
   );
 };
 
+// Layout wrapper that provides shared navigation
+const LayoutWrapper: Component<{ children?: JSX.Element }> = (props) => {
+  return <AppLayout>{props.children}</AppLayout>;
+};
+
 export const App: Component = () => {
-  // Log to help debug blank screen issues
   console.log("[App] Rendering App component");
 
   return (
@@ -35,12 +40,18 @@ export const App: Component = () => {
       <OpenCodeProvider>
         <SkillsProvider>
           <LayoutProvider>
-            <Router root={(props) => {
-              console.log("[Router] Rendering with children:", !!props.children);
-              return <>{props.children}</>;
-            }}>
-              <Route path="/" component={Dashboard} />
-              <Route path="*" component={Dashboard} />
+            <Router root={LayoutWrapper}>
+              {/* Redirect root to chat */}
+              <Route path="/" component={() => <Navigate href="/chat" />} />
+
+              {/* Main pages */}
+              <Route path="/chat" component={ChatPage} />
+              <Route path="/agents" component={AgentsPage} />
+              <Route path="/profiles" component={ProfilesPage} />
+              <Route path="/logs" component={LogsPage} />
+
+              {/* Fallback - redirect unknown routes to chat */}
+              <Route path="*" component={() => <Navigate href="/chat" />} />
             </Router>
           </LayoutProvider>
         </SkillsProvider>

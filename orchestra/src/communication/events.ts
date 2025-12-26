@@ -1,12 +1,59 @@
 import type { Event as OpenCodeEvent } from "@opencode-ai/sdk";
-import type { Skill, SkillScope, WorkerInstance } from "../types";
+import type { Skill, SkillScope, WorkerInstance, WorkerSessionMode, WorkerForwardEvent } from "../types";
 import type { WorkerJob } from "../workers/jobs";
 
 export type OrchestraEventMeta = {
-  source: "orchestrator" | "worker" | "sdk";
+  source: "orchestrator" | "worker" | "sdk" | "session-manager" | "event-forwarding";
   sessionId?: string;
   workerId?: string;
   jobId?: string;
+};
+
+// Session-related event payloads
+export type SessionCreatedPayload = {
+  session: {
+    workerId: string;
+    sessionId: string;
+    mode: WorkerSessionMode;
+    parentSessionId?: string;
+    serverUrl?: string;
+    createdAt: string;
+    lastActivity: string;
+    status: string;
+    messageCount: number;
+    toolCount: number;
+    recentActivityCount: number;
+    error?: string;
+  };
+};
+
+export type SessionActivityPayload = {
+  sessionId: string;
+  workerId: string;
+  activity: {
+    id: string;
+    type: WorkerForwardEvent;
+    timestamp: string;
+    summary: string;
+  };
+};
+
+export type SessionStatusPayload = {
+  sessionId: string;
+  workerId: string;
+  status: string;
+  error?: string;
+};
+
+export type SessionClosedPayload = {
+  sessionId: string;
+  workerId: string;
+};
+
+export type SessionErrorPayload = {
+  workerId: string;
+  sessionId?: string;
+  error: string;
 };
 
 export type StreamChunk = {
@@ -39,6 +86,13 @@ export type OrchestraEventMap = {
   "orchestra.worker.stream": { chunk: StreamChunk };
   "orchestra.worker.response": { worker: WorkerInstance; response: string; jobId?: string };
   "orchestra.worker.wakeup": { workerId: string; jobId?: string; reason: string; summary?: string };
+  // Session events
+  "orchestra.session.created": SessionCreatedPayload;
+  "orchestra.session.activity": SessionActivityPayload;
+  "orchestra.session.status": SessionStatusPayload;
+  "orchestra.session.closed": SessionClosedPayload;
+  "orchestra.session.error": SessionErrorPayload;
+  // Skill events
   "skill.created": { skill: Skill };
   "skill.updated": { skill: Skill };
   "skill.deleted": { id: string; scope: SkillScope };

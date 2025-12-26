@@ -9,11 +9,6 @@ type SkillsRouterDeps = {
   workers?: WorkerManager;
 };
 
-type ResponseLike = {
-  status: number;
-  body: JsonValue;
-};
-
 function setCors(res: ServerResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");

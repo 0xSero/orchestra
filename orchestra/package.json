@@ -26,8 +26,8 @@
     "test:real": "bun test test/integration/linear-real.test.ts test/integration/neo4j-real.test.ts"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "^1.0.164",
-    "@opencode-ai/sdk": "^1.0.164",
+    "@opencode-ai/plugin": "^1.0.203",
+    "@opencode-ai/sdk": "^1.0.203",
     "@types/better-sqlite3": "^7.6.13",
     "better-sqlite3": "^12.5.0",
     "neo4j-driver": "^6.0.1",

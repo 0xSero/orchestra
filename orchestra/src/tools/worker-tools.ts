@@ -8,6 +8,8 @@ export type WorkerToolsDeps = {
   workers: WorkerManager;
 };
 
+type ToolDefinition = ReturnType<typeof tool>;
+
 function attachmentSchema() {
   return tool.schema.object({
     type: tool.schema.enum(["image", "file"]),
@@ -21,7 +23,7 @@ function serialize(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
-export function createWorkerTools(deps: WorkerToolsDeps) {
+export function createWorkerTools(deps: WorkerToolsDeps): Record<string, ToolDefinition> {
   const spawnWorker = tool({
     description: "Spawn a worker by profile ID",
     args: {

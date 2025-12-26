@@ -3,6 +3,7 @@ import type { Factory, ServiceLifecycle } from "../types";
 import type { SkillsService } from "../skills/service";
 import type { WorkerManager } from "../workers";
 import { createSkillsRouter } from "./skills-router";
+import { createSessionsRouter } from "./sessions-router";
 
 export type SkillsApiConfig = {
   enabled?: boolean;
@@ -34,9 +35,35 @@ export const createSkillsApiServer: Factory<SkillsApiConfig, SkillsApiDeps, Skil
 
   const start = async () => {
     if (!enabled || server) return;
-    const handler = createSkillsRouter({ skills: deps.skills, workers: deps.workers });
+
+    // Create routers
+    const skillsHandler = createSkillsRouter({ skills: deps.skills, workers: deps.workers });
+
+    // Sessions router needs workers with session manager
+    const sessionsHandler = deps.workers
+      ? createSessionsRouter({
+          sessionManager: deps.workers.sessionManager,
+          workers: deps.workers,
+        })
+      : null;
+
     server = createServer((req, res) => {
-      void handler(req, res);
+      const url = req.url ?? "";
+
+      // Route to sessions API
+      if (url.startsWith("/api/sessions")) {
+        if (sessionsHandler) {
+          void sessionsHandler(req, res);
+        } else {
+          res.statusCode = 501;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ error: "Sessions API not available" }));
+        }
+        return;
+      }
+
+      // Route to skills API
+      void skillsHandler(req, res);
     });
 
     try {

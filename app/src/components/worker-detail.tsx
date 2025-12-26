@@ -1,64 +1,127 @@
 /**
- * ChatView - vLLM Studio style chat interface
- *
- * Messages in the center, input at the bottom (also centered)
+ * ChatView - Chat interface with session metadata header
  */
 
 import { type Component, Show, For, createMemo, createEffect, createSignal } from "solid-js";
-import { useOpenCode, type Message, type Part } from "@/context/opencode";
+import { useOpenCode, type Message, type Part, type WorkerRuntime } from "@/context/opencode";
 import { useLayout } from "@/context/layout";
 
+// Icons
 const AttachmentIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M21.44 11.05l-8.49 8.49a5 5 0 0 1-7.07-7.07l8.49-8.49a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.49a2 2 0 0 1-2.83-2.83l7.78-7.78" />
   </svg>
 );
 
-const ToolIcon = () => (
+const SendIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M14.7 6.3a1 1 0 0 0-1.4 0l-1.9 1.9-3-3a2.1 2.1 0 0 0-3 3l3 3-1.9 1.9a1 1 0 0 0 0 1.4l2.8 2.8a1 1 0 0 0 1.4 0l1.9-1.9 3 3a2.1 2.1 0 0 0 3-3l-3-3 1.9-1.9a1 1 0 0 0 0-1.4Z" />
+    <path d="M22 2L11 13" />
+    <path d="M22 2l-7 20-4-9-9-4 20-7z" />
   </svg>
 );
 
-const PreviewIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6Z" />
-    <circle cx="12" cy="12" r="3" />
+const StopIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect width="14" height="14" x="5" y="5" rx="2" />
   </svg>
 );
 
-const NetworkIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M4.9 19.1a9 9 0 0 1 0-12.2" />
-    <path d="M7.8 16.2a5 5 0 0 1 0-8.4" />
-    <circle cx="12" cy="12" r="1" />
-    <path d="M16.2 16.2a5 5 0 0 0 0-8.4" />
-    <path d="M19.1 19.1a9 9 0 0 0 0-12.2" />
+const TrashIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 6h18" />
+    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
   </svg>
 );
 
-const SystemIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M3 3h18v14H3z" />
-    <path d="M8 21h8" />
-    <path d="M12 17v4" />
+const ServerIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
+    <rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
+    <line x1="6" x2="6.01" y1="6" y2="6" />
+    <line x1="6" x2="6.01" y1="18" y2="18" />
   </svg>
 );
 
-const EmptyChatIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+const ClockIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12,6 12,12 16,14" />
+  </svg>
+);
+
+const ChatIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
     <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
   </svg>
 );
 
+// Format duration
+const formatDuration = (startTime: number): string => {
+  const now = Date.now();
+  const diff = now - startTime;
+
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days}d ${hours % 24}h`;
+  if (hours > 0) return `${hours}h ${minutes % 60}m`;
+  if (minutes > 0) return `${minutes}m`;
+  return `${seconds}s`;
+};
+
+// Get status from session/worker
+// Sessions don't have a status field - we infer from:
+// 1. Worker status (if we have worker data from orchestra events)
+// 2. Recent activity (time.updated within last 30 seconds = likely active)
+// 3. Compacting state (time.compacting exists = processing)
+const getStatus = (session?: { time?: { updated?: number; compacting?: number } }, worker?: WorkerRuntime): "ready" | "busy" | "error" | "stopped" | "starting" => {
+  // If we have worker data, use it
+  if (worker) {
+    if (worker.status === "busy") return "busy";
+    if (worker.status === "ready") return "ready";
+    if (worker.status === "error") return "error";
+    if (worker.status === "starting") return "starting";
+    return "stopped";
+  }
+
+  if (!session) return "stopped";
+
+  // Check if session is compacting (processing)
+  if (session.time?.compacting) return "busy";
+
+  // Check if recently active (updated within last 30 seconds)
+  const now = Date.now();
+  const lastUpdate = session.time?.updated || 0;
+  const timeSinceUpdate = now - lastUpdate;
+
+  if (timeSinceUpdate < 30000) {
+    return "busy";
+  }
+
+  return "ready";
+};
+
+const getStatusLabel = (status: string): string => {
+  switch (status) {
+    case "ready": return "Idle";
+    case "busy": return "Running";
+    case "error": return "Error";
+    case "starting": return "Starting";
+    default: return "Stopped";
+  }
+};
+
 export const ChatView: Component = () => {
-  const { getSession, getSessionMessages, getMessageParts, deleteSession, fetchMessages, sendMessage } =
-    useOpenCode();
+  const { getSession, getSessionMessages, getMessageParts, deleteSession, fetchMessages, sendMessage, abortSession, workers } = useOpenCode();
   const { selectedWorkerId, selectWorker } = useLayout();
 
   const [message, setMessage] = createSignal("");
   const [isLoading, setIsLoading] = createSignal(false);
   let inputRef: HTMLTextAreaElement | undefined;
+  let messagesEndRef: HTMLDivElement | undefined;
 
   const session = createMemo(() => {
     const id = selectedWorkerId();
@@ -70,10 +133,27 @@ export const ChatView: Component = () => {
     return id ? getSessionMessages(id) : [];
   });
 
+  // Get worker for this session
+  const worker = createMemo(() => {
+    const id = selectedWorkerId();
+    if (!id) return undefined;
+    return workers().find(w => w.sessionId === id);
+  });
+
+  const status = createMemo(() => getStatus(session(), worker()));
+
   // Fetch messages when session changes
   createEffect(async () => {
     const id = selectedWorkerId();
     if (id) await fetchMessages(id);
+  });
+
+  // Auto-scroll to bottom when messages change
+  createEffect(() => {
+    messages(); // Track messages
+    setTimeout(() => {
+      messagesEndRef?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
   });
 
   const getMessageText = (parts: Part[]): string => {
@@ -130,21 +210,84 @@ export const ChatView: Component = () => {
     selectWorker(null);
   };
 
+  const handleAbort = async () => {
+    const id = selectedWorkerId();
+    if (id) await abortSession(id);
+  };
+
   return (
     <div class="flex flex-col h-full">
       <Show when={session()} fallback={<EmptyState />}>
         {(s) => (
           <>
-            {/* Header */}
-            <div class="flex items-center justify-between px-4 py-2 border-b border-border">
-              <div class="flex items-center gap-3 min-w-0">
-                <span class="text-sm font-medium truncate">
-                  {s().title || "New Chat"}
+            {/* Header with metadata */}
+            <div class="border-b border-border bg-card/50">
+              <div class="flex items-center justify-between px-4 py-3">
+                <div class="flex items-center gap-4 min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class={`status-dot ${status()}`} />
+                    <span class="text-sm font-medium text-foreground truncate">
+                      {s().title || "Untitled Session"}
+                    </span>
+                  </div>
+
+                  <span class={`status-badge ${status()}`}>
+                    {getStatusLabel(status())}
+                  </span>
+                </div>
+
+                <div class="flex items-center gap-2">
+                  <Show when={status() === "busy"}>
+                    <button
+                      class="btn btn-sm btn-ghost"
+                      onClick={handleAbort}
+                      title="Stop session"
+                    >
+                      <StopIcon />
+                      Stop
+                    </button>
+                  </Show>
+                  <button
+                    class="btn btn-sm btn-ghost text-destructive hover:text-destructive"
+                    onClick={handleDelete}
+                    title="Delete session"
+                  >
+                    <TrashIcon />
+                    Delete
+                  </button>
+                </div>
+              </div>
+
+              {/* Metadata bar */}
+              <div class="flex items-center gap-4 px-4 py-2 text-xs text-muted-foreground border-t border-border/50 bg-muted/30">
+                <span class="flex items-center gap-1.5">
+                  <ClockIcon />
+                  Running: {formatDuration(s().time.created)}
+                </span>
+
+                <Show when={worker()?.port}>
+                  <span class="flex items-center gap-1.5 font-mono">
+                    <ServerIcon />
+                    Port: {worker()?.port}
+                  </span>
+                </Show>
+
+                <Show when={worker()?.serverUrl}>
+                  <span class="flex items-center gap-1.5 font-mono truncate">
+                    URL: {worker()?.serverUrl}
+                  </span>
+                </Show>
+
+                <Show when={worker()?.model}>
+                  <span class="truncate">
+                    Model: {worker()?.model}
+                  </span>
+                </Show>
+
+                <span class="font-mono text-muted-foreground/70 truncate">
+                  ID: {s().id.slice(0, 12)}...
                 </span>
               </div>
-              <button class="btn btn-ghost btn-sm text-muted-foreground" onClick={handleDelete}>
-                Delete
-              </button>
             </div>
 
             {/* Messages area */}
@@ -152,70 +295,68 @@ export const ChatView: Component = () => {
               <Show
                 when={messages().length > 0}
                 fallback={
-                  <div class="flex flex-col items-center justify-center h-full text-center">
-                    <div class="text-muted-foreground mb-3">
-                      <EmptyChatIcon />
+                  <div class="empty-state">
+                    <div class="empty-state-icon">
+                      <ChatIcon />
                     </div>
-                    <p class="text-lg text-foreground mb-1">Start a conversation</p>
-                    <p class="text-sm text-muted-foreground">Send a message to begin chatting.</p>
+                    <p class="empty-state-title">Start a conversation</p>
+                    <p class="empty-state-description">Send a message to begin chatting.</p>
                   </div>
                 }
               >
-                <div class="max-w-3xl mx-auto">
+                <div class="max-w-3xl mx-auto py-4">
                   <For each={messages()}>
                     {(msg) => (
-                      <div class={`message ${msg.role === "user" ? "message-user" : "message-assistant"}`}>
-                        <div class="flex items-center gap-2 mb-1">
-                          <span class="text-xs font-medium text-muted-foreground uppercase">
+                      <div class={`message ${msg.role === "user" ? "message-user" : "message-assistant"} animate-fade-in`}>
+                        <div class="flex items-center gap-2 mb-2">
+                          <span class="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                             {msg.role}
                           </span>
                         </div>
-                        <div class="text-sm whitespace-pre-wrap">
+                        <div class="message-content whitespace-pre-wrap">
                           {getMessageContent(msg)}
                         </div>
                       </div>
                     )}
                   </For>
+                  <div ref={messagesEndRef} />
                 </div>
               </Show>
             </div>
 
-            {/* Input area - centered at bottom */}
-            <div class="border-t border-border p-4">
+            {/* Input area */}
+            <div class="border-t border-border p-4 bg-card/30">
               <div class="max-w-3xl mx-auto">
                 <div class="composer">
-                  <button class="composer-icon" title="Attach">
+                  <button class="btn btn-ghost btn-icon" title="Attach file">
                     <AttachmentIcon />
                   </button>
-                  <button class="composer-icon" title="Tools">
-                    <ToolIcon />
-                  </button>
-                  <button class="composer-icon" title="Preview">
-                    <PreviewIcon />
-                  </button>
-                  <button class="composer-icon" title="MCP">
-                    <NetworkIcon />
-                  </button>
-                  <button class="composer-icon" title="System">
-                    <SystemIcon />
-                  </button>
+
                   <textarea
                     ref={inputRef}
                     value={message()}
                     onInput={handleInput}
                     onKeyDown={handleKeyDown}
-                    placeholder="Message..."
+                    placeholder="Type a message..."
                     disabled={isLoading()}
                     rows={1}
-                    class="flex-1 bg-transparent text-sm resize-none outline-none min-h-[24px] max-h-[150px] py-1 px-2"
+                    class="composer-textarea"
                   />
+
                   <button
-                    class="btn btn-sm"
+                    class="btn btn-primary btn-sm"
                     onClick={handleSubmit}
                     disabled={!message().trim() || isLoading()}
                   >
-                    {isLoading() ? "..." : "Send"}
+                    <Show when={isLoading()} fallback={<><SendIcon /> Send</>}>
+                      <span class="animate-pulse-soft">Sending...</span>
+                    </Show>
                   </button>
+                </div>
+
+                <div class="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+                  <span>Press Enter to send, Shift+Enter for new line</span>
+                  <span>{messages().length} messages</span>
                 </div>
               </div>
             </div>
@@ -236,12 +377,12 @@ const EmptyState: Component = () => {
   };
 
   return (
-    <div class="flex flex-col items-center justify-center h-full text-center p-8">
-      <div class="text-muted-foreground mb-3">
-        <EmptyChatIcon />
+    <div class="empty-state">
+      <div class="empty-state-icon">
+        <ChatIcon />
       </div>
-      <p class="text-lg text-foreground mb-1">Start a conversation</p>
-      <p class="text-sm text-muted-foreground mb-4">
+      <p class="empty-state-title">Start a conversation</p>
+      <p class="empty-state-description">
         Select a session or create a new one.
       </p>
       <button class="btn" onClick={handleNew}>

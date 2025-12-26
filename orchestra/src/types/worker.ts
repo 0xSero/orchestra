@@ -2,6 +2,29 @@ import type { ToolPermissions } from "./permissions";
 
 export type WorkerStatus = "starting" | "ready" | "busy" | "error" | "stopped";
 
+/**
+ * Session mode determines how a worker's session relates to the parent orchestrator.
+ * - "child": Session is a child of the parent - visible in TUI, shares context
+ * - "isolated": Separate server/session - fully independent, no visibility
+ * - "linked": Separate server but events are forwarded to parent for visibility
+ */
+export type WorkerSessionMode = "child" | "isolated" | "linked";
+
+/**
+ * Events that can be forwarded from linked worker sessions to the parent.
+ */
+export type WorkerForwardEvent = "tool" | "message" | "error" | "complete" | "progress";
+
+/**
+ * MCP server configuration to forward to workers.
+ */
+export type WorkerMcpConfig = {
+  /** MCP servers to enable for this worker */
+  servers?: string[];
+  /** Inherit all MCP servers from parent config */
+  inheritAll?: boolean;
+};
+
 export interface WorkerProfile {
   /** Unique identifier for this worker */
   id: string;
@@ -37,6 +60,19 @@ export interface WorkerProfile {
   extends?: string;
   /** Compose multiple profiles */
   compose?: string[];
+
+  // === Session Mode Configuration ===
+
+  /** How this worker's session relates to the parent (default: "linked") */
+  sessionMode?: WorkerSessionMode;
+  /** For linked mode: which events to forward to parent */
+  forwardEvents?: WorkerForwardEvent[];
+  /** MCP server configuration for this worker */
+  mcp?: WorkerMcpConfig;
+  /** Environment variables to forward to this worker */
+  env?: Record<string, string>;
+  /** Environment variable prefixes to auto-forward (e.g., ["OPENCODE_NEO4J_"]) */
+  envPrefixes?: string[];
 }
 
 export interface WorkerInstance {
@@ -73,6 +109,19 @@ export interface WorkerInstance {
   };
   /** How the worker model was resolved */
   modelResolution?: string;
+
+  // === Session Mode State ===
+
+  /** The resolved session mode for this instance */
+  sessionMode?: WorkerSessionMode;
+  /** Parent session ID (for child mode) */
+  parentSessionId?: string;
+  /** Event forwarding subscription handle (for linked mode) */
+  eventForwardingHandle?: { stop: () => void };
+  /** Messages processed by this worker (for activity tracking) */
+  messageCount?: number;
+  /** Tools executed by this worker */
+  toolCount?: number;
 }
 
 export interface Registry {

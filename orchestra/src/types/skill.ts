@@ -7,6 +7,7 @@
  */
 
 import type { ToolPermissions } from "./permissions";
+import type { WorkerSessionMode, WorkerForwardEvent, WorkerMcpConfig } from "./worker";
 
 // ============================================================================
 // Standard Agent Skills Frontmatter (per specification)
@@ -113,6 +114,41 @@ export interface ProfileExtensions {
    * Compose multiple profiles (multi-inheritance).
    */
   compose?: string[];
+
+  // === Session Mode Configuration ===
+
+  /**
+   * How this worker's session relates to the parent orchestrator.
+   * - "child": Session is a child of parent - visible in TUI, shares context
+   * - "isolated": Separate server/session - fully independent
+   * - "linked": Separate server but events forwarded for visibility
+   * Default: "linked"
+   */
+  sessionMode?: WorkerSessionMode;
+
+  /**
+   * For linked mode: which events to forward to parent.
+   * Default: ["tool", "message", "error", "complete", "progress"]
+   */
+  forwardEvents?: WorkerForwardEvent[];
+
+  /**
+   * MCP server configuration for this worker.
+   * Use inheritAll: true to pass all parent MCP servers.
+   * Or specify servers: ["neo4j", "linear"] for specific ones.
+   */
+  mcp?: WorkerMcpConfig;
+
+  /**
+   * Explicit environment variables to set for this worker.
+   */
+  env?: Record<string, string>;
+
+  /**
+   * Environment variable prefixes to auto-forward.
+   * E.g., ["OPENCODE_NEO4J_", "LINEAR_"] to pass all Neo4j and Linear vars.
+   */
+  envPrefixes?: string[];
 }
 
 // ============================================================================

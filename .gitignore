@@ -1,7 +1,11 @@
 dist
 node_modules
 .env
+.env.*
 .tmp
 .osgrep
 .claude
+.opencode
 work
+*.log
+*.local

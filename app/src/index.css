@@ -3,52 +3,87 @@
 @tailwind utilities;
 
 /**
- * vLLM Studio-inspired dark theme
- * Very dark background, subtle borders, clean typography
+ * Warm Paper Design System
+ * Papery, warm aesthetic - like quality stationery
+ * No harsh contrasts, everything warm and considered
  */
 
 @layer base {
   :root {
     color-scheme: dark;
 
-    /* Very dark base - almost black */
-    --background: 0 0% 5%;
-    --foreground: 0 0% 87%;
+    /* Dark mode: Rich charcoal base */
+    --background: 30 5% 10.5%;        /* #1b1b1b */
+    --foreground: 40 20% 92%;         /* warm off-white */
 
-    /* Slightly elevated surfaces */
-    --card: 0 0% 8%;
-    --card-foreground: 0 0% 87%;
+    /* Elevated surfaces */
+    --card: 30 5% 12%;                /* #1e1e1e */
+    --card-foreground: 40 20% 92%;
 
-    --popover: 0 0% 10%;
-    --popover-foreground: 0 0% 87%;
+    --popover: 30 5% 14%;
+    --popover-foreground: 40 20% 92%;
 
-    /* Muted teal/gray accent - subtle */
-    --primary: 162 10% 52%;
-    --primary-foreground: 0 0% 100%;
+    /* Warm tan accent */
+    --primary: 35 25% 45%;
+    --primary-foreground: 40 20% 95%;
 
-    /* Even more subtle secondary */
-    --secondary: 0 0% 10%;
-    --secondary-foreground: 0 0% 70%;
+    /* Muted secondary */
+    --secondary: 30 5% 15%;
+    --secondary-foreground: 40 15% 70%;
 
-    --muted: 0 0% 12%;
-    --muted-foreground: 0 0% 43%;
+    --muted: 30 5% 18%;
+    --muted-foreground: 40 10% 55%;
 
-    --accent: 0 0% 14%;
-    --accent-foreground: 0 0% 87%;
+    --accent: 35 8% 18%;
+    --accent-foreground: 40 20% 92%;
 
-    --destructive: 0 62% 50%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 55% 45%;
+    --destructive-foreground: 40 20% 95%;
 
-    /* Very subtle borders */
-    --border: 0 0% 10%;
-    --input: 0 0% 10%;
-    --ring: 160 6% 50%;
+    /* Subtle borders */
+    --border: 30 5% 20%;
+    --input: 30 5% 15%;
+    --ring: 35 15% 70%;
 
-    /* Status */
-    --status-ready: 142 70% 45%;
-    --status-busy: 38 90% 50%;
-    --status-error: 0 70% 50%;
-    --status-stopped: 0 0% 40%;
+    /* Status colors - warmer variants */
+    --status-ready: 142 50% 40%;
+    --status-busy: 38 70% 50%;
+    --status-error: 0 55% 50%;
+    --status-stopped: 30 5% 35%;
+    --status-starting: 200 40% 50%;
+  }
+
+  /* Light mode - warm cream */
+  .light {
+    color-scheme: light;
+
+    --background: 40 30% 97%;         /* warm cream */
+    --foreground: 30 15% 15%;         /* deep brown-charcoal */
+
+    --card: 40 25% 95%;               /* soft tan */
+    --card-foreground: 30 15% 15%;
+
+    --popover: 40 25% 98%;
+    --popover-foreground: 30 15% 15%;
+
+    --primary: 35 30% 35%;
+    --primary-foreground: 40 30% 97%;
+
+    --secondary: 35 20% 90%;
+    --secondary-foreground: 30 15% 25%;
+
+    --muted: 35 20% 88%;
+    --muted-foreground: 30 10% 45%;
+
+    --accent: 35 15% 92%;
+    --accent-foreground: 30 15% 15%;
+
+    --destructive: 0 60% 45%;
+    --destructive-foreground: 40 30% 97%;
+
+    --border: 35 15% 85%;
+    --input: 35 15% 88%;
+    --ring: 30 20% 25%;
   }
 }
 
@@ -63,14 +98,14 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    font-size: 13px;
+    font-family: "Geist Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
     line-height: 1.5;
   }
 
-  /* Minimal focus ring */
+  /* Warm focus ring */
   :focus-visible {
-    @apply outline-none ring-1 ring-ring/40;
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 
   ::selection {
@@ -79,14 +114,14 @@
 }
 
 @layer components {
-  /* Top nav tabs - like vLLM Studio */
+  /* Top nav tabs */
   .nav-tabs {
-    @apply flex items-center gap-1 h-12 px-3 border-b border-border bg-card;
+    @apply flex items-center gap-1 h-12 px-4 border-b border-border bg-card;
   }
 
   .nav-tab {
-    @apply flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground rounded;
-    @apply hover:text-foreground hover:bg-accent transition-colors;
+    @apply flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground rounded-md;
+    @apply hover:text-foreground hover:bg-accent/50 transition-colors;
   }
 
   .nav-tab.active {
@@ -106,67 +141,135 @@
   }
 
   .nav-pill {
-    @apply flex items-center gap-2 rounded-md bg-background border border-border px-2 py-1 text-xs text-muted-foreground;
+    @apply flex items-center gap-2 rounded-md bg-background border border-border px-2.5 py-1.5 text-xs text-muted-foreground;
   }
 
   .nav-input {
-    @apply bg-transparent text-xs text-foreground placeholder:text-muted-foreground outline-none;
-    min-width: 120px;
+    @apply bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none;
+    min-width: 140px;
   }
 
-  /* Simple flat buttons */
+  /* Buttons - minimal, dark and white */
   .btn {
     @apply inline-flex items-center justify-center gap-1.5;
-    @apply px-3 py-1.5 text-sm rounded;
-    @apply bg-secondary text-secondary-foreground;
-    @apply hover:bg-accent transition-colors;
-    @apply disabled:opacity-40 disabled:pointer-events-none;
+    @apply px-4 py-2 text-sm font-medium rounded-md;
+    @apply bg-secondary text-secondary-foreground border border-border;
+    @apply hover:bg-accent/50 transition-colors;
+    @apply disabled:opacity-50 disabled:pointer-events-none;
   }
 
   .btn-primary {
-    @apply bg-primary/20 text-primary hover:bg-primary/30;
+    @apply bg-foreground text-background border-foreground;
+    @apply hover:bg-foreground/90;
   }
 
   .btn-ghost {
-    @apply bg-transparent text-muted-foreground hover:text-foreground hover:bg-accent;
+    @apply bg-transparent border-transparent text-muted-foreground;
+    @apply hover:text-foreground hover:bg-accent/50;
+  }
+
+  .btn-destructive {
+    @apply bg-destructive text-destructive-foreground border-destructive;
+    @apply hover:bg-destructive/90;
   }
 
   .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  .btn-xs {
     @apply px-2 py-1 text-xs;
   }
 
-  .btn-compact {
-    @apply h-7 px-2 text-xs rounded-md;
+  .btn-icon {
+    @apply p-2;
   }
 
-  /* Input - dark, minimal border */
+  /* Input - rounded, subtle */
   .input {
-    @apply w-full px-3 py-2 text-sm rounded bg-background border border-border;
+    @apply w-full px-3 py-2 text-sm rounded-md bg-input border border-border;
     @apply placeholder:text-muted-foreground;
-    @apply focus:border-border focus:ring-0;
+    @apply focus:border-ring focus:ring-1 focus:ring-ring;
+    @apply transition-colors;
   }
 
-  /* Sidebar list items */
-  .sidebar-item {
-    @apply flex flex-col gap-0.5 px-3 py-2 cursor-pointer rounded-md mx-2;
-    @apply hover:bg-accent transition-colors;
+  /* Card */
+  .card {
+    @apply rounded-lg border border-border bg-card shadow-sm;
   }
 
-  .sidebar-item.selected {
+  .card-header {
+    @apply p-4 border-b border-border;
+  }
+
+  .card-content {
+    @apply p-4;
+  }
+
+  /* Session/Worker list items */
+  .session-item {
+    @apply flex flex-col gap-1 px-3 py-3 cursor-pointer border-b border-border;
+    @apply hover:bg-accent/50 transition-colors;
+  }
+
+  .session-item.selected {
     @apply bg-accent;
   }
 
-  .sidebar-subtitle {
-    @apply text-xs text-muted-foreground;
+  .session-item-header {
+    @apply flex items-center justify-between gap-2;
   }
 
+  .session-item-title {
+    @apply text-sm font-medium text-foreground truncate;
+  }
+
+  .session-item-meta {
+    @apply flex items-center gap-3 text-xs text-muted-foreground;
+  }
+
+  .session-item-actions {
+    @apply flex items-center gap-1 opacity-0 transition-opacity;
+  }
+
+  .session-item:hover .session-item-actions {
+    @apply opacity-100;
+  }
+
+  /* Status indicators */
   .status-dot {
-    @apply h-1.5 w-1.5 rounded-full bg-primary/80;
+    @apply w-2 h-2 rounded-full flex-shrink-0;
+  }
+
+  .status-dot.ready { @apply bg-status-ready; }
+  .status-dot.busy { @apply bg-status-busy; }
+  .status-dot.error { @apply bg-status-error; }
+  .status-dot.stopped { @apply bg-status-stopped; }
+  .status-dot.starting { @apply bg-status-starting; }
+
+  .status-badge {
+    @apply inline-flex items-center gap-1.5 px-2 py-0.5 text-xs rounded-full;
+  }
+
+  .status-badge.ready {
+    @apply bg-status-ready/15 text-status-ready;
+  }
+
+  .status-badge.busy {
+    @apply bg-status-busy/15 text-status-busy;
+  }
+
+  .status-badge.error {
+    @apply bg-status-error/15 text-status-error;
+  }
+
+  .status-badge.stopped {
+    @apply bg-status-stopped/15 text-status-stopped;
   }
 
   /* Message styling */
   .message {
-    @apply px-4 py-3;
+    @apply px-4 py-4 border-b border-border/50;
   }
 
   .message-user {
@@ -174,54 +277,84 @@
   }
 
   .message-assistant {
-    @apply bg-card/50;
+    @apply bg-card/30;
   }
 
-  /* Status dots */
-  .dot {
-    @apply w-2 h-2 rounded-full;
+  .message-content {
+    @apply text-sm leading-relaxed;
   }
 
-  .dot-online { @apply bg-status-ready; }
-  .dot-busy { @apply bg-status-busy animate-pulse; }
-  .dot-error { @apply bg-status-error; }
-  .dot-offline { @apply bg-status-stopped; }
-
-  /* Subtle badge */
-  .badge {
-    @apply inline-flex items-center px-1.5 py-0.5 text-xs rounded bg-secondary text-secondary-foreground;
-  }
-
-  .badge-success {
-    @apply bg-status-ready/20 text-status-ready;
-  }
-
-  .skill-item {
-    @apply w-full text-left rounded-md px-3 py-2 border border-transparent;
-    @apply hover:bg-accent transition-colors;
-  }
-
-  .skill-item.selected {
-    @apply bg-accent border-border;
-  }
-
+  /* Composer */
   .composer {
-    @apply flex items-end gap-2 bg-card border border-border rounded-xl px-3 py-2;
+    @apply flex items-end gap-3 bg-card border border-border rounded-lg p-3;
+    @apply shadow-sm;
   }
 
-  .composer-icon {
-    @apply text-muted-foreground hover:text-foreground transition-colors;
+  .composer-textarea {
+    @apply flex-1 bg-transparent text-sm text-foreground resize-none outline-none;
+    @apply placeholder:text-muted-foreground;
+    min-height: 40px;
+    max-height: 200px;
+  }
+
+  .composer-actions {
+    @apply flex items-center gap-1;
+  }
+
+  /* Badge */
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 text-xs rounded-md;
+    @apply bg-muted text-muted-foreground;
+  }
+
+  .badge-outline {
+    @apply border border-border bg-transparent;
+  }
+
+  /* Mono text for technical content */
+  .mono {
+    font-family: "Geist Mono", "SF Mono", "Fira Code", ui-monospace, monospace;
+  }
+
+  /* Port/technical info badge */
+  .tech-badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded;
+    @apply bg-muted/50 text-muted-foreground font-mono;
+  }
+
+  /* Duration display */
+  .duration {
+    @apply text-xs text-muted-foreground tabular-nums;
+  }
+
+  /* Empty state */
+  .empty-state {
+    @apply flex flex-col items-center justify-center h-full text-center p-8;
+  }
+
+  .empty-state-icon {
+    @apply w-12 h-12 text-muted-foreground/30 mb-4;
+  }
+
+  .empty-state-title {
+    @apply text-lg font-medium text-foreground mb-1;
+  }
+
+  .empty-state-description {
+    @apply text-sm text-muted-foreground mb-4;
   }
 }
 
 @layer utilities {
+  /* Custom scrollbar */
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--border)) transparent;
   }
 
   .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
+    width: 8px;
+    height: 8px;
   }
 
   .scrollbar-thin::-webkit-scrollbar-track {
@@ -230,20 +363,57 @@
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
     background: hsl(var(--border));
-    border-radius: 3px;
+    border-radius: 9999px;
   }
 
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+
+  /* Text utilities */
   .text-mono {
-    font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
-    font-size: 12px;
+    font-family: "Geist Mono", "SF Mono", ui-monospace, monospace;
+  }
+
+  /* Truncate with ellipsis */
+  .truncate-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+/* Animations */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.animate-pulse {
-  animation: pulse 2s ease-in-out infinite;
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
 }

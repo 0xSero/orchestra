@@ -1,14 +1,17 @@
-import type { WorkerInstance, WorkerProfile } from "../types";
+import type { WorkerInstance, WorkerProfile, WorkerSessionMode } from "../types";
 import type { ApiService } from "../api";
 import type { OrchestratorConfig } from "../types";
 import { hydrateProfileModelsFromOpencode, type ProfileModelHydrationChange } from "../models/hydrate";
 import { buildToolConfigFromPermissions, summarizePermissions } from "../permissions/validator";
-import { mergeOpenCodeConfig } from "../config/opencode";
+import { mergeOpenCodeConfig, loadOpenCodeConfig } from "../config/opencode";
 import { getRepoContextForWorker } from "../ux/repo-context";
 import type { WorkerRegistry } from "./registry";
+import type { WorkerSessionManager } from "./session-manager";
+import type { CommunicationService } from "../communication";
+import { startEventForwarding, stopEventForwarding } from "./event-forwarding";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 export type ModelResolutionResult = {
   profile: WorkerProfile;
@@ -53,6 +56,16 @@ function resolveWorkerBridgePluginPath(): string | undefined {
   return undefined;
 }
 
+function normalizePluginPath(path: string | undefined): string | undefined {
+  if (!path) return undefined;
+  if (path.startsWith("file://")) return path;
+  try {
+    return pathToFileURL(path).href;
+  } catch {
+    return path;
+  }
+}
+
 async function resolveProfileModel(input: {
   api: ApiService;
   directory: string;
@@ -95,6 +108,79 @@ export type SpawnWorkerCallbacks = {
   onModelFallback?: (profileId: string, model: string, reason: string) => void;
 };
 
+/**
+ * Resolve environment variables for a worker based on profile configuration.
+ * Includes explicit env vars and any matching envPrefixes from process.env.
+ */
+function resolveWorkerEnv(profile: WorkerProfile): Record<string, string> {
+  const env: Record<string, string> = {};
+
+  // Add explicit env vars from profile
+  if (profile.env) {
+    Object.assign(env, profile.env);
+  }
+
+  // Add env vars matching prefixes
+  if (profile.envPrefixes && profile.envPrefixes.length > 0) {
+    for (const [key, value] of Object.entries(process.env)) {
+      if (!value) continue;
+      for (const prefix of profile.envPrefixes) {
+        if (key.startsWith(prefix)) {
+          env[key] = value;
+          break;
+        }
+      }
+    }
+  }
+
+  return env;
+}
+
+/**
+ * Resolve MCP server configuration for a worker.
+ * Returns the MCP config to merge into the worker's opencode config.
+ */
+async function resolveWorkerMcp(
+  profile: WorkerProfile,
+  parentConfig: Record<string, unknown>
+): Promise<Record<string, unknown> | undefined> {
+  const mcpConfig = profile.mcp;
+  if (!mcpConfig) return undefined;
+
+  const parentMcp = parentConfig.mcp as Record<string, unknown> | undefined;
+  if (!parentMcp) return undefined;
+
+  // If inheritAll, pass through the entire parent MCP config
+  if (mcpConfig.inheritAll) {
+    return parentMcp;
+  }
+
+  // Otherwise, filter to only specified servers
+  if (mcpConfig.servers && mcpConfig.servers.length > 0) {
+    const filtered: Record<string, unknown> = {};
+    for (const serverName of mcpConfig.servers) {
+      if (parentMcp[serverName]) {
+        filtered[serverName] = parentMcp[serverName];
+      }
+    }
+    return Object.keys(filtered).length > 0 ? filtered : undefined;
+  }
+
+  return undefined;
+}
+
+/**
+ * Default session mode based on worker type.
+ */
+function getDefaultSessionMode(profile: WorkerProfile): WorkerSessionMode {
+  // Memory and docs benefit from linked mode for visibility
+  if (profile.id === "memory" || profile.id === "docs") {
+    return "linked";
+  }
+  // Default to linked for visibility
+  return "linked";
+}
+
 export async function spawnWorker(input: {
   api: ApiService;
   registry: WorkerRegistry;
@@ -104,6 +190,12 @@ export async function spawnWorker(input: {
   modelAliases?: OrchestratorConfig["modelAliases"];
   timeoutMs: number;
   callbacks?: SpawnWorkerCallbacks;
+  /** Session manager for tracking and event forwarding */
+  sessionManager?: WorkerSessionManager;
+  /** Communication service for event forwarding */
+  communication?: CommunicationService;
+  /** Parent session ID (for child mode) */
+  parentSessionId?: string;
 }): Promise<WorkerInstance> {
   const { profile: resolvedProfile, changes, fallbackModel } = await resolveProfileModel({
     api: input.api,
@@ -142,6 +234,16 @@ export async function spawnWorker(input: {
   });
   const permissionSummary = summarizePermissions(resolvedProfile.permissions);
 
+  // Determine session mode
+  const sessionMode = resolvedProfile.sessionMode ?? getDefaultSessionMode(resolvedProfile);
+
+  // Resolve env vars for this worker
+  const workerEnv = resolveWorkerEnv(resolvedProfile);
+
+  // Load parent config for MCP resolution
+  const parentConfig = await loadOpenCodeConfig();
+  const workerMcp = await resolveWorkerMcp(resolvedProfile, parentConfig);
+
   const instance: WorkerInstance = {
     profile: resolvedProfile,
     status: "starting",
@@ -149,13 +251,31 @@ export async function spawnWorker(input: {
     directory: input.directory,
     startedAt: new Date(),
     modelResolution,
+    sessionMode,
+    parentSessionId: input.parentSessionId,
+    messageCount: 0,
+    toolCount: 0,
   };
 
   input.registry.register(instance);
 
+  // Set up worker env vars restoration function (defined outside try for catch access)
+  const previousEnvValues: Record<string, string | undefined> = {};
+  const restoreWorkerEnv = () => {
+    for (const [key, previousValue] of Object.entries(previousEnvValues)) {
+      if (previousValue === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previousValue;
+      }
+    }
+  };
+
   try {
-    const workerBridgePluginPath = resolveWorkerBridgePluginPath();
-    const useWorkerBridge = Boolean(workerBridgePluginPath);
+    const workerBridgePluginPath = normalizePluginPath(resolveWorkerBridgePluginPath());
+    const preferWorkerBridge =
+      process.env.OPENCODE_WORKER_BRIDGE === "1" || Boolean(process.env.OPENCODE_WORKER_PLUGIN_PATH);
+    const useWorkerBridge = Boolean(workerBridgePluginPath) && preferWorkerBridge;
 
     const mergedConfig = await mergeOpenCodeConfig(
       {
@@ -163,12 +283,20 @@ export async function spawnWorker(input: {
         plugin: [],
         ...(toolConfig && { tools: toolConfig }),
         ...(resolvedProfile.permissions && { permissions: resolvedProfile.permissions }),
+        ...(workerMcp && { mcp: workerMcp }),
       },
       {
         dropOrchestratorPlugin: true,
         appendPlugins: useWorkerBridge ? [workerBridgePluginPath as string] : undefined,
       }
     );
+
+    // Inject worker env vars into process.env before starting server
+    for (const [key, value] of Object.entries(workerEnv)) {
+      previousEnvValues[key] = process.env[key];
+      process.env[key] = value;
+    }
+
     const startServer = async (config: Record<string, unknown>, pluginPath?: string) => {
       const previousWorkerPluginPath = process.env.OPENCODE_WORKER_PLUGIN_PATH;
       const previousWorkerFlag = process.env.OPENCODE_ORCHESTRATOR_WORKER;
@@ -340,17 +468,73 @@ export async function spawnWorker(input: {
     instance.lastActivity = new Date();
     input.registry.updateStatus(resolvedProfile.id, "ready");
 
+    // Restore worker env vars
+    restoreWorkerEnv();
+
+    // Register session with session manager
+    if (input.sessionManager && instance.sessionId) {
+      input.sessionManager.registerSession({
+        workerId: resolvedProfile.id,
+        sessionId: instance.sessionId,
+        mode: sessionMode,
+        parentSessionId: input.parentSessionId,
+        serverUrl: instance.serverUrl,
+      });
+    }
+
+    // Start event forwarding for linked mode
+    if (sessionMode === "linked" && input.sessionManager && input.communication) {
+      const forwardEvents = resolvedProfile.forwardEvents ?? [
+        "tool",
+        "message",
+        "error",
+        "complete",
+        "progress",
+      ];
+      instance.eventForwardingHandle = startEventForwarding(
+        instance,
+        input.sessionManager,
+        input.communication,
+        { events: forwardEvents }
+      );
+    }
+
     return instance;
   } catch (error) {
+    // Restore worker env vars on error
+    restoreWorkerEnv();
+
     const errorMsg = error instanceof Error ? error.message : String(error);
     instance.status = "error";
     instance.error = errorMsg;
     input.registry.updateStatus(resolvedProfile.id, "error", errorMsg);
+
+    // Close session in session manager
+    if (input.sessionManager && instance.sessionId) {
+      input.sessionManager.closeSession(instance.sessionId);
+    }
+
+    // Stop event forwarding if started
+    stopEventForwarding(instance);
+
     try {
       await instance.shutdown?.();
     } catch {
       // ignore
     }
     throw error;
+  }
+}
+
+/**
+ * Clean up a worker instance, stopping event forwarding and closing sessions.
+ */
+export function cleanupWorkerInstance(
+  instance: WorkerInstance,
+  sessionManager?: WorkerSessionManager
+): void {
+  stopEventForwarding(instance);
+  if (sessionManager && instance.sessionId) {
+    sessionManager.closeSession(instance.sessionId);
   }
 }

@@ -1,13 +1,17 @@
 import type { Skill } from "../types";
-import { builtInProfiles } from "../workers/profiles";
-import { profileToSkill } from "./convert";
 
+/**
+ * Load builtin skills.
+ *
+ * With the new subagent system, there are no hardcoded builtins.
+ * All profiles come from .opencode/agent/subagents/ SKILL.md files.
+ *
+ * This function returns an empty map for backwards compatibility.
+ * It will be removed in a future version.
+ *
+ * @deprecated Profiles are now loaded from .opencode/agent/subagents/
+ */
 export function loadBuiltinSkills(): Map<string, Skill> {
-  const skills = new Map<string, Skill>();
-  for (const profile of Object.values(builtInProfiles)) {
-    const skill = profileToSkill(profile, { type: "builtin" });
-    skill.filePath = `builtin:${skill.id}`;
-    skills.set(skill.id, skill);
-  }
-  return skills;
+  // No more hardcoded builtins - everything comes from SKILL.md files
+  return new Map();
 }

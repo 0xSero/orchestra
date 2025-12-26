@@ -9,11 +9,9 @@ import {
   type User,
   type UserRow,
   type Preference,
-  type PreferenceRow,
   type WorkerConfig,
   type WorkerConfigRow,
   rowToUser,
-  rowToPreference,
   rowToWorkerConfig,
 } from "./schema";
 

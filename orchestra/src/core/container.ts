@@ -10,9 +10,15 @@ import { createWorkflowEngine } from "../workflows/factory";
 import { createOrchestrator } from "../orchestrator";
 import { createTools } from "../tools";
 import { setNeo4jIntegrationsConfig } from "../memory/neo4j";
-import { getAllProfilesWithSkills } from "../workers/profiles";
+import { getAllProfiles } from "../workers/profiles";
 import { createSkillsService } from "../skills/service";
-import { createVisionRoutingState, routeVisionMessage, syncVisionProcessedMessages } from "../ux/vision-routing";
+import {
+  createVisionRoutingState,
+  routeVisionMessage,
+  syncVisionProcessedMessages,
+  type VisionChatInput,
+  type VisionChatOutput,
+} from "../ux/vision-routing";
 import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -117,7 +123,7 @@ export const createCore: Factory<CoreConfig, {}, CoreService> = ({ config }) => 
   };
 
   const refreshProfiles = async () => {
-    const merged = await getAllProfilesWithSkills(projectDir, baseProfiles);
+    const merged = await getAllProfiles(projectDir);
     syncProfiles(merged);
   };
 
@@ -269,7 +275,7 @@ export const createCore: Factory<CoreConfig, {}, CoreService> = ({ config }) => 
   const hooks: CoreHooks = {
     tool: tools.tool,
     "tool.execute.before": tools.guard,
-    "chat.message": async (input, output) => {
+    "chat.message": async (input: VisionChatInput, output: VisionChatOutput) => {
       await routeVisionMessage(
         {
           sessionID: input.sessionID,
@@ -282,8 +288,11 @@ export const createCore: Factory<CoreConfig, {}, CoreService> = ({ config }) => 
         visionState
       );
     },
-    "experimental.chat.messages.transform": async (_input, output) => {
-      syncVisionProcessedMessages(output as any, visionState);
+    "experimental.chat.messages.transform": async (
+      _input: unknown,
+      output: { messages: Array<{ info?: { id?: string; role?: string }; parts?: any[] }> }
+    ) => {
+      syncVisionProcessedMessages(output, visionState);
     },
     "experimental.chat.system.transform": tools.systemTransform,
     "experimental.session.compacting": tools.compaction,

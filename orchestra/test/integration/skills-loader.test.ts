@@ -19,9 +19,10 @@ describe("skills loader", () => {
     delete process.env.OPENCODE_SKILLS_HOME;
   });
 
-  test("project overrides global and builtin", async () => {
-    const projectSkillDir = join(tempDir, ".opencode", "skill", "coder");
-    const globalSkillDir = join(homeDir, ".opencode", "skill", "coder");
+  test("project overrides global", async () => {
+    // Use new path: .opencode/agent/subagents/{id}/SKILL.md
+    const projectSkillDir = join(tempDir, ".opencode", "agent", "subagents", "coder");
+    const globalSkillDir = join(homeDir, ".opencode", "agent", "subagents", "coder");
 
     await mkdir(projectSkillDir, { recursive: true });
     await mkdir(globalSkillDir, { recursive: true });
@@ -53,7 +54,5 @@ describe("skills loader", () => {
 
     const direct = await loadSkill("coder", tempDir);
     expect(direct?.frontmatter.description).toBe("project coder");
-
-    expect(all.get("docs")).toBeTruthy();
   });
 });

@@ -24,6 +24,12 @@ export function profileToSkill(profile: WorkerProfile, source: SkillSource): Ski
     injectRepoContext: profile.injectRepoContext,
     extends: profile.extends,
     compose: profile.compose,
+    // Session mode configuration
+    sessionMode: profile.sessionMode,
+    forwardEvents: profile.forwardEvents,
+    mcp: profile.mcp,
+    env: profile.env,
+    envPrefixes: profile.envPrefixes,
   };
 
   return {
@@ -56,5 +62,11 @@ export function skillToProfile(skill: Skill): WorkerProfile {
     permissions: skill.frontmatter.permissions,
     extends: skill.frontmatter.extends,
     compose: skill.frontmatter.compose,
+    // Session mode configuration
+    sessionMode: skill.frontmatter.sessionMode,
+    forwardEvents: skill.frontmatter.forwardEvents,
+    mcp: skill.frontmatter.mcp,
+    env: skill.frontmatter.env,
+    envPrefixes: skill.frontmatter.envPrefixes,
   };
 }

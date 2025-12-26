@@ -31,9 +31,10 @@ export const createCommunication: Factory<CommunicationConfig, CommunicationDeps
 
   // Forward orchestra events to the SSE stream for frontend visibility
   const forwardToSse = <T extends OrchestraEventName>(type: T, data: OrchestraEventMap[T], meta: OrchestraEventMeta) => {
-    // Forward worker events, orchestrator lifecycle, and model events
+    // Forward worker events, session events, orchestrator lifecycle, and model events
     if (
       type.startsWith("orchestra.worker.") ||
+      type.startsWith("orchestra.session.") ||
       type.startsWith("orchestra.model.") ||
       type === "orchestra.started" ||
       type.startsWith("skill.")

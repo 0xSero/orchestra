@@ -58,6 +58,9 @@ export async function updateSkill(
       ...(base?.frontmatter ?? {}),
       ...(updates.frontmatter ?? {}),
       name: updates.frontmatter?.name ?? base?.frontmatter.name ?? id,
+      description:
+        updates.frontmatter?.description ?? base?.frontmatter.description ?? "",
+      model: updates.frontmatter?.model ?? base?.frontmatter.model ?? "",
     },
     systemPrompt: updates.systemPrompt ?? base?.systemPrompt ?? "",
   };

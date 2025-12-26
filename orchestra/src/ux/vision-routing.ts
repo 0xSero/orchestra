@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import type { CommunicationService } from "../communication";
 import type { WorkerAttachment } from "../workers/prompt";
 import { normalizeBase64Image } from "../workers/prompt";
 
@@ -32,9 +33,7 @@ export type VisionRoutingDeps = {
   };
   ensureWorker?: (input: { workerId: string; reason: "manual" | "on-demand" }) => Promise<any>;
   profiles: Record<string, { id: string; name?: string; model?: string; supportsVision?: boolean }>;
-  communication?: {
-    emit: (type: string, data: any, meta: { source: "orchestrator"; workerId?: string; jobId?: string; sessionId?: string }) => void;
-  };
+  communication?: Pick<CommunicationService, "emit">;
   timeoutMs?: number;
   prompt?: string;
   logSink?: (entry: Record<string, unknown>) => Promise<void> | void;

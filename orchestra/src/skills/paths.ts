@@ -2,15 +2,17 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { SkillScope } from "../types";
 
-const SKILL_DIR_NAME = "skill";
+// Subagents are stored in .opencode/agent/subagents/
+// Each subagent is a directory with a SKILL.md file defining its profile
+const SUBAGENT_DIR_PATH = ["agent", "subagents"];
 
 export function getProjectSkillsDir(projectDir: string): string {
-  return join(projectDir, ".opencode", SKILL_DIR_NAME);
+  return join(projectDir, ".opencode", ...SUBAGENT_DIR_PATH);
 }
 
 export function getGlobalSkillsDir(): string {
   const home = process.env.OPENCODE_SKILLS_HOME ?? homedir();
-  return join(home, ".opencode", SKILL_DIR_NAME);
+  return join(home, ".opencode", ...SUBAGENT_DIR_PATH);
 }
 
 export function getSkillDir(id: string, scope: SkillScope, projectDir?: string): string {

@@ -1,5 +1,4 @@
 import type { OrchestratorConfig, OrchestratorConfigFile, SpawnPolicy, ToolPermissions, WorkerProfile } from "../../types";
-import { builtInProfiles } from "../profiles";
 import { resolveProfileInheritance, type WorkerProfileDefinition } from "../profile-inheritance";
 import { isPlainObject, asBooleanRecord, asStringArray } from "../../helpers/format";
 import { parseIntegrationsSection, parseMemorySection, parseTelemetrySection } from "./parse-extra";
@@ -49,14 +48,27 @@ function parseSpawnPolicyEntry(value: unknown): SpawnPolicy | undefined {
   return out;
 }
 
-function resolveWorkerEntry(entry: unknown): WorkerProfileDefinition | undefined {
-  if (typeof entry === "string") return builtInProfiles[entry];
+/**
+ * Parse a worker entry from orchestrator.json profiles[] or workers[].
+ * Profiles are now loaded from SKILL.md files, so this only parses config overrides.
+ * String entries (e.g., "coder") are treated as references to profiles loaded at runtime.
+ */
+function resolveWorkerEntry(
+  entry: unknown,
+  baseProfiles: Record<string, WorkerProfile> = {}
+): WorkerProfileDefinition | undefined {
+  // String entry: reference to a profile that will be loaded from SKILL.md
+  if (typeof entry === "string") {
+    // Return the base profile if available, otherwise create a minimal reference
+    return baseProfiles[entry] ?? { id: entry } as WorkerProfileDefinition;
+  }
   if (!isPlainObject(entry)) return undefined;
 
   const id = typeof entry.id === "string" ? entry.id : undefined;
   if (!id) return undefined;
 
-  const base = builtInProfiles[id];
+  // Use base profile from SKILL.md if available
+  const base = baseProfiles[id];
   const merged: Record<string, unknown> = { ...(base ?? {}), ...entry };
 
   if (typeof merged.id !== "string") return undefined;
@@ -289,7 +301,19 @@ export function parseOrchestratorConfigFile(raw: unknown): Partial<OrchestratorC
   return partial;
 }
 
-export function collectProfilesAndSpawn(input: OrchestratorConfigFile): {
+/**
+ * Collect profile overrides and spawn list from orchestrator.json config.
+ *
+ * Profiles are now primarily loaded from SKILL.md files in .opencode/agent/subagents/.
+ * This function processes config file overrides and determines which workers to spawn.
+ *
+ * @param input - Parsed orchestrator.json config
+ * @param baseProfiles - Profiles loaded from SKILL.md files (optional, for merging)
+ */
+export function collectProfilesAndSpawn(
+  input: OrchestratorConfigFile,
+  baseProfiles: Record<string, WorkerProfile> = {}
+): {
   profiles: Record<string, WorkerProfile>;
   spawn: string[];
 } {
@@ -298,23 +322,26 @@ export function collectProfilesAndSpawn(input: OrchestratorConfigFile): {
   const seen = new Set<string>();
 
   const registerProfile = (entry: unknown): WorkerProfileDefinition | undefined => {
-    const resolved = resolveWorkerEntry(entry);
+    const resolved = resolveWorkerEntry(entry, baseProfiles);
     if (resolved) definitions[resolved.id] = resolved;
     return resolved;
   };
 
   const enqueueSpawn = (id: string | undefined) => {
     if (!id) return;
-    if (!(id in builtInProfiles) && !(id in definitions)) return;
+    // Accept spawn if profile exists in base profiles or definitions
+    if (!(id in baseProfiles) && !(id in definitions)) return;
     if (seen.has(id)) return;
     seen.add(id);
     spawn.push(id);
   };
 
+  // Process profile overrides from config
   for (const entry of input.profiles ?? []) {
     registerProfile(entry);
   }
 
+  // Process workers to spawn
   for (const entry of input.workers ?? []) {
     if (typeof entry === "string") {
       enqueueSpawn(entry);
@@ -324,6 +351,7 @@ export function collectProfilesAndSpawn(input: OrchestratorConfigFile): {
     enqueueSpawn(resolved?.id);
   }
 
-  const profiles = resolveProfileInheritance({ builtIns: builtInProfiles, definitions });
+  // Merge base profiles with config overrides via inheritance resolution
+  const profiles = resolveProfileInheritance({ builtIns: baseProfiles, definitions });
   return { profiles, spawn };
 }

@@ -1,10 +1,10 @@
 import type { Config } from "tailwindcss";
 
 /**
- * Terminal Dark Design System
+ * Warm Paper Design System
  *
- * Clean, developer-focused dark theme.
- * Cool grays, blue accent, monospace for technical content.
+ * Papery, warm aesthetic with HSL colors anchored in 30-40 degree hue range.
+ * Geist Sans primary, Geist Mono for code. Clean, readable hierarchy.
  */
 export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
@@ -64,14 +64,30 @@ export default {
       },
 
       fontFamily: {
-        sans: ["-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
-        mono: ["SF Mono", "Fira Code", "JetBrains Mono", "monospace"],
+        sans: ["Geist Sans", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+        mono: ["Geist Mono", "SF Mono", "Fira Code", "JetBrains Mono", "monospace"],
+      },
+
+      fontSize: {
+        xs: ["0.75rem", { lineHeight: "1rem" }],
+        sm: ["0.875rem", { lineHeight: "1.25rem" }],
+        base: ["1rem", { lineHeight: "1.5rem" }],
+        lg: ["1.125rem", { lineHeight: "1.75rem" }],
+        xl: ["1.25rem", { lineHeight: "1.75rem" }],
+        "2xl": ["1.5rem", { lineHeight: "2rem", letterSpacing: "-0.025em" }],
       },
 
       borderRadius: {
         lg: "0.5rem",
         md: "0.375rem",
         sm: "0.25rem",
+        full: "9999px",
+      },
+
+      spacing: {
+        "18": "4.5rem",
+        "88": "22rem",
+        "100": "25rem",
       },
 
       keyframes: {
@@ -79,15 +95,26 @@ export default {
           "0%": { opacity: "0" },
           "100%": { opacity: "1" },
         },
-        pulse: {
+        "slide-up": {
+          "0%": { opacity: "0", transform: "translateY(8px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        "pulse-soft": {
           "0%, 100%": { opacity: "1" },
-          "50%": { opacity: "0.5" },
+          "50%": { opacity: "0.6" },
         },
       },
 
       animation: {
-        "fade-in": "fade-in 0.15s ease-out",
-        pulse: "pulse 2s ease-in-out infinite",
+        "fade-in": "fade-in 0.2s ease-out",
+        "slide-up": "slide-up 0.3s ease-out",
+        "pulse-soft": "pulse-soft 2s ease-in-out infinite",
+      },
+
+      boxShadow: {
+        sm: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
+        DEFAULT: "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)",
+        md: "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
       },
     },
   },

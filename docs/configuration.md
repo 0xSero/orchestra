@@ -111,21 +111,46 @@ interface OrchestratorConfig {
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Built-in Profiles
+### Subagent Profiles (SKILL.md)
 
-| ID | Name | Purpose | Vision | Web |
-|----|------|---------|--------|-----|
-| `vision` | Vision | Image analysis, screenshots, diagrams | ✓ | - |
-| `docs` | Documentation | README, technical docs, comments | - | - |
-| `coder` | Coder | Code implementation, refactoring | - | - |
-| `architect` | Architect | System design, architecture | - | - |
-| `explorer` | Explorer | Codebase navigation, discovery | - | - |
-| `memory` | Memory | Long-term context management | - | - |
-| `reviewer` | Reviewer | Code review, PR feedback | - | - |
-| `qa` | QA | Testing, quality assurance | - | - |
-| `security` | Security | Security analysis, vulnerabilities | - | - |
-| `product` | Product | Product specs, user stories | - | - |
-| `analyst` | Analyst | Data analysis, insights | - | - |
+Profiles are defined as subagents in `.opencode/agent/subagents/{id}/SKILL.md` files:
+
+```
+.opencode/
+└── agent/
+    └── subagents/
+        ├── memory/
+        │   └── SKILL.md
+        ├── research/
+        │   └── SKILL.md
+        ├── builder/
+        │   └── SKILL.md
+        └── reviewer/
+            └── SKILL.md
+```
+
+Each SKILL.md file has YAML frontmatter defining the profile:
+
+```markdown
+---
+name: builder
+description: Code implementation specialist
+model: node:code
+tools:
+  read: true
+  write: true
+  bash: true
+tags:
+  - implementation
+  - coding
+---
+
+You are a code implementation specialist...
+```
+
+**Model Selection**:
+- Direct: `model: anthropic/claude-sonnet-4-20250514`
+- Node tags: `model: node:code` (resolved via `modelSelection` in orchestrator.json)
 
 ### Profile Inheritance
 
@@ -134,13 +159,15 @@ interface OrchestratorConfig {
 │                     Profile Inheritance Flow                         │
 └─────────────────────────────────────────────────────────────────────┘
 
-  Built-in Profile                    Custom Profile
+  Subagent Profile                    Custom Profile
+  .opencode/agent/subagents/         .opencode/agent/subagents/
   ┌───────────────┐                  ┌───────────────┐
-  │   "coder"     │                  │   "my-coder"  │
-  │   id: coder   │  ────extends──▶  │   extends:    │
-  │   model: ...  │                  │     "coder"   │
-  │   purpose:... │                  │   model: ...  │ ← override
-  └───────────────┘                  └───────────────┘
+  │ builder/      │                  │ my-builder/   │
+  │ SKILL.md      │  ────extends──▶  │ SKILL.md      │
+  │   model: ...  │                  │   extends:    │
+  │   tools:...   │                  │     "builder" │
+  └───────────────┘                  │   model: ...  │ ← override
+                                     └───────────────┘
           │
           └──── Base fields inherited unless overridden
 ```
@@ -739,20 +766,24 @@ Pre-spawn workers for fast availability.
   "basePort": 4097,
   "autoSpawn": true,
 
+  // Profiles are loaded from .opencode/agent/subagents/{id}/SKILL.md
+  // Config overrides can be specified here:
   "profiles": [
-    "docs",
-    "coder",
+    {
+      "id": "builder",
+      "temperature": 0.3
+    },
     {
       "id": "custom-reviewer",
       "extends": "reviewer",
-      "model": "anthropic/claude-sonnet-4-20250514",
-      "temperature": 0.3
+      "model": "anthropic/claude-sonnet-4-20250514"
     }
   ],
 
-  "workers": ["docs", "coder", "custom-reviewer"],
+  // Workers to auto-spawn (must exist as subagents)
+  "workers": ["memory", "builder", "custom-reviewer"],
 
-  "spawnOnDemand": ["vision", "architect"],
+  "spawnOnDemand": ["vision", "research"],
 
   "spawnPolicy": {
     "default": {

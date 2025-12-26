@@ -8,6 +8,8 @@ export type WorkflowToolsDeps = {
   workflows?: WorkflowEngine;
 };
 
+type ToolDefinition = ReturnType<typeof tool>;
+
 function serialize(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
@@ -21,8 +23,8 @@ function attachmentSchema() {
   });
 }
 
-export function createWorkflowTools(deps: WorkflowToolsDeps) {
-  if (!deps.workflows) return {} as const;
+export function createWorkflowTools(deps: WorkflowToolsDeps): Record<string, ToolDefinition> {
+  if (!deps.workflows) return {};
 
   const listWorkflows = tool({
     description: "List available workflows",
