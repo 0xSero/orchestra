@@ -12,62 +12,86 @@ export type ApiDeps = {
   client?: ReturnType<typeof createOpencodeClient>;
 };
 
+/**
+ * Simplified API service interface for OpenCode SDK operations.
+ *
+ * Note: This interface uses `unknown` for args/return types instead of the SDK's
+ * complex generic types. This is intentional - the SDK types have deeply nested
+ * generics with conditional types that would require complex type gymnastics to
+ * properly expose. Using `unknown` provides a clean interface while the actual
+ * implementation delegates to the properly-typed SDK client.
+ *
+ * Callers should refer to SDK documentation for the actual request/response shapes.
+ */
 export type ApiService = ServiceLifecycle & {
   client: ReturnType<typeof createOpencodeClient>;
   createClient: (input: { baseUrl: string; directory?: string }) => ReturnType<typeof createOpencodeClient>;
   createServer: typeof createOpencode;
   session: {
-    create: (args: any) => Promise<any>;
-    list: (args: any) => Promise<any>;
-    get: (args: any) => Promise<any>;
-    prompt: (args: any) => Promise<any>;
-    promptAsync: (args: any) => Promise<any>;
-    messages: (args: any) => Promise<any>;
-    messageDelete: (args: any) => Promise<any>;
-    abort: (args: any) => Promise<any>;
+    create: (args: unknown) => Promise<unknown>;
+    list: (args: unknown) => Promise<unknown>;
+    get: (args: unknown) => Promise<unknown>;
+    prompt: (args: unknown) => Promise<unknown>;
+    promptAsync: (args: unknown) => Promise<unknown>;
+    messages: (args: unknown) => Promise<unknown>;
+    messageDelete: (args: unknown) => Promise<unknown>;
+    abort: (args: unknown) => Promise<unknown>;
   };
   event: {
-    subscribe: (args: any) => any;
+    subscribe: (args: unknown) => unknown;
   };
   file: {
-    read: (args: any) => Promise<any>;
+    read: (args: unknown) => Promise<unknown>;
   };
   find: {
-    text: (args: any) => Promise<any>;
-    files: (args: any) => Promise<any>;
+    text: (args: unknown) => Promise<unknown>;
+    files: (args: unknown) => Promise<unknown>;
   };
   project: {
-    list: (args: any) => Promise<any>;
-    current: (args: any) => Promise<any>;
+    list: (args: unknown) => Promise<unknown>;
+    current: (args: unknown) => Promise<unknown>;
   };
   path: {
-    get: (args: any) => Promise<any>;
+    get: (args: unknown) => Promise<unknown>;
   };
   config: {
-    get: (args: any) => Promise<any>;
-    providers: (args: any) => Promise<any>;
+    get: (args: unknown) => Promise<unknown>;
+    providers: (args: unknown) => Promise<unknown>;
   };
   app: {
-    agents: (args: any) => Promise<any>;
-    log: (args: any) => Promise<any>;
+    agents: (args: unknown) => Promise<unknown>;
+    log: (args: unknown) => Promise<unknown>;
   };
   tui: {
-    appendPrompt: (args: any) => Promise<any>;
-    showToast: (args: any) => Promise<any>;
-    submitPrompt: (args: any) => Promise<any>;
-    publish: (args: any) => Promise<any>;
+    appendPrompt: (args: unknown) => Promise<unknown>;
+    showToast: (args: unknown) => Promise<unknown>;
+    submitPrompt: (args: unknown) => Promise<unknown>;
+    publish: (args: unknown) => Promise<unknown>;
   };
   auth: {
-    set: (args: any) => Promise<any>;
+    set: (args: unknown) => Promise<unknown>;
   };
 };
 
-function withDirectory(directory: string | undefined, args: any): any {
+/**
+ * SDK request arguments shape - simplified for type checking.
+ */
+type SdkArgs = { query?: Record<string, unknown> } & Record<string, unknown>;
+
+/**
+ * Helper to inject directory into SDK request arguments.
+ *
+ * Note: Returns `any` because the SDK client methods expect specific option types
+ * (e.g., Options<SessionGetData>). The actual type validation happens in the SDK.
+ * Using `any` here allows the wrapper to remain flexible while the SDK enforces
+ * the actual type constraints at runtime.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function withDirectory(directory: string | undefined, args: unknown): any {
   if (!directory) return args;
   if (!args || typeof args !== "object") return { query: { directory } };
-  const next = { ...args };
-  next.query = { ...(args.query ?? {}), directory };
-  return next;
+  const typedArgs = args as SdkArgs;
+  return { ...typedArgs, query: { ...(typedArgs.query ?? {}), directory } };
 }
 
 export const createApi: Factory<ApiConfig, ApiDeps, ApiService> = ({ config, deps }) => {

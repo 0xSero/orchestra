@@ -16,6 +16,29 @@ export interface ModelCapabilities {
   throughputTokensPerSecond?: number;
 }
 
+/**
+ * Minimal model shape needed for capability derivation.
+ * This allows the function to handle both SDK Model type and raw objects.
+ */
+type ModelLike = {
+  capabilities?: {
+    attachment?: boolean;
+    toolcall?: boolean;
+    tools?: boolean;
+    function_calling?: boolean;
+    streaming?: boolean;
+    stream?: boolean;
+    reasoning?: boolean;
+    web?: boolean;
+    input?: { image?: boolean; pdf?: boolean };
+    output?: { pdf?: boolean };
+  };
+  limit?: { context?: number; output?: number };
+  cost?: { input?: number; output?: number };
+  latency?: number;
+  throughput?: number;
+};
+
 function inferFromName(name: string): Partial<ModelCapabilities> {
   const lower = name.toLowerCase();
   return {
@@ -27,12 +50,13 @@ function inferFromName(name: string): Partial<ModelCapabilities> {
 }
 
 export function deriveModelCapabilities(input: {
-  model: Model | Record<string, any> | undefined;
+  model: Model | Record<string, unknown> | undefined;
   modelId: string;
   modelName?: string;
   overrides?: Partial<ModelCapabilities>;
 }): ModelCapabilities {
-  const model = input.model as any;
+  // Use ModelLike for safe property access - the function handles any shape of model object
+  const model = input.model as ModelLike | undefined;
   const capabilities = model?.capabilities ?? {};
   const inputCaps = capabilities?.input ?? {};
   const outputCaps = capabilities?.output ?? {};

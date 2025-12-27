@@ -1,4 +1,5 @@
-import type { MemoryNode, MemoryScope } from "./graph/shared";
+import type { Record } from "neo4j-driver";
+import type { MemoryNode, MemoryRecordShape, MemoryScope } from "./graph/shared";
 import { requireProjectId, toNode } from "./graph/shared";
 import type { Neo4jConfig } from "./neo4j";
 import { withNeo4jSession } from "./neo4j";
@@ -34,9 +35,9 @@ RETURN n
         tags: input.tags ?? [],
       },
     );
-    const rec = res.records?.[0];
+    const rec = res.records?.[0] as Record<MemoryRecordShape> | undefined;
     if (!rec) throw new Error("No record returned from Neo4j");
-    return toNode(rec as any);
+    return toNode(rec);
   });
 }
 
@@ -98,9 +99,9 @@ LIMIT 1
         key: input.key,
       },
     );
-    const rec = res.records?.[0];
+    const rec = res.records?.[0] as Record<MemoryRecordShape> | undefined;
     if (!rec) return undefined;
-    return toNode(rec as any);
+    return toNode(rec);
   });
 }
 
@@ -134,7 +135,7 @@ LIMIT toInteger($limit)
         limit,
       },
     );
-    return res.records.map((r) => toNode(r as any));
+    return res.records.map((r) => toNode(r as Record<MemoryRecordShape>));
   });
 }
 
@@ -163,7 +164,7 @@ LIMIT toInteger($limit)
         limit,
       },
     );
-    return res.records.map((r) => toNode(r as any));
+    return res.records.map((r) => toNode(r as Record<MemoryRecordShape>));
   });
 }
 

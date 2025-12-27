@@ -1,14 +1,38 @@
 import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import type { Skill, SkillInput, SkillScope } from "../types";
 import { loadSkill, loadSkillOverrides } from "./loader";
 import { serializeSkillFile } from "./parse";
-import { getSkillDir, getSkillFilePath } from "./paths";
+import {
+  getGlobalSkillsDir,
+  getGlobalSubagentsDir,
+  getProjectSkillsDirs,
+  getProjectSubagentsDirs,
+  getSkillFilePath,
+  resolveProjectDir,
+} from "./paths";
 import { validateSkillInput } from "./validate";
 
 function toValidationMessage(result: ReturnType<typeof validateSkillInput>): string {
   return result.errors.map((err) => `${err.field}: ${err.message}`).join("; ");
+}
+
+function findScopedSkillFilePath(id: string, scope: SkillScope, projectDir?: string): string | null {
+  const resolvedProjectDir = scope === "project" ? resolveProjectDir(projectDir) : undefined;
+  const roots =
+    scope === "global"
+      ? [getGlobalSkillsDir(), getGlobalSubagentsDir()]
+      : resolvedProjectDir
+        ? [...getProjectSkillsDirs(resolvedProjectDir), ...getProjectSubagentsDirs(resolvedProjectDir)]
+        : [];
+
+  for (const root of roots) {
+    const filePath = join(root, id, "SKILL.md");
+    if (existsSync(filePath)) return filePath;
+  }
+
+  return null;
 }
 
 async function writeSkillFile(filePath: string, input: SkillInput): Promise<void> {
@@ -25,7 +49,8 @@ export async function createSkill(input: SkillInput, scope: SkillScope, projectD
   const validation = validateSkillInput(input);
   if (!validation.valid) throw new Error(`Invalid skill input: ${toValidationMessage(validation)}`);
 
-  const filePath = getSkillFilePath(input.id, scope, projectDir);
+  const resolvedProjectDir = scope === "project" ? resolveProjectDir(projectDir) : projectDir;
+  const filePath = getSkillFilePath(input.id, scope, resolvedProjectDir);
   if (existsSync(filePath)) {
     throw new Error(`Skill "${input.id}" already exists in ${scope} scope.`);
   }
@@ -42,15 +67,10 @@ export async function updateSkill(
   scope: SkillScope,
   projectDir?: string,
 ): Promise<Skill> {
-  const filePath = getSkillFilePath(id, scope, projectDir);
-
-  let base: Skill | undefined;
-  if (existsSync(filePath)) {
-    base = await loadSkill(id, scope === "project" ? projectDir : undefined);
-  } else {
-    const lookupDir = scope === "project" ? projectDir : undefined;
-    base = await loadSkill(id, lookupDir);
-  }
+  const lookupDir = scope === "project" ? resolveProjectDir(projectDir) : undefined;
+  const base = await loadSkill(id, lookupDir);
+  const filePath =
+    findScopedSkillFilePath(id, scope, lookupDir) ?? getSkillFilePath(id, scope, lookupDir ?? projectDir);
 
   const merged: SkillInput = {
     id,
@@ -74,9 +94,10 @@ export async function updateSkill(
 }
 
 export async function deleteSkill(id: string, scope: SkillScope, projectDir?: string): Promise<boolean> {
-  const dir = getSkillDir(id, scope, projectDir);
-  if (!existsSync(dir)) return false;
-  await rm(dir, { recursive: true, force: true });
+  const lookupDir = scope === "project" ? resolveProjectDir(projectDir) : projectDir;
+  const filePath = findScopedSkillFilePath(id, scope, lookupDir);
+  if (!filePath) return false;
+  await rm(dirname(filePath), { recursive: true, force: true });
   return true;
 }
 

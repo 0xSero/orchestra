@@ -20,6 +20,10 @@ export type Neo4jIntegrationConfig = {
   username?: string;
   password?: string;
   database?: string;
+  /** Auto-start Neo4j Docker container if not running (default: true) */
+  autoStart?: boolean;
+  /** Docker image to use (default: neo4j:community) */
+  image?: string;
 };
 
 export type MonitoringIntegrationConfig = {

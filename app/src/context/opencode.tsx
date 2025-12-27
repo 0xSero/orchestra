@@ -111,6 +111,9 @@ export interface OpenCodeContextValue {
     }>,
   ) => Promise<void>;
   abortSession: (id: string) => Promise<boolean>;
+  abortAllSessions: () => Promise<number>;
+  deleteAllSessions: () => Promise<number>;
+  disposeAllInstances: () => Promise<boolean>;
 
   // Direct client access for advanced use
   client: OpencodeClient;
@@ -198,7 +201,7 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
   // Data Fetching
   // ---------------------------------------------------------------------------
 
-  const fetchAll = async () => {
+  const fetchAll = async (includeMessages = false) => {
     try {
       // Fetch sessions and agents in parallel
       const [sessionsRes, agentsRes] = await Promise.all([client.session.list(), client.app.agents()]);
@@ -227,6 +230,13 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
         sessions: sessions.length,
         agents: agents.length,
       });
+
+      // Fetch messages for all sessions if requested (typically on initial load)
+      if (includeMessages && sessions.length > 0) {
+        console.log("[opencode] Fetching messages for all sessions...");
+        await Promise.all(sessions.map((session) => fetchMessages(session.id)));
+        console.log("[opencode] All session messages loaded");
+      }
     } catch (err) {
       console.error("[opencode] Failed to fetch data:", err);
       setState("connected", false);
@@ -234,68 +244,58 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
   };
 
   const fetchMessages = async (sessionId: string) => {
-    console.log(`🔍 [fetchMessages] Starting fetch for session: ${sessionId}`);
     try {
       const res = await client.session.messages({ path: { id: sessionId } });
-      console.log(`🔍 [fetchMessages] SDK response for ${sessionId}:`, {
-        status: res.response?.status,
-        hasData: !!res.data,
-        dataKeys: res.data ? Object.keys(res.data) : "no-data",
-      });
 
-      const data = res.data as { messages?: Message[]; parts?: Part[] } | undefined;
+      // API returns { info: Message, parts: Part[] }[] - an array of message+parts objects
+      // OR it might return { messages: Message[], parts: Part[] } depending on SDK version
+      const rawData = res.data;
 
-      if (data) {
-        console.log(`🔍 [fetchMessages] Processing data for ${sessionId}:`, {
-          messageCount: data.messages?.length || 0,
-          partCount: data.parts?.length || 0,
-          sampleMessage: data.messages?.[0]
-            ? {
-                id: data.messages[0].id,
-                role: data.messages[0].role,
-                hasParts: !!(
-                  data.parts &&
-                  data.messages &&
-                  data.parts.find((p) => p.messageID === data.messages![0].id)
-                ),
-              }
-            : "no-messages",
-        });
-
-        const oldState = {
-          messageCount: state.messages[sessionId]?.length || 0,
-          partCount: Object.keys(state.parts).reduce((acc, msgId) => (msgId.startsWith(sessionId) ? acc + 1 : acc), 0),
-        };
-
-        setState(
-          produce((s) => {
-            s.messages[sessionId] = data.messages ?? [];
-            const messageIds = new Set((data.messages ?? []).map((m) => m.id));
-            for (const id of messageIds) {
-              delete s.parts[id];
-            }
-            for (const part of data.parts ?? []) {
-              if (!s.parts[part.messageID]) {
-                s.parts[part.messageID] = [];
-              }
-              s.parts[part.messageID].push(part);
-            }
-          }),
-        );
-
-        const newState = {
-          messageCount: state.messages[sessionId]?.length || 0,
-          partCount: Object.keys(state.parts).reduce((acc, msgId) => (msgId.startsWith(sessionId) ? acc + 1 : acc), 0),
-        };
-
-        console.log(`🔍 [fetchMessages] State updated for ${sessionId}:`, {
-          before: oldState,
-          after: newState,
-          messages: state.messages[sessionId]?.map((m) => ({ id: m.id, role: m.role })) || "no-messages",
-        });
-      } else {
-        console.log(`🔍 [fetchMessages] No data returned for session: ${sessionId}`);
+      if (!rawData) {
+        console.log(`[opencode] No message data for session ${sessionId}`);
+        return;
       }
+
+      // Handle both response formats
+      let messages: Message[] = [];
+      let allParts: Part[] = [];
+
+      if (Array.isArray(rawData)) {
+        // Format: { info: Message, parts: Part[] }[]
+        for (const item of rawData as Array<{ info?: Message; parts?: Part[] }>) {
+          if (item.info) {
+            messages.push(item.info);
+          }
+          if (item.parts) {
+            allParts.push(...item.parts);
+          }
+        }
+      } else if (typeof rawData === "object") {
+        // Format: { messages: Message[], parts: Part[] }
+        const objData = rawData as { messages?: Message[]; parts?: Part[] };
+        messages = objData.messages ?? [];
+        allParts = objData.parts ?? [];
+      }
+
+      setState(
+        produce((s) => {
+          s.messages[sessionId] = messages;
+          // Clear old parts for these messages
+          const messageIds = new Set(messages.map((m) => m.id));
+          for (const id of messageIds) {
+            delete s.parts[id];
+          }
+          // Add new parts
+          for (const part of allParts) {
+            if (!s.parts[part.messageID]) {
+              s.parts[part.messageID] = [];
+            }
+            s.parts[part.messageID].push(part);
+          }
+        }),
+      );
+
+      console.log(`[opencode] Loaded ${messages.length} messages for session ${sessionId}`);
     } catch (err) {
       console.error(`[opencode] Failed to fetch messages for ${sessionId}:`, err);
     }
@@ -306,12 +306,12 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
   // ---------------------------------------------------------------------------
 
   createEffect(() => {
-    // Initial fetch
-    fetchAll();
+    // Initial fetch - include messages for all sessions on first load
+    fetchAll(true);
 
-    // Poll for updates every 5 seconds
+    // Poll for updates every 5 seconds (sessions only, not messages)
     const pollInterval = setInterval(() => {
-      fetchAll();
+      fetchAll(false);
     }, 5000);
 
     onCleanup(() => {
@@ -550,6 +550,47 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     }
   };
 
+  const abortAllSessions = async (): Promise<number> => {
+    const allSessions = Object.values(state.sessions);
+    let aborted = 0;
+    await Promise.all(
+      allSessions.map(async (session) => {
+        const success = await abortSession(session.id);
+        if (success) aborted++;
+      }),
+    );
+    return aborted;
+  };
+
+  const deleteAllSessions = async (): Promise<number> => {
+    const allSessions = Object.values(state.sessions);
+    let deleted = 0;
+    await Promise.all(
+      allSessions.map(async (session) => {
+        const success = await deleteSession(session.id);
+        if (success) deleted++;
+      }),
+    );
+    return deleted;
+  };
+
+  const disposeAllInstances = async (): Promise<boolean> => {
+    try {
+      await client.instance.dispose();
+      // Clear all workers from state
+      setState(
+        produce((s) => {
+          s.workers = {};
+          s.lastUpdate = Date.now();
+        }),
+      );
+      return true;
+    } catch (err) {
+      console.error("[opencode] Failed to dispose instances:", err);
+      return false;
+    }
+  };
+
   // ---------------------------------------------------------------------------
   // Context Value
   // ---------------------------------------------------------------------------
@@ -584,6 +625,9 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     deleteSession,
     sendMessage,
     abortSession,
+    abortAllSessions,
+    deleteAllSessions,
+    disposeAllInstances,
 
     client,
   };

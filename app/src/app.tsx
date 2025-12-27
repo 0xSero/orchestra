@@ -12,7 +12,7 @@ import { DbProvider, useDb } from "@/context/db";
 import { LayoutProvider } from "@/context/layout";
 import { OpenCodeProvider } from "@/context/opencode";
 import { SkillsProvider } from "@/context/skills";
-import { AgentsPage, ChatPage, LogsPage, OnboardingPage, ProfilesPage, SettingsPage } from "@/pages";
+import { AgentsPage, ChatPage, LogsPage, OnboardingPage, SettingsPage, SystemPage } from "@/pages";
 
 declare global {
   interface Window {
@@ -111,8 +111,9 @@ export const App: Component = () => {
                 {/* Main pages */}
                 <Route path="/chat" component={ChatPage} />
                 <Route path="/agents" component={AgentsPage} />
-                <Route path="/profiles" component={ProfilesPage} />
+                <Route path="/profiles" component={() => <Navigate href="/agents" />} />
                 <Route path="/logs" component={LogsPage} />
+                <Route path="/system" component={SystemPage} />
                 <Route path="/settings" component={SettingsPage} />
                 <Route path="/onboarding" component={OnboardingPage} />
 

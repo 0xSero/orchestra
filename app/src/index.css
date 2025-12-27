@@ -187,6 +187,10 @@
     @apply p-2;
   }
 
+  .btn-compact {
+    @apply px-2.5 py-1 text-xs;
+  }
+
   /* Input - rounded, subtle */
   .input {
     @apply w-full px-3 py-2 text-sm rounded-md bg-input border border-border;
@@ -296,6 +300,98 @@
     @apply text-sm leading-relaxed;
   }
 
+  /* Prose styling for markdown */
+  .prose {
+    @apply text-foreground;
+  }
+
+  .prose p {
+    @apply mb-3 last:mb-0;
+  }
+
+  .prose h1,
+  .prose h2,
+  .prose h3,
+  .prose h4,
+  .prose h5,
+  .prose h6 {
+    @apply font-semibold text-foreground mt-4 mb-2;
+  }
+
+  .prose h1 {
+    @apply text-xl;
+  }
+
+  .prose h2 {
+    @apply text-lg;
+  }
+
+  .prose h3 {
+    @apply text-base;
+  }
+
+  .prose ul,
+  .prose ol {
+    @apply my-2 pl-5;
+  }
+
+  .prose ul {
+    @apply list-disc;
+  }
+
+  .prose ol {
+    @apply list-decimal;
+  }
+
+  .prose li {
+    @apply mb-1;
+  }
+
+  .prose code {
+    @apply px-1.5 py-0.5 rounded bg-muted text-sm font-mono;
+  }
+
+  .prose pre {
+    @apply my-3 p-3 rounded-lg bg-muted overflow-x-auto;
+  }
+
+  .prose pre code {
+    @apply px-0 py-0 bg-transparent;
+  }
+
+  .prose blockquote {
+    @apply my-3 pl-4 border-l-2 border-primary/50 text-muted-foreground italic;
+  }
+
+  .prose a {
+    @apply text-primary underline underline-offset-2 hover:text-primary/80;
+  }
+
+  .prose strong {
+    @apply font-semibold text-foreground;
+  }
+
+  .prose em {
+    @apply italic;
+  }
+
+  .prose hr {
+    @apply my-4 border-border;
+  }
+
+  .prose table {
+    @apply w-full my-3 text-sm;
+  }
+
+  .prose th,
+  .prose td {
+    @apply border border-border px-3 py-1.5;
+  }
+
+  .prose th {
+    @apply bg-muted font-medium text-left;
+  }
+
   /* Composer */
   .composer {
     @apply flex items-end gap-3 bg-card border border-border rounded-lg p-3;
@@ -354,6 +450,176 @@
 
   .empty-state-description {
     @apply text-sm text-muted-foreground mb-4;
+  }
+
+  /* Agents / Skills workspace */
+  .agents-shell {
+    @apply flex-1 flex h-full overflow-hidden;
+    background:
+      radial-gradient(1200px 500px at 15% -10%, rgba(214, 170, 96, 0.12), transparent 55%),
+      radial-gradient(900px 600px at 85% -20%, rgba(90, 150, 130, 0.12), transparent 60%),
+      hsl(var(--background));
+  }
+
+  .skills-sidebar {
+    @apply w-80 border-r border-border/60 bg-card/70 backdrop-blur-xl;
+  }
+
+  .skills-sidebar-inner {
+    @apply flex flex-col h-full;
+  }
+
+  .skills-header {
+    @apply px-5 pt-5 pb-4 border-b border-border/60 flex items-start justify-between gap-4;
+  }
+
+  .skills-eyebrow {
+    @apply text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70;
+  }
+
+  .skills-title {
+    @apply text-lg font-semibold text-foreground;
+  }
+
+  .skills-count {
+    @apply text-[11px] px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground;
+  }
+
+  .skills-subtitle {
+    @apply text-xs text-muted-foreground/80 mt-1;
+  }
+
+  .skills-new-btn {
+    @apply h-8 px-3 rounded-full;
+  }
+
+  .skills-search {
+    @apply px-4 py-3 border-b border-border/60;
+  }
+
+  .skills-search input {
+    @apply bg-background/60 border-border/70 rounded-full pl-4;
+  }
+
+  .skills-list {
+    @apply flex-1;
+  }
+
+  .skills-list-inner {
+    @apply p-4 space-y-3;
+  }
+
+  .skills-muted {
+    @apply text-xs text-muted-foreground/70 px-1;
+  }
+
+  .skill-item {
+    @apply w-full text-left rounded-xl border border-border/70 px-4 py-3 bg-background/50;
+    @apply transition-all duration-200 hover:border-primary/40 hover:bg-background/80;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  }
+
+  .skill-item.selected {
+    @apply border-primary/60 bg-background;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(214, 170, 96, 0.2);
+  }
+
+  .skill-item-header {
+    @apply flex items-center justify-between gap-3;
+  }
+
+  .skill-item-title {
+    @apply text-sm font-semibold text-foreground;
+  }
+
+  .skill-item-badge {
+    @apply text-[10px] uppercase tracking-[0.15em] bg-secondary/70 text-secondary-foreground;
+  }
+
+  .skill-item-desc {
+    @apply mt-2 text-xs text-muted-foreground/80 truncate-2;
+  }
+
+  .skill-item-meta {
+    @apply mt-3 flex items-center gap-2 text-[10px] text-muted-foreground/70;
+  }
+
+  .skill-item-model {
+    @apply font-mono;
+  }
+
+  .skill-item-dot {
+    @apply h-1 w-1 rounded-full bg-muted-foreground/50;
+  }
+
+  .skill-item-hint {
+    @apply uppercase tracking-[0.2em];
+  }
+
+  .skills-workspace {
+    @apply flex-1 overflow-hidden;
+  }
+
+  .skills-empty {
+    @apply h-full w-full flex items-center justify-center p-8;
+  }
+
+  .skills-empty-card {
+    @apply max-w-md w-full rounded-2xl border border-border/60 bg-card/60 px-6 py-8 flex items-center gap-4;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+  }
+
+  .skills-empty-icon {
+    @apply h-10 w-10 rounded-full bg-primary/20 text-primary flex items-center justify-center text-lg;
+  }
+
+  .skills-empty-title {
+    @apply text-base font-semibold text-foreground;
+  }
+
+  .skills-empty-subtitle {
+    @apply text-sm text-muted-foreground/80 mt-1;
+  }
+
+  .skills-editor {
+    @apply flex flex-col h-full;
+  }
+
+  .skills-editor-header {
+    @apply flex items-start justify-between gap-4 px-6 py-5 border-b border-border/60 bg-card/60 backdrop-blur;
+  }
+
+  .skills-editor-eyebrow {
+    @apply text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70;
+  }
+
+  .skills-editor-title {
+    @apply text-xl font-semibold text-foreground;
+  }
+
+  .skills-editor-subtitle {
+    @apply text-xs text-muted-foreground/80 mt-1;
+  }
+
+  .skills-editor-actions {
+    @apply flex items-center gap-2;
+  }
+
+  .skills-editor-tabs {
+    @apply flex items-center gap-2 px-6 py-2 border-b border-border/60 text-xs bg-card/40;
+  }
+
+  .skills-editor-tab {
+    @apply px-3 py-1.5 rounded-full text-muted-foreground/80 transition-colors;
+    @apply hover:text-foreground hover:bg-accent/50;
+  }
+
+  .skills-editor-tab.active {
+    @apply text-foreground bg-accent;
+  }
+
+  .skills-editor-body {
+    @apply flex-1 overflow-auto p-6;
   }
 }
 

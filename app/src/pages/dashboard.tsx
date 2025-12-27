@@ -4,20 +4,22 @@
  * Top nav with tabs, collapsible sidebar, centered content area
  */
 
-import { type Component, createEffect, createSignal, For, Show } from "solid-js";
+import { type Component, createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import { CommandPalette } from "@/components/command-palette";
 import { LogsPanel } from "@/components/log-stream";
 import { SessionList } from "@/components/sidebar/worker-list";
 import { SkillList, SkillsWorkspace } from "@/components/skills";
+import { SystemMonitor } from "@/components/system-monitor";
 import { ChatView } from "@/components/worker-detail";
 import { useOpenCode } from "@/context/opencode";
 
-type Tab = "chat" | "skills" | "logs";
+type Tab = "chat" | "skills" | "logs" | "system";
 
 export const Dashboard: Component = () => {
-  const { connected, sessions } = useOpenCode();
+  const { connected, sessions, workers, abortAllSessions, deleteAllSessions, disposeAllInstances } = useOpenCode();
   const [activeTab, setActiveTab] = createSignal<Tab>("chat");
   const [sidebarOpen, setSidebarOpen] = createSignal(true);
+  const [actionsOpen, setActionsOpen] = createSignal(false);
 
   // Keyboard shortcuts
   createEffect(() => {
@@ -39,10 +41,41 @@ export const Dashboard: Component = () => {
           e.preventDefault();
           setActiveTab("logs");
         }
+        if (e.key === "4") {
+          e.preventDefault();
+          setActiveTab("system");
+        }
       }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
+  });
+
+  // Calculate active sessions based on worker status or recent activity
+  const sessionStats = createMemo(() => {
+    const allSessions = sessions();
+    const allWorkers = workers();
+
+    // Build a map of sessionId -> worker for quick lookup
+    const workerBySession = new Map<string, (typeof allWorkers)[0]>();
+    for (const w of allWorkers) {
+      if (w.sessionId) workerBySession.set(w.sessionId, w);
+    }
+
+    let active = 0;
+    const now = Date.now();
+
+    for (const session of allSessions) {
+      const worker = workerBySession.get(session.id);
+      // Active if: worker is busy/starting, or session was updated within last 30 seconds
+      if (worker?.status === "busy" || worker?.status === "starting") {
+        active++;
+      } else if (session.time?.updated && now - session.time.updated < 30000) {
+        active++;
+      }
+    }
+
+    return { total: allSessions.length, active };
   });
 
   const tabs: { id: Tab; label: string; icon: Component }[] = [
@@ -110,6 +143,28 @@ export const Dashboard: Component = () => {
         </svg>
       ),
     },
+    {
+      id: "system",
+      label: "System",
+      icon: () => (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
+          <rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
+          <line x1="6" x2="6.01" y1="6" y2="6" />
+          <line x1="6" x2="6.01" y1="18" y2="18" />
+        </svg>
+      ),
+    },
   ];
 
   return (
@@ -118,7 +173,7 @@ export const Dashboard: Component = () => {
       <nav class="nav-tabs">
         {/* Brand */}
         <div class="flex items-center gap-2 px-2 mr-4">
-          <span class="font-medium text-foreground">OpenCode Studio</span>
+          <span class="font-medium text-foreground">Orchestra</span>
         </div>
 
         {/* Tabs */}
@@ -175,10 +230,74 @@ export const Dashboard: Component = () => {
             <input class="nav-input" type="text" placeholder="Search" />
           </div>
 
-          <button class="btn btn-compact btn-ghost">Actions ▾</button>
+          <div class="relative">
+            <button
+              class="btn btn-compact btn-ghost"
+              onClick={() => setActionsOpen((v) => !v)}
+              onBlur={() => setTimeout(() => setActionsOpen(false), 150)}
+            >
+              Actions ▾
+            </button>
+            <Show when={actionsOpen()}>
+              <div class="absolute right-0 top-full mt-1 w-48 rounded-md border border-border bg-card shadow-lg z-50">
+                <div class="py-1">
+                  <button
+                    class="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-accent/50 flex items-center gap-2"
+                    onClick={async () => {
+                      setActionsOpen(false);
+                      const count = await abortAllSessions();
+                      console.log(`Aborted ${count} sessions`);
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect width="14" height="14" x="5" y="5" rx="2" />
+                    </svg>
+                    Stop All Sessions
+                  </button>
+                  <button
+                    class="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-accent/50 flex items-center gap-2"
+                    onClick={async () => {
+                      setActionsOpen(false);
+                      const ok = await disposeAllInstances();
+                      console.log(`Dispose instances: ${ok}`);
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M18 6 6 18" />
+                      <path d="m6 6 12 12" />
+                    </svg>
+                    Kill All Workers
+                  </button>
+                  <div class="border-t border-border my-1" />
+                  <button
+                    class="w-full px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 flex items-center gap-2"
+                    onClick={async () => {
+                      if (confirm("Delete all sessions? This cannot be undone.")) {
+                        setActionsOpen(false);
+                        const count = await deleteAllSessions();
+                        console.log(`Deleted ${count} sessions`);
+                      }
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 6h18" />
+                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                    </svg>
+                    Delete All Sessions
+                  </button>
+                </div>
+              </div>
+            </Show>
+          </div>
 
           <div class="nav-pill">
-            <span>{sessions().length} sessions</span>
+            <Show when={sessionStats().active > 0}>
+              <span class="status-dot busy animate-pulse-soft" />
+              <span class="text-status-busy">{sessionStats().active}</span>
+              <span>/</span>
+            </Show>
+            <span>{sessionStats().total} sessions</span>
           </div>
         </div>
       </nav>
@@ -228,6 +347,13 @@ export const Dashboard: Component = () => {
         <Show when={activeTab() === "logs"}>
           <div class="flex-1 overflow-hidden">
             <LogsPanel />
+          </div>
+        </Show>
+
+        {/* System tab */}
+        <Show when={activeTab() === "system"}>
+          <div class="flex-1 overflow-hidden">
+            <SystemMonitor />
           </div>
         </Show>
       </div>

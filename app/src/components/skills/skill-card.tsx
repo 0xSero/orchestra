@@ -19,14 +19,18 @@ export const SkillCard: Component<{
       class={cn("skill-item", "focus:outline-none focus:ring-2 focus:ring-ring/30", props.selected && "selected")}
       onClick={props.onClick}
     >
-      <div class="flex items-center justify-between gap-2">
-        <h3 class="text-sm font-medium text-foreground">{props.skill.id}</h3>
-        <Badge variant="secondary" class="text-[10px] uppercase tracking-wide">
+      <div class="skill-item-header">
+        <h3 class="skill-item-title">{props.skill.id}</h3>
+        <Badge variant="secondary" class="skill-item-badge">
           {sourceLabel(props.skill)}
         </Badge>
       </div>
-      <p class="mt-1 text-xs text-muted-foreground truncate">{props.skill.frontmatter.description}</p>
-      <div class="mt-2 text-[10px] text-muted-foreground">{props.skill.frontmatter.model}</div>
+      <p class="skill-item-desc">{props.skill.frontmatter.description}</p>
+      <div class="skill-item-meta">
+        <span class="skill-item-model">{props.skill.frontmatter.model}</span>
+        <span class="skill-item-dot" />
+        <span class="skill-item-hint">Editable</span>
+      </div>
     </button>
   );
 };

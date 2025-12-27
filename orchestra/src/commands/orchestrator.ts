@@ -354,8 +354,75 @@ export function createOrchestratorCommands(input: { prefix: string }): Record<st
   const spawnName = `${prefix}spawn`;
   const demoName = `${prefix}demo`;
   const onboardName = `${prefix}onboard`;
+  const helpName = `${prefix}help`;
+  const listWorkersName = `${prefix}list_workers`;
 
   return {
+    [helpName]: {
+      description: "Show available orchestrator commands",
+      async execute(ctx) {
+        const lines: string[] = [
+          "Orchestrator Commands",
+          "",
+          `/${helpName}`,
+          "  Show this help message",
+          "",
+          `/${listWorkersName}`,
+          "  List all running workers with their status",
+          "",
+          `/${statusName}`,
+          "  Show orchestrator status (workers + profiles)",
+          "",
+          `/${spawnName} <profileId>`,
+          "  Spawn a worker by profile ID",
+          "",
+          `/${demoName}`,
+          "  Run a short orchestrator demo",
+          "",
+          `/${onboardName} [--mode council|multimodal|all]`,
+          "  Run the 5-minute onboarding flow",
+          "",
+          "/vision.analyze [--path <file>] [--prompt <text>]",
+          "  Analyze an image from clipboard or file",
+          "",
+          "/memory.record <key> <value> [--tags tag1,tag2]",
+          "  Record a memory entry",
+          "",
+          "/memory.query <query> [--limit 10]",
+          "  Query the memory graph",
+        ];
+        return lines.join("\n");
+      },
+    },
+    [listWorkersName]: {
+      description: "List all running workers",
+      async execute(ctx) {
+        const workers = ctx.deps.workers.listWorkers();
+
+        if (workers.length === 0) {
+          return "No workers are currently running.";
+        }
+
+        const lines: string[] = [`Running Workers (${workers.length})`, ""];
+
+        for (const worker of workers) {
+          const name = worker.profile.name || worker.profile.id;
+          const model = worker.profile.model;
+          const port = worker.port ? `port ${worker.port}` : "no port";
+          const status = worker.status || "unknown";
+          const vision = worker.profile.supportsVision ? " [vision]" : "";
+
+          lines.push(`${name}`);
+          lines.push(`  ID: ${worker.profile.id}`);
+          lines.push(`  Model: ${model}${vision}`);
+          lines.push(`  Status: ${status}`);
+          lines.push(`  Port: ${port}`);
+          lines.push("");
+        }
+
+        return lines.join("\n").trimEnd();
+      },
+    },
     [statusName]: {
       description: "Show orchestrator worker status",
       async execute(ctx) {

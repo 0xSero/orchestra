@@ -1,4 +1,4 @@
-import { callbackify, debuglog, deprecate, format, inspect } from "node:util";
+import { debuglog, format, inspect } from "node:util";
 import type { WorkerInstance } from "../types";
 
 // Enhanced debugging for worker states
@@ -24,17 +24,6 @@ export const formatWorkerStatus = (worker: WorkerInstance): string => {
     worker.port || "unknown",
   );
 };
-
-// Safe callback wrapper for async worker operations
-export const safeCallbackify = <T extends any[], R>(fn: (...args: T) => Promise<R>) => {
-  return callbackify(fn);
-};
-
-// Deprecated method wrapper with clear migration path
-export const deprecatedWorkerMethod = deprecate(
-  (workerId: string) => console.log(`Checking worker ${workerId}`),
-  "Use checkWorkerHealth() instead of deprecatedWorkerMethod()",
-);
 
 // Enhanced inspection for worker objects
 export const inspectWorker = (worker: WorkerInstance, depth: number = 2): string => {

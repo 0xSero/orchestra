@@ -4,7 +4,7 @@
 
 import { type Component, createMemo, createSignal, For, Show } from "solid-js";
 import { useLayout } from "@/context/layout";
-import { type Session, useOpenCode, type WorkerRuntime } from "@/context/opencode";
+import { type Message, type Part, type Session, useOpenCode, type WorkerRuntime } from "@/context/opencode";
 
 // Icons
 const PlusIcon = () => (
@@ -177,9 +177,28 @@ const getStatusLabel = (status: string): string => {
   }
 };
 
+// Message icon
+const MessageIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+  </svg>
+);
+
 interface SessionItemProps {
   session: Session;
   worker?: WorkerRuntime;
+  messages: Message[];
+  getMessageParts: (messageId: string) => Part[];
   isSelected: boolean;
   onSelect: () => void;
   onDelete: () => void;
@@ -198,6 +217,27 @@ const SessionItem: Component<SessionItemProps> = (props) => {
   const model = createMemo(() => {
     const s = props.session as any;
     return props.worker?.model || s.model || s.agent?.model || s.metadata?.model || "default";
+  });
+
+  // Get message count
+  const messageCount = createMemo(() => props.messages.length);
+
+  // Get last message preview
+  const lastMessagePreview = createMemo(() => {
+    const msgs = props.messages;
+    if (msgs.length === 0) return null;
+    const lastMsg = msgs[msgs.length - 1];
+    const parts = props.getMessageParts(lastMsg.id);
+    const textParts = parts.filter((p) => p.type === "text" || p.type === "reasoning") as Array<{
+      type: "text" | "reasoning";
+      text: string;
+    }>;
+    const text = textParts
+      .map((p) => p.text?.trim())
+      .filter(Boolean)
+      .join(" ");
+    if (!text) return `[${lastMsg.role} message]`;
+    return text.length > 80 ? text.slice(0, 80) + "..." : text;
   });
 
   return (
@@ -254,8 +294,18 @@ const SessionItem: Component<SessionItemProps> = (props) => {
           </span>
         </Show>
 
+        <span class="flex items-center gap-1">
+          <MessageIcon />
+          {messageCount()}
+        </span>
+
         <span class="truncate">{model()}</span>
       </div>
+
+      {/* Message preview */}
+      <Show when={lastMessagePreview()}>
+        <div class="mt-1.5 text-xs text-muted-foreground line-clamp-2 leading-relaxed">{lastMessagePreview()}</div>
+      </Show>
 
       {/* Status badge for active sessions */}
       <Show when={status() === "busy" || status() === "starting"}>
@@ -271,7 +321,8 @@ const SessionItem: Component<SessionItemProps> = (props) => {
 };
 
 export const SessionList: Component = () => {
-  const { sessions, workers, createSession, deleteSession, abortSession } = useOpenCode();
+  const { sessions, workers, createSession, deleteSession, abortSession, getSessionMessages, getMessageParts } =
+    useOpenCode();
   const { selectedWorkerId, selectWorker } = useLayout();
   const [filter, setFilter] = createSignal<"all" | "active" | "idle">("all");
 
@@ -406,6 +457,8 @@ export const SessionList: Component = () => {
               <SessionItem
                 session={session}
                 worker={workersBySession().get(session.id)}
+                messages={getSessionMessages(session.id)}
+                getMessageParts={getMessageParts}
                 isSelected={selectedWorkerId() === session.id}
                 onSelect={() => selectWorker(session.id)}
                 onDelete={() => handleDelete(session.id)}

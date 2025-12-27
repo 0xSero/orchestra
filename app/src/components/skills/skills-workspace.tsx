@@ -9,8 +9,16 @@ export function SkillsWorkspace() {
     <Show
       when={selectedSkillId()}
       fallback={
-        <div class="flex h-full items-center justify-center text-sm text-muted-foreground">
-          Select a recipe to view and edit its configuration.
+        <div class="skills-empty">
+          <div class="skills-empty-card">
+            <div class="skills-empty-icon">◎</div>
+            <div>
+              <h3 class="skills-empty-title">Select an agent profile</h3>
+              <p class="skills-empty-subtitle">
+                Choose a profile from the left to edit prompts, tools, and permissions.
+              </p>
+            </div>
+          </div>
         </div>
       }
     >

@@ -1,7 +1,14 @@
+import { spawn, execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import neo4j, { type Driver, type Session } from "neo4j-driver";
+import type { OrchestratorConfigFile } from "../types/config";
 import type { Neo4jIntegrationConfig } from "../types";
+
+const NEO4J_CONTAINER_NAME = "opencode-neo4j";
+const NEO4J_DEFAULT_IMAGE = "neo4j:community";
+const NEO4J_STARTUP_TIMEOUT_MS = 30_000;
+const NEO4J_HEALTH_CHECK_INTERVAL_MS = 1_000;
 
 export type Neo4jConfig = {
   uri: string;
@@ -56,7 +63,7 @@ function loadNeo4jConfigFromFile(): Neo4jConfig | undefined {
       if (!existsSync(configPath)) continue;
 
       const content = readFileSync(configPath, "utf8");
-      const config = JSON.parse(content) as any;
+      const config = JSON.parse(content) as OrchestratorConfigFile;
       const neo4j = config?.integrations?.neo4j;
 
       if (neo4j?.enabled !== false && neo4j?.uri && neo4j?.username && neo4j?.password) {
@@ -160,5 +167,206 @@ export async function withNeo4jSession<T>(cfg: Neo4jConfig, fn: (session: Sessio
     return await fn(session);
   } finally {
     await session.close();
+  }
+}
+
+/**
+ * Check if Docker is available on the system.
+ */
+function isDockerAvailable(): boolean {
+  try {
+    execSync("docker --version", { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if the Neo4j container exists (running or stopped).
+ */
+function containerExists(): boolean {
+  try {
+    const result = execSync(`docker ps -a --filter "name=^${NEO4J_CONTAINER_NAME}$" --format "{{.Names}}"`, {
+      encoding: "utf8",
+    });
+    return result.trim() === NEO4J_CONTAINER_NAME;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if the Neo4j container is currently running.
+ */
+function isContainerRunning(): boolean {
+  try {
+    const result = execSync(`docker ps --filter "name=^${NEO4J_CONTAINER_NAME}$" --format "{{.Names}}"`, {
+      encoding: "utf8",
+    });
+    return result.trim() === NEO4J_CONTAINER_NAME;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Start an existing stopped container.
+ */
+function startContainer(): void {
+  execSync(`docker start ${NEO4J_CONTAINER_NAME}`, { stdio: "ignore" });
+}
+
+/**
+ * Create and start a new Neo4j container.
+ */
+function createContainer(cfg: Neo4jIntegrationConfig): void {
+  const username = cfg.username ?? "neo4j";
+  const password = cfg.password ?? "opencode";
+  const image = cfg.image ?? NEO4J_DEFAULT_IMAGE;
+
+  // Parse port from URI (default bolt://localhost:7687)
+  const uri = cfg.uri ?? "bolt://localhost:7687";
+  const portMatch = uri.match(/:(\d+)$/);
+  const boltPort = portMatch ? portMatch[1] : "7687";
+
+  // Run container with appropriate settings
+  const args = [
+    "run",
+    "-d",
+    "--name",
+    NEO4J_CONTAINER_NAME,
+    "-p",
+    `${boltPort}:7687`,
+    "-p",
+    "7474:7474",
+    "-e",
+    `NEO4J_AUTH=${username}/${password}`,
+    "-e",
+    "NEO4J_PLUGINS=[]",
+    "--restart",
+    "unless-stopped",
+    image,
+  ];
+
+  spawn("docker", args, { stdio: "ignore", detached: true }).unref();
+}
+
+/**
+ * Wait for Neo4j to become responsive.
+ */
+async function waitForNeo4j(cfg: Neo4jConfig, timeoutMs: number = NEO4J_STARTUP_TIMEOUT_MS): Promise<boolean> {
+  const start = Date.now();
+
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const testDriver = neo4j.driver(cfg.uri, neo4j.auth.basic(cfg.username, cfg.password));
+      const session = testDriver.session();
+      try {
+        await session.run("RETURN 1");
+        await session.close();
+        await testDriver.close();
+        return true;
+      } catch {
+        await session.close();
+        await testDriver.close();
+      }
+    } catch {
+      // Connection failed, keep waiting
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, NEO4J_HEALTH_CHECK_INTERVAL_MS));
+  }
+
+  return false;
+}
+
+/**
+ * Check if Neo4j is currently accessible.
+ */
+export async function isNeo4jAccessible(cfg?: Neo4jConfig): Promise<boolean> {
+  const config = cfg ?? loadNeo4jConfig();
+  if (!config) return false;
+
+  try {
+    const testDriver = neo4j.driver(config.uri, neo4j.auth.basic(config.username, config.password));
+    const session = testDriver.session();
+    try {
+      await session.run("RETURN 1");
+      return true;
+    } finally {
+      await session.close();
+      await testDriver.close();
+    }
+  } catch {
+    return false;
+  }
+}
+
+export type EnsureNeo4jResult = {
+  status: "already_running" | "started" | "created" | "failed" | "disabled" | "no_docker" | "no_config";
+  message: string;
+};
+
+/**
+ * Ensure Neo4j is running. If autoStart is enabled in config and Neo4j is not
+ * accessible, this will attempt to start or create a Docker container.
+ */
+export async function ensureNeo4jRunning(integrationsCfg?: Neo4jIntegrationConfig): Promise<EnsureNeo4jResult> {
+  const cfg = integrationsCfg ?? integrationsNeo4jConfig;
+
+  // Check if Neo4j is disabled
+  if (cfg?.enabled === false) {
+    return { status: "disabled", message: "Neo4j integration is disabled" };
+  }
+
+  // Check if autoStart is disabled (default: true when neo4j config exists)
+  if (cfg?.autoStart === false) {
+    return { status: "disabled", message: "Neo4j autoStart is disabled" };
+  }
+
+  // Build config for connection testing
+  const neo4jCfg = loadNeo4jConfig();
+  if (!neo4jCfg) {
+    return { status: "no_config", message: "No Neo4j configuration found" };
+  }
+
+  // Check if already accessible
+  if (await isNeo4jAccessible(neo4jCfg)) {
+    return { status: "already_running", message: "Neo4j is already running" };
+  }
+
+  // Check for Docker
+  if (!isDockerAvailable()) {
+    return { status: "no_docker", message: "Docker is not available - cannot auto-start Neo4j" };
+  }
+
+  try {
+    if (containerExists()) {
+      if (!isContainerRunning()) {
+        // Container exists but stopped - start it
+        startContainer();
+      }
+      // Container is running or just started - wait for it
+      const ready = await waitForNeo4j(neo4jCfg);
+      if (ready) {
+        return { status: "started", message: `Started existing Neo4j container '${NEO4J_CONTAINER_NAME}'` };
+      }
+      return { status: "failed", message: "Neo4j container started but failed to become responsive" };
+    }
+
+    // No container exists - create one
+    createContainer(cfg ?? {});
+
+    // Wait for Neo4j to become ready
+    const ready = await waitForNeo4j(neo4jCfg);
+    if (ready) {
+      return { status: "created", message: `Created and started Neo4j container '${NEO4J_CONTAINER_NAME}'` };
+    }
+
+    return { status: "failed", message: "Neo4j container created but failed to become responsive" };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { status: "failed", message: `Failed to start Neo4j: ${msg}` };
   }
 }

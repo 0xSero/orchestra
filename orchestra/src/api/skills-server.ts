@@ -6,6 +6,7 @@ import type { WorkerManager } from "../workers";
 import { createDbRouter } from "./db-router";
 import { createSessionsRouter } from "./sessions-router";
 import { createSkillsRouter } from "./skills-router";
+import { createSystemRouter } from "./system-router";
 
 export type SkillsApiConfig = {
   enabled?: boolean;
@@ -54,8 +55,17 @@ export const createSkillsApiServer: Factory<SkillsApiConfig, SkillsApiDeps, Skil
         })
       : null;
 
+    // System router for process management
+    const systemHandler = createSystemRouter();
+
     server = createServer((req, res) => {
       const url = req.url ?? "";
+
+      // Route to system API
+      if (url.startsWith("/api/system")) {
+        void systemHandler(req, res);
+        return;
+      }
 
       // Route to DB API
       if (url.startsWith("/api/db")) {

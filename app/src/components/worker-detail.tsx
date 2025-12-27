@@ -3,9 +3,16 @@
  */
 
 import { type Component, createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import { marked } from "marked";
 import { type Attachment as PromptAttachment, PromptInput } from "@/components/prompt-input";
 import { useLayout } from "@/context/layout";
 import { type Message, type Part, useOpenCode, type WorkerRuntime } from "@/context/opencode";
+
+// Configure marked for safe rendering
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+});
 
 // Icons
 const StopIcon = () => (
@@ -340,19 +347,22 @@ export const ChatView: Component = () => {
                     {(msg) => {
                       const display = getMessageDisplay(msg);
                       const content = display.text || (display.files.length > 0 ? "" : `[${msg.role} message]`);
+                      const renderedHtml = createMemo(() => (content ? marked.parse(content) : ""));
 
                       return (
                         <div
                           class={`message ${msg.role === "user" ? "message-user" : "message-assistant"} animate-fade-in`}
                         >
                           <div class="flex items-center gap-2 mb-2">
-                            <span class="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            <span
+                              class={`text-xs font-medium uppercase tracking-wide ${msg.role === "user" ? "text-primary" : "text-muted-foreground"}`}
+                            >
                               {msg.role}
                             </span>
                           </div>
 
                           <Show when={content}>
-                            <div class="message-content whitespace-pre-wrap">{content}</div>
+                            <div class="message-content prose prose-sm prose-invert max-w-none" innerHTML={renderedHtml()} />
                           </Show>
 
                           <Show when={display.files.length > 0}>
@@ -400,20 +410,15 @@ export const ChatView: Component = () => {
             </div>
 
             {/* Input area */}
-            <div class="border-t border-border p-4 bg-card/30">
+            <div class="p-4 bg-background/50">
               <div class="max-w-3xl mx-auto">
                 <PromptInput
                   onSubmit={handleSubmit}
                   onCancel={handleAbort}
                   isLoading={isSending() || isBusy()}
                   allowFilePicker
-                  placeholder="Type a message..."
+                  placeholder="Message..."
                 />
-
-                <div class="flex items-center justify-between mt-2 text-xs text-muted-foreground">
-                  <span>Press Enter to send, Shift+Enter for new line</span>
-                  <span>{messages().length} messages</span>
-                </div>
               </div>
             </div>
           </>

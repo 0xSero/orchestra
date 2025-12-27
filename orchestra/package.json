@@ -19,7 +19,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target node --external @opencode-ai/sdk --external @opencode-ai/plugin --external zod && cp scripts/worker-bridge-plugin.mjs dist/worker-bridge-plugin.mjs",
+    "build": "bun build ./src/index.ts --outdir ./dist --target bun --external @opencode-ai/sdk --external @opencode-ai/plugin --external zod && cp scripts/worker-bridge-plugin.mjs dist/worker-bridge-plugin.mjs",
     "dev": "bun --watch src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
@@ -28,8 +28,6 @@
   "dependencies": {
     "@opencode-ai/plugin": "^1.0.203",
     "@opencode-ai/sdk": "^1.0.203",
-    "@types/better-sqlite3": "^7.6.13",
-    "better-sqlite3": "^12.5.0",
     "neo4j-driver": "^6.0.1",
     "posthog-node": "^5.17.4",
     "yaml": "^2.8.2"

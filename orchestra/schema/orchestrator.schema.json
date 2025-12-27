@@ -285,6 +285,16 @@
             "database": {
               "type": "string",
               "description": "Neo4j database name (optional, uses default if not specified)"
+            },
+            "autoStart": {
+              "type": "boolean",
+              "default": true,
+              "description": "Automatically start Neo4j Docker container if not running (requires Docker)"
+            },
+            "image": {
+              "type": "string",
+              "default": "neo4j:community",
+              "description": "Docker image to use for Neo4j container"
             }
           }
         },

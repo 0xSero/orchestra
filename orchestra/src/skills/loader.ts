@@ -3,7 +3,13 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { Skill, SkillSource } from "../types";
 import { parseSkillFile } from "./parse";
-import { getGlobalSkillsDir, getProjectSkillsDir } from "./paths";
+import {
+  getGlobalSkillsDir,
+  getGlobalSubagentsDir,
+  getProjectSkillsDirs,
+  getProjectSubagentsDirs,
+  resolveProjectDir,
+} from "./paths";
 import { validateSkillFrontmatter } from "./validate";
 
 type SkillLocation = {
@@ -11,6 +17,34 @@ type SkillLocation = {
   filePath: string;
   source: SkillSource;
 };
+
+type SkillRoot = {
+  root: string;
+  source: SkillSource;
+};
+
+function getSkillRoots(projectDir?: string): SkillRoot[] {
+  const roots: SkillRoot[] = [];
+  const globalSkills = getGlobalSkillsDir();
+  const globalSubagents = getGlobalSubagentsDir();
+  const resolvedDir = resolveProjectDir(projectDir);
+
+  if (resolvedDir) {
+    const projectSkills = getProjectSkillsDirs(resolvedDir);
+    const projectSubagents = getProjectSubagentsDirs(resolvedDir);
+    for (const root of projectSkills) {
+      roots.push({ root, source: { type: "project", path: root } });
+    }
+    for (const root of projectSubagents) {
+      roots.push({ root, source: { type: "project", path: root } });
+    }
+  }
+
+  roots.push({ root: globalSkills, source: { type: "global", path: globalSkills } });
+  roots.push({ root: globalSubagents, source: { type: "global", path: globalSubagents } });
+
+  return roots;
+}
 
 async function detectSkillDirs(root: string, source: SkillSource): Promise<SkillLocation[]> {
   if (!existsSync(root)) return [];
@@ -61,21 +95,11 @@ async function loadSkillFile(location: SkillLocation): Promise<Skill> {
 }
 
 export async function loadSkill(id: string, projectDir?: string): Promise<Skill | undefined> {
-  const projectRoot = projectDir ? getProjectSkillsDir(projectDir) : undefined;
-  const globalRoot = getGlobalSkillsDir();
-
-  const locations: SkillLocation[] = [];
-  if (projectRoot) {
-    const filePath = join(projectRoot, id, "SKILL.md");
-    if (existsSync(filePath)) locations.push({ id, filePath, source: { type: "project", path: projectRoot } });
-  }
-
-  const globalPath = join(globalRoot, id, "SKILL.md");
-  if (existsSync(globalPath))
-    locations.push({ id, filePath: globalPath, source: { type: "global", path: globalRoot } });
-
-  if (locations.length > 0) {
-    return await loadSkillFile(locations[0]);
+  for (const root of getSkillRoots(projectDir)) {
+    const filePath = join(root.root, id, "SKILL.md");
+    if (existsSync(filePath)) {
+      return await loadSkillFile({ id, filePath, source: root.source });
+    }
   }
 
   const { loadBuiltinSkills } = await import("./builtin");
@@ -85,21 +109,10 @@ export async function loadSkill(id: string, projectDir?: string): Promise<Skill 
 
 export async function loadSkillOverrides(projectDir?: string): Promise<Map<string, Skill>> {
   const skills = new Map<string, Skill>();
-  const globalRoot = getGlobalSkillsDir();
-  const projectRoot = projectDir ? getProjectSkillsDir(projectDir) : undefined;
-
-  const globalSkills = await detectSkillDirs(globalRoot, { type: "global", path: globalRoot });
-  for (const location of globalSkills) {
-    try {
-      skills.set(location.id, await loadSkillFile(location));
-    } catch {
-      // Ignore invalid skills in listing.
-    }
-  }
-
-  if (projectRoot) {
-    const projectSkills = await detectSkillDirs(projectRoot, { type: "project", path: projectRoot });
-    for (const location of projectSkills) {
+  const roots = getSkillRoots(projectDir).slice().reverse();
+  for (const root of roots) {
+    const entries = await detectSkillDirs(root.root, root.source);
+    for (const location of entries) {
       try {
         skills.set(location.id, await loadSkillFile(location));
       } catch {

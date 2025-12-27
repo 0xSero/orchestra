@@ -5,21 +5,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function parseArg(name: string): string | undefined {
-  const prefix = `--${name}=`;
-  const hit = process.argv.slice(2).find((a) => a.startsWith(prefix));
-  return hit ? hit.slice(prefix.length) : undefined;
-}
-
-function toNumber(value: string | undefined, fallback: number): number {
-  const n = value ? Number(value) : NaN;
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
 function asBooleanRecord(value: unknown): Record<string, boolean> | undefined {
   if (!isPlainObject(value)) return undefined;
   const out: Record<string, boolean> = {};
@@ -58,4 +43,4 @@ function getUserConfigDir(): string {
   return process.env.XDG_CONFIG_HOME || join(homedir(), ".config");
 }
 
-export { isPlainObject, asBooleanRecord, asStringArray, deepMerge, getUserConfigDir, parseArg, toNumber, sleep };
+export { isPlainObject, asBooleanRecord, asStringArray, deepMerge, getUserConfigDir };

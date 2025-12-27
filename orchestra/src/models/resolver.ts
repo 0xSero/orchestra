@@ -1,10 +1,19 @@
-import type { Provider } from "@opencode-ai/sdk";
+import type { Model, Provider } from "@opencode-ai/sdk";
 import type { OrchestratorConfig } from "../types";
 import { type ModelAliasMap, resolveAlias } from "./aliases";
 import { deriveModelCapabilities, type ModelCapabilities } from "./capabilities";
 import { type CapabilityOverrideMap, resolveCapabilityOverride } from "./capability-overrides";
 import { filterProviders, fullModelID, isFullModelID, parseFullModelID } from "./catalog";
 import { scoreCost } from "./cost";
+
+/**
+ * Type helper to treat a provider model entry as a full Model type.
+ * The SDK's Provider.models type is Record<string, Model>, but Object.entries
+ * loses the Model typing. This helper restores it.
+ */
+function asModel(model: unknown): Model {
+  return model as Model;
+}
 
 export type ModelResolutionContext = {
   providers: Provider[];
@@ -105,7 +114,7 @@ function pickDefaultModel(
     if (!modelId) continue;
     const provider = providers.find((p) => p.id === providerId);
     if (!provider || !(modelId in (provider.models ?? {}))) continue;
-    const model = provider.models?.[modelId] as any;
+    const model = asModel(provider.models?.[modelId]);
     const capabilities = deriveModelCapabilities({ model, modelId, modelName: model?.name });
     return {
       full: fullModelID(providerId, modelId),
@@ -123,8 +132,9 @@ function collectSuggestions(providers: Provider[], query: string): string[] {
   const needle = query.toLowerCase();
   const out: string[] = [];
   for (const provider of providers) {
-    for (const [modelId, model] of Object.entries(provider.models ?? {})) {
-      const name = (model as any)?.name ?? "";
+    for (const [modelId, modelEntry] of Object.entries(provider.models ?? {})) {
+      const model = asModel(modelEntry);
+      const name = model?.name ?? "";
       const full = fullModelID(provider.id, modelId);
       if (
         modelId.toLowerCase().includes(needle) ||
@@ -162,20 +172,21 @@ export function resolveModel(input: string, ctx: ModelResolutionContext): ModelR
     const candidates: ModelResolutionResult[] = [];
 
     for (const provider of providerScope) {
-      for (const [modelId, model] of Object.entries(provider.models ?? {})) {
+      for (const [modelId, modelEntry] of Object.entries(provider.models ?? {})) {
+        const model = asModel(modelEntry);
         const full = fullModelID(provider.id, modelId);
         const overrides = resolveCapabilityOverride(full, ctx.capabilityOverrides);
         const caps = deriveModelCapabilities({
-          model: model as any,
+          model,
           modelId,
-          modelName: (model as any)?.name,
+          modelName: model?.name,
           overrides,
         });
         if (!matchesRequirements(caps, requirements)) continue;
 
         let score = 0;
-        if ((model as any)?.status === "deprecated") score -= 50;
-        score += rankForTag(autoTag, modelId, (model as any)?.name);
+        if (model?.status === "deprecated") score -= 50;
+        score += rankForTag(autoTag, modelId, model?.name);
 
         if (caps.contextWindow > 0) {
           if (autoTag === "auto:docs") score += Math.min(Math.floor(caps.contextWindow / 64_000), 10);
@@ -224,18 +235,19 @@ export function resolveModel(input: string, ctx: ModelResolutionContext): ModelR
         suggestions: providersAll.map((p) => p.id).slice(0, 20),
       };
     }
-    const model = provider.models?.[parsed.modelID];
-    if (!model) {
+    const modelEntry = provider.models?.[parsed.modelID];
+    if (!modelEntry) {
       return {
         error: `Model "${parsed.modelID}" not found for provider "${provider.id}".`,
         suggestions: collectSuggestions([provider], parsed.modelID),
       };
     }
+    const model = asModel(modelEntry);
     const overrides = resolveCapabilityOverride(normalizedInput, ctx.capabilityOverrides);
     const caps = deriveModelCapabilities({
-      model: model as any,
+      model,
       modelId: parsed.modelID,
-      modelName: (model as any)?.name,
+      modelName: model?.name,
       overrides,
     });
     return {
@@ -250,14 +262,15 @@ export function resolveModel(input: string, ctx: ModelResolutionContext): ModelR
 
   const matches: ModelResolutionResult[] = [];
   for (const provider of providersAll) {
-    for (const [modelId, model] of Object.entries(provider.models ?? {})) {
+    for (const [modelId, modelEntry] of Object.entries(provider.models ?? {})) {
       if (modelId !== normalizedInput) continue;
+      const model = asModel(modelEntry);
       const full = fullModelID(provider.id, modelId);
       const overrides = resolveCapabilityOverride(full, ctx.capabilityOverrides);
       const caps = deriveModelCapabilities({
-        model: model as any,
+        model,
         modelId,
-        modelName: (model as any)?.name,
+        modelName: model?.name,
         overrides,
       });
       matches.push({

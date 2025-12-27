@@ -210,12 +210,14 @@ export function parseOrchestratorConfigFile(raw: unknown): Partial<OrchestratorC
 
   if ("profiles" in raw) {
     const profiles = asConfigArray(raw.profiles);
-    if (profiles) partial.profiles = profiles as any;
+    // profiles is Array<string | Record<string, unknown>> which matches OrchestratorConfigFile["profiles"]
+    if (profiles) partial.profiles = profiles as OrchestratorConfigFile["profiles"];
   }
 
   if ("workers" in raw) {
     const workers = asConfigArray(raw.workers);
-    if (workers) partial.workers = workers as any;
+    // workers is Array<string | Record<string, unknown>> which matches OrchestratorConfigFile["workers"]
+    if (workers) partial.workers = workers as OrchestratorConfigFile["workers"];
   }
 
   if (isPlainObject(raw.ui)) {

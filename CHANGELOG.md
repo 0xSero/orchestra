@@ -5,6 +5,26 @@ All notable changes to Open Orchestra will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] - 2025-12-27
+
+### Added
+- **Neo4j Auto-Start** - Automatically starts Neo4j Docker container on plugin load if not running
+  - New config options: `integrations.neo4j.autoStart` (default: true) and `integrations.neo4j.image` (default: neo4j:community)
+  - Detects existing `opencode-neo4j` containers and starts them if stopped
+  - Creates new container with `--restart unless-stopped` for persistence across reboots
+  - Waits up to 30 seconds for Neo4j to become responsive before continuing
+
+### Changed
+- **Migrated from better-sqlite3 to bun:sqlite** - Native Bun SQLite support for better compatibility
+  - Removes native binding issues when running under Bun
+  - Smaller bundle size without native dependencies
+  - Build target changed from `node` to `bun`
+
+### Fixed
+- Plugin crash on startup due to better-sqlite3 not being supported in Bun runtime
+
+---
+
 ## [0.2.3] - 2025-12-23
 
 ### Added

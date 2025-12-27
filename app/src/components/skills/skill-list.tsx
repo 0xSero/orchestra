@@ -38,29 +38,34 @@ export function SkillList() {
   });
 
   return (
-    <div class="flex flex-col h-full">
-      <div class="flex items-center justify-between p-4 border-b border-border">
+    <div class="skills-sidebar-inner">
+      <div class="skills-header">
         <div>
-          <h2 class="font-semibold text-foreground">Recipes</h2>
-          <p class="text-xs text-muted-foreground">{skills().length} total</p>
+          <p class="skills-eyebrow">Agents</p>
+          <div class="flex items-center gap-2">
+            <h2 class="skills-title">Profiles</h2>
+            <span class="skills-count">{skills().length}</span>
+          </div>
+          <p class="skills-subtitle">Local skills + subagents</p>
         </div>
-        <Button variant="ghost" size="sm" class="h-8" onClick={openCreateDialog}>
+        <Button variant="secondary" size="sm" class="skills-new-btn" onClick={openCreateDialog}>
           <PlusIcon />
           New
         </Button>
       </div>
 
-      <div class="p-3 border-b border-border">
-        <Input placeholder="Search recipes..." value={search()} onInput={(e) => setSearch(e.currentTarget.value)} />
+      <div class="skills-search">
+        <Input
+          placeholder="Search agents..."
+          value={search()}
+          onInput={(e) => setSearch(e.currentTarget.value)}
+        />
       </div>
 
-      <ScrollArea class="flex-1">
-        <div class="p-3 space-y-2">
-          <Show when={!isLoading()} fallback={<div class="text-xs text-muted-foreground">Loading...</div>}>
-            <Show
-              when={filteredSkills().length > 0}
-              fallback={<div class="text-xs text-muted-foreground">No recipes</div>}
-            >
+      <ScrollArea class="skills-list">
+        <div class="skills-list-inner">
+          <Show when={!isLoading()} fallback={<div class="skills-muted">Loading profiles...</div>}>
+            <Show when={filteredSkills().length > 0} fallback={<div class="skills-muted">No profiles found</div>}>
               <For each={filteredSkills()}>
                 {(skill) => (
                   <SkillCard

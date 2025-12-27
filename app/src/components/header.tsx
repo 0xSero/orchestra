@@ -57,7 +57,7 @@ export const AppHeader: Component = () => {
             <CommandIcon />
           </div>
           <Show when={!isMobile()}>
-            <span class="font-semibold text-foreground">OpenCode Studio</span>
+            <span class="font-semibold text-foreground">Orchestra</span>
           </Show>
         </div>
 

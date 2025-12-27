@@ -54,27 +54,6 @@ const AgentsIcon: Component = () => (
   </svg>
 );
 
-const ProfilesIcon: Component = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  >
-    <path d="M8 6h13" />
-    <path d="M8 12h13" />
-    <path d="M8 18h13" />
-    <path d="M3 6h.01" />
-    <path d="M3 12h.01" />
-    <path d="M3 18h.01" />
-  </svg>
-);
-
 const LogsIcon: Component = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -147,13 +126,31 @@ const SearchIcon: Component = () => (
   </svg>
 );
 
+const SystemIcon: Component = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
+    <rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
+    <line x1="6" x2="6.01" y1="6" y2="6" />
+    <line x1="6" x2="6.01" y1="18" y2="18" />
+  </svg>
+);
+
 const navItems: NavItem[] = [
   { path: "/chat", label: "Chat", icon: ChatIcon, shortcut: "1" },
   { path: "/agents", label: "Agents", icon: AgentsIcon, shortcut: "2" },
-  { path: "/profiles", label: "Profiles", icon: ProfilesIcon, shortcut: "3" },
-  { path: "/logs", label: "Logs", icon: LogsIcon, shortcut: "4" },
-  { path: "/onboarding", label: "Onboarding", icon: OnboardingIcon, shortcut: "5" },
-  { path: "/settings", label: "Settings", icon: SettingsIcon, shortcut: "6" },
+  { path: "/logs", label: "Logs", icon: LogsIcon, shortcut: "3" },
+  { path: "/system", label: "System", icon: SystemIcon, shortcut: "4" },
+  { path: "/settings", label: "Settings", icon: SettingsIcon, shortcut: "5" },
 ];
 
 export const AppLayout: Component<{ children: JSX.Element }> = (props) => {
@@ -239,7 +236,7 @@ export const AppLayout: Component<{ children: JSX.Element }> = (props) => {
       <nav class="nav-tabs">
         {/* Brand */}
         <A href="/chat" class="flex items-center gap-2 px-3 mr-6 hover:opacity-80 transition-opacity">
-          <span class="text-sm font-semibold text-foreground tracking-tight">OpenCode</span>
+          <span class="text-sm font-semibold text-foreground tracking-tight">Orchestra</span>
         </A>
 
         {/* Navigation tabs */}

@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import Database from "better-sqlite3";
+import { Database } from "bun:sqlite";
 import type { Factory, ServiceLifecycle } from "../types";
 import {
   CREATE_TABLES_SQL,
@@ -48,7 +48,7 @@ export type DatabaseService = ServiceLifecycle & {
 
 export const createDatabase: Factory<DatabaseConfig, Record<string, never>, DatabaseService> = ({ config }) => {
   const dbPath = join(config.directory, ".opencode", config.filename ?? "user.db");
-  let db: Database.Database | null = null;
+  let db: Database | null = null;
 
   const ensureUser = (): string => {
     if (!db) throw new Error("Database not initialized");
@@ -213,9 +213,9 @@ export const createDatabase: Factory<DatabaseConfig, Record<string, never>, Data
       await mkdir(dbDir, { recursive: true });
     }
 
-    db = new Database(dbPath);
-    db.pragma("journal_mode = WAL");
-    db.pragma("foreign_keys = ON");
+    db = new Database(dbPath, { create: true });
+    db.exec("PRAGMA journal_mode = WAL");
+    db.exec("PRAGMA foreign_keys = ON");
 
     // Run schema creation
     db.exec(CREATE_TABLES_SQL);

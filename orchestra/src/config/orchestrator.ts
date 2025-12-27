@@ -33,6 +33,9 @@ export async function loadOrchestratorConfig(input: {
   const projectCandidates = [
     getDefaultProjectOrchestratorConfigPath(input.directory),
     input.worktree ? getDefaultProjectOrchestratorConfigPath(input.worktree) : undefined,
+    // Fallback to orchestra/ subdirectory (for monorepo development setups)
+    join(input.directory, "orchestra", ".opencode", "orchestrator.json"),
+    input.worktree ? join(input.worktree, "orchestra", ".opencode", "orchestrator.json") : undefined,
     join(input.directory, "orchestrator.json"),
     input.worktree ? join(input.worktree, "orchestrator.json") : undefined,
   ].filter(Boolean) as string[];

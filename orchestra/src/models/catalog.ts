@@ -14,6 +14,15 @@ export type ModelCatalogEntry = {
   providerSource: Provider["source"];
 };
 
+/**
+ * Type guard to treat a provider model entry as a full Model type.
+ * The SDK's Provider.models type is Record<string, Model>, but Object.entries
+ * loses the Model typing. This helper restores it.
+ */
+function asModel(model: unknown): Model {
+  return model as Model;
+}
+
 export function isFullModelID(value: string): boolean {
   return value.includes("/");
 }
@@ -31,14 +40,15 @@ export function flattenProviders(providers: Provider[]): ModelCatalogEntry[] {
   const out: ModelCatalogEntry[] = [];
   for (const provider of providers) {
     const models = provider.models ?? {};
-    for (const [modelID, model] of Object.entries(models)) {
+    for (const [modelID, modelEntry] of Object.entries(models)) {
+      const model = asModel(modelEntry);
       out.push({
         full: fullModelID(provider.id, modelID),
         providerID: provider.id,
         modelID,
-        name: (model as any).name ?? modelID,
-        status: (model as any).status ?? "active",
-        capabilities: (model as any).capabilities ?? {
+        name: model.name ?? modelID,
+        status: model.status ?? "active",
+        capabilities: model.capabilities ?? {
           temperature: true,
           reasoning: false,
           attachment: false,
@@ -46,8 +56,8 @@ export function flattenProviders(providers: Provider[]): ModelCatalogEntry[] {
           input: { text: true, audio: false, image: false, video: false, pdf: false },
           output: { text: true, audio: false, image: false, video: false, pdf: false },
         },
-        limit: (model as any).limit ?? { context: 0, output: 0 },
-        cost: (model as any).cost ?? { input: 0, output: 0, cache: { read: 0, write: 0 } },
+        limit: model.limit ?? { context: 0, output: 0 },
+        cost: model.cost ?? { input: 0, output: 0, cache: { read: 0, write: 0 } },
         providerSource: provider.source,
       });
     }
@@ -149,10 +159,20 @@ export async function fetchOpencodeConfig(client: any, directory: string): Promi
   return res?.data as Config | undefined;
 }
 
+/**
+ * Expected shape of the config.providers response.
+ * The SDK response type is complex, so we define the expected data shape here.
+ */
+type ProvidersResponseData = {
+  providers?: Provider[];
+  default?: Record<string, string>;
+};
+
 export async function fetchProviders(
-  client: any,
+  client: { config: { providers: (args: { query: { directory: string } }) => Promise<{ data?: unknown }> } },
   directory: string,
 ): Promise<{ providers: Provider[]; defaults: Record<string, string> }> {
   const res = await client.config.providers({ query: { directory } });
-  return { providers: (res.data as any)?.providers ?? [], defaults: (res.data as any)?.default ?? {} };
+  const data = res.data as ProvidersResponseData | undefined;
+  return { providers: data?.providers ?? [], defaults: data?.default ?? {} };
 }

@@ -8,7 +8,7 @@ import { createCommunication } from "../communication";
 import { createDatabase } from "../db";
 import { applyWorkerConfigOverrides } from "../db/overrides";
 import { createMemoryStore } from "../memory";
-import { setNeo4jIntegrationsConfig } from "../memory/neo4j";
+import { ensureNeo4jRunning, setNeo4jIntegrationsConfig } from "../memory/neo4j";
 import { createOrchestrator } from "../orchestrator";
 import { createSkillsService } from "../skills/service";
 import { createTools } from "../tools";
@@ -170,6 +170,18 @@ export const createCore: Factory<CoreConfig, Record<string, never>, CoreService>
     await api.start();
     await communication.start();
     await database.start();
+
+    // Auto-start Neo4j if configured
+    const neo4jCfg = config.config.integrations?.neo4j;
+    if (neo4jCfg && neo4jCfg.enabled !== false) {
+      const result = await ensureNeo4jRunning(neo4jCfg);
+      if (result.status === "created" || result.status === "started") {
+        console.log(`[Neo4j] ${result.message}`);
+      } else if (result.status === "failed") {
+        console.log(`[Neo4j] Warning: ${result.message}`);
+      }
+    }
+
     await memory.start();
     await refreshProfiles();
     await workers.start();
@@ -182,7 +194,7 @@ export const createCore: Factory<CoreConfig, Record<string, never>, CoreService>
     });
 
     const toastsEnabled = config.config.ui?.toasts !== false;
-    const showToast = (body: Parameters<typeof api.tui.showToast>[0]["body"]) => {
+    const showToast = (body: { title: string; message: string; variant: "info" | "success" | "warning" | "error" }) => {
       if (!toastsEnabled) return;
       api.tui.showToast({ body }).catch((err) => console.log("[Toast] Failed:", err));
     };
@@ -302,7 +314,7 @@ export const createCore: Factory<CoreConfig, Record<string, never>, CoreService>
 
   const hooks: CoreHooks = {
     tool: tools.tool,
-    config: async (input: { agent?: Record<string, unknown> }) => {
+    config: async (input: { agent?: Record<string, unknown>; command?: Record<string, unknown> }) => {
       // Inject the orchestrator agent if enabled in config
       const agentCfg = config.config.agent;
       if (agentCfg?.enabled !== false) {
@@ -319,7 +331,7 @@ export const createCore: Factory<CoreConfig, Record<string, never>, CoreService>
 
       const commandConfig = commands.commandConfig();
       if (Object.keys(commandConfig).length > 0) {
-        (input as any).command = { ...((input as any).command ?? {}), ...commandConfig };
+        input.command = { ...(input.command ?? {}), ...commandConfig };
       }
     },
     "tool.execute.before": tools.guard,
@@ -329,14 +341,15 @@ export const createCore: Factory<CoreConfig, Record<string, never>, CoreService>
           sessionID: input.sessionID,
           agent: input.agent,
           messageID: input.messageID,
-          role: (output as any)?.message?.role,
+          role: output?.message?.role,
         },
-        output as any,
+        output,
         visionDeps,
         visionState,
       );
     },
-    "tui.command.execute": async (input: any) => commands.execute(input as any),
+    // tui.command.execute hook input type is defined by the SDK plugin system
+    "tui.command.execute": async (input: unknown) => commands.execute(input as Parameters<typeof commands.execute>[0]),
     "experimental.chat.messages.transform": async (
       _input: unknown,
       output: { messages: Array<{ info?: { id?: string; role?: string }; parts?: any[] }> },

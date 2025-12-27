@@ -46,7 +46,8 @@ export const createMemoryStore: Factory<MemoryConfig | undefined, MemoryDeps, Me
     if (!deps.api || requestedScope !== "project") return projectId;
     try {
       const res = await deps.api.project.current({});
-      const data = (res as any)?.data ?? res;
+      // SDK response type has complex conditional generics - use type assertion for data extraction
+      const data = (res as { data?: { id?: string } })?.data ?? (res as { id?: string });
       if (data?.id) projectId = data.id;
     } catch {
       // ignore

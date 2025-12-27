@@ -1,7 +1,18 @@
+import type { Record } from "neo4j-driver";
 import type { Neo4jConfig } from "../neo4j";
 import { withNeo4jSession } from "../neo4j";
 import type { MemoryScope } from "./shared";
 import { requireProjectId } from "./shared";
+
+/**
+ * Record shape for queries returning a deleted count.
+ */
+type DeletedCountRecord = { deleted: number };
+
+/**
+ * Record shape for queries returning project drop statistics.
+ */
+type TrimProjectsRecord = { projectsDropped: number; messagesDeleted: number };
 
 export async function trimMemoryByKeyPrefix(input: {
   cfg: Neo4jConfig;
@@ -31,8 +42,8 @@ RETURN size(nodes) AS deleted
           prefix: input.keyPrefix,
         },
       );
-      const rec = res.records?.[0] as any;
-      return rec ? (rec.get("deleted") as number) : 0;
+      const rec = res.records?.[0] as Record<DeletedCountRecord> | undefined;
+      return rec ? rec.get("deleted") : 0;
     });
     return { deleted };
   }
@@ -56,8 +67,8 @@ RETURN size(toDelete) AS deleted
         keepLatest,
       },
     );
-    const rec = res.records?.[0] as any;
-    return rec ? (rec.get("deleted") as number) : 0;
+    const rec = res.records?.[0] as Record<DeletedCountRecord> | undefined;
+    return rec ? rec.get("deleted") : 0;
   });
 
   return { deleted };
@@ -95,10 +106,10 @@ RETURN size(toDrop) AS projectsDropped, size(toDelete) AS messagesDeleted
       `.trim(),
       { keepProjects, scope: "global", prefix: "message:" },
     );
-    const rec = res.records?.[0] as any;
+    const rec = res.records?.[0] as Record<TrimProjectsRecord> | undefined;
     return {
-      projectsDropped: rec ? (rec.get("projectsDropped") as number) : 0,
-      messagesDeleted: rec ? (rec.get("messagesDeleted") as number) : 0,
+      projectsDropped: rec ? rec.get("projectsDropped") : 0,
+      messagesDeleted: rec ? rec.get("messagesDeleted") : 0,
     };
   });
 }
