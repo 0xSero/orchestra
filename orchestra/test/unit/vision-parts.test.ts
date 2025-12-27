@@ -10,9 +10,18 @@ describe("vision parts utilities", () => {
     expect(isImagePart({ type: "file", url: "data:image/png;base64,abc" })).toBe(true);
     expect(isImagePart({ type: "file", url: "clipboard" })).toBe(true);
 
-    expect(formatVisionAnalysis({ response: " ok " })).toBe("[VISION ANALYSIS]\nok");
-    expect(formatVisionAnalysis({ error: " fail " })).toBe("[VISION ANALYSIS FAILED]\nfail");
-    expect(formatVisionAnalysis({})).toContain("Vision analysis unavailable");
+    const ok = formatVisionAnalysis({ response: " ok " });
+    expect(ok).toContain("<pasted_image>");
+    expect(ok).toContain("TEXT DESCRIPTION");
+    expect(ok).toContain("ok");
+
+    const failed = formatVisionAnalysis({ error: " fail " });
+    expect(failed).toContain("<pasted_image>");
+    expect(failed).toContain("Image could not be analyzed: fail");
+
+    const missing = formatVisionAnalysis({});
+    expect(missing).toContain("<pasted_image>");
+    expect(missing).toContain("Image could not be analyzed");
   });
 
   test("replaces image parts with text", () => {

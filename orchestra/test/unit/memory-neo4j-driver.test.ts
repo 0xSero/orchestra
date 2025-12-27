@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test, mock } from "bun:test";
+import { setNeo4jIntegrationsConfig } from "../../src/memory/neo4j-config";
 
 let closeCalls = 0;
 let sessionCloseCalls = 0;
 let closeShouldThrow = false;
 let runShouldThrow = false;
-let loadedConfig: { uri: string; username: string; password: string; database?: string } | undefined;
 
 const makeSession = () => ({
   run: async () => {
@@ -35,14 +35,16 @@ describe("neo4j driver helpers", () => {
       driver: () => makeDriver(),
     }));
 
-    mock.module("../../src/memory/neo4j-config", () => ({
-      loadNeo4jConfig: () => loadedConfig,
-      setNeo4jIntegrationsConfig: () => {},
-    }));
   });
 
   test("caches drivers, closes sessions, and checks accessibility", async () => {
     const { getNeo4jDriver, withNeo4jSession, isNeo4jAccessible } = await import("../../src/memory/neo4j-driver");
+    const envSnapshot = {
+      OPENCODE_NEO4J_URI: process.env.OPENCODE_NEO4J_URI,
+      OPENCODE_NEO4J_USERNAME: process.env.OPENCODE_NEO4J_USERNAME,
+      OPENCODE_NEO4J_PASSWORD: process.env.OPENCODE_NEO4J_PASSWORD,
+      OPENCODE_NEO4J_DATABASE: process.env.OPENCODE_NEO4J_DATABASE,
+    };
 
     const cfg1 = { uri: "bolt://one", username: "neo4j", password: "pw" };
     const cfg2 = { uri: "bolt://two", username: "neo4j", password: "pw" };
@@ -61,16 +63,34 @@ describe("neo4j driver helpers", () => {
     expect(result).toBe("ok");
     expect(sessionCloseCalls).toBeGreaterThan(0);
 
-    loadedConfig = undefined;
-    expect(await isNeo4jAccessible()).toBe(false);
+    try {
+      delete process.env.OPENCODE_NEO4J_URI;
+      delete process.env.OPENCODE_NEO4J_USERNAME;
+      delete process.env.OPENCODE_NEO4J_PASSWORD;
+      delete process.env.OPENCODE_NEO4J_DATABASE;
+      setNeo4jIntegrationsConfig(undefined);
+      expect(await isNeo4jAccessible()).toBe(false);
 
-    loadedConfig = { uri: "bolt://three", username: "neo4j", password: "pw" };
-    closeShouldThrow = false;
-    runShouldThrow = false;
-    expect(await isNeo4jAccessible()).toBe(true);
+      process.env.OPENCODE_NEO4J_URI = "bolt://three";
+      process.env.OPENCODE_NEO4J_USERNAME = "neo4j";
+      process.env.OPENCODE_NEO4J_PASSWORD = "pw";
+      closeShouldThrow = false;
+      runShouldThrow = false;
+      expect(await isNeo4jAccessible()).toBe(true);
 
-    runShouldThrow = true;
-    expect(await isNeo4jAccessible(cfg2)).toBe(false);
+      runShouldThrow = true;
+      expect(await isNeo4jAccessible(cfg2)).toBe(false);
+    } finally {
+      if (envSnapshot.OPENCODE_NEO4J_URI) process.env.OPENCODE_NEO4J_URI = envSnapshot.OPENCODE_NEO4J_URI;
+      else delete process.env.OPENCODE_NEO4J_URI;
+      if (envSnapshot.OPENCODE_NEO4J_USERNAME) process.env.OPENCODE_NEO4J_USERNAME = envSnapshot.OPENCODE_NEO4J_USERNAME;
+      else delete process.env.OPENCODE_NEO4J_USERNAME;
+      if (envSnapshot.OPENCODE_NEO4J_PASSWORD) process.env.OPENCODE_NEO4J_PASSWORD = envSnapshot.OPENCODE_NEO4J_PASSWORD;
+      else delete process.env.OPENCODE_NEO4J_PASSWORD;
+      if (envSnapshot.OPENCODE_NEO4J_DATABASE) process.env.OPENCODE_NEO4J_DATABASE = envSnapshot.OPENCODE_NEO4J_DATABASE;
+      else delete process.env.OPENCODE_NEO4J_DATABASE;
+      setNeo4jIntegrationsConfig(undefined);
+    }
   });
 });
 

@@ -142,9 +142,10 @@ async function killProcess(pid: number): Promise<boolean> {
 }
 
 /**
- * Clean up stale worker processes on startup.
- * Removes workers whose parent process is dead or entries older than maxAge.
- * Uses port-based detection as primary method since we track orchestrator PID, not worker PID.
+ * Clean up stale worker process entries on startup.
+ * IMPORTANT: This only removes stale ENTRIES from tracking, it does NOT kill processes.
+ * We cannot safely kill processes by port because another application (like Chrome)
+ * may have taken over the port since the worker was last running.
  */
 export async function cleanupStaleWorkers(options?: {
   maxAgeMs?: number;
@@ -154,16 +155,12 @@ export async function cleanupStaleWorkers(options?: {
   const dryRun = options?.dryRun ?? false;
 
   const store = await readPidStore();
-  const killed: string[] = [];
   const removed: string[] = [];
   const alive: PidEntry[] = [];
 
   for (const entry of store.entries) {
     const isStale = Date.now() - entry.createdAt > maxAgeMs;
     const parentDead = !isProcessAlive(entry.parentPid);
-
-    // Use port-based detection as primary method - more reliable than PID
-    // since we track orchestrator PID, not the actual worker server PID
     const portActive = entry.port ? isPortInUse(entry.port) : false;
 
     if (!portActive && !isProcessAlive(entry.pid)) {
@@ -173,18 +170,9 @@ export async function cleanupStaleWorkers(options?: {
     }
 
     if (isStale || parentDead) {
-      // Kill orphaned or stale process
-      // Try to kill by port first if available, then by PID
-      if (!dryRun) {
-        if (entry.port && portActive) {
-          await killProcessOnPort(entry.port);
-        }
-        // Also try PID in case it's still the actual worker
-        if (isProcessAlive(entry.pid)) {
-          await killProcess(entry.pid);
-        }
-      }
-      killed.push(entry.workerId);
+      // Entry is stale/orphaned - remove from tracking but DO NOT kill the process
+      // The port may now be used by a different application (e.g., browser)
+      removed.push(entry.workerId);
       continue;
     }
 
@@ -197,7 +185,8 @@ export async function cleanupStaleWorkers(options?: {
     await writePidStore(store);
   }
 
-  return { killed, removed };
+  // Return empty killed array - we no longer kill processes on cleanup
+  return { killed: [], removed };
 }
 
 /**

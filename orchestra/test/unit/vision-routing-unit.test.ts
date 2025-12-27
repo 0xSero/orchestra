@@ -66,7 +66,8 @@ describe("vision routing", () => {
     };
 
     await routeVisionMessage({ role: "user", messageID: "msg-2" }, output as never, deps as never, state);
-    expect(output.parts[0]?.text).toContain("[VISION ANALYSIS FAILED]");
+    expect(output.parts[0]?.text).toContain("<pasted_image>");
+    expect(output.parts[0]?.text).toContain("No valid image attachments found");
     expect(state.processedMessageIds.has("msg-2")).toBe(true);
   });
 
@@ -90,7 +91,8 @@ describe("vision routing", () => {
     };
 
     await routeVisionMessage({ role: "user", messageID: "msg-3" }, output as never, deps as never, state);
-    expect(output.parts[0]?.text).toContain("[VISION ANALYSIS]");
+    expect(output.parts[0]?.text).toContain("<pasted_image>");
+    expect(output.parts[0]?.text).toContain("Vision result");
   });
 
   test("handles worker errors", async () => {
@@ -112,7 +114,8 @@ describe("vision routing", () => {
     };
 
     await routeVisionMessage({ role: "user", messageID: "msg-4" }, output as never, deps as never, state);
-    expect(output.parts[0]?.text).toContain("[VISION ANALYSIS FAILED]");
+    expect(output.parts[0]?.text).toContain("<pasted_image>");
+    expect(output.parts[0]?.text).toContain("vision down");
   });
 
   test("syncs processed message ids", () => {

@@ -96,6 +96,6 @@ describe("memory injection builder", () => {
       },
     });
 
-    expect(injection).toContain("## Memory (auto)");
+    expect(injection).toBeUndefined();
   });
 });

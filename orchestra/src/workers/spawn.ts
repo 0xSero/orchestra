@@ -23,6 +23,27 @@ export type SpawnWorkerCallbacks = {
   onModelFallback?: (profileId: string, model: string, reason: string) => void;
 };
 
+export type SpawnWorkerDeps = {
+  resolveProfileModel?: typeof resolveProfileModel;
+  loadOpenCodeConfig?: typeof loadOpenCodeConfig;
+  mergeOpenCodeConfig?: typeof mergeOpenCodeConfig;
+  resolveWorkerEnv?: typeof resolveWorkerEnv;
+  resolveWorkerMcp?: typeof resolveWorkerMcp;
+  getDefaultSessionMode?: typeof getDefaultSessionMode;
+  getRepoContextForWorker?: typeof getRepoContextForWorker;
+  startEventForwarding?: typeof startEventForwarding;
+  stopEventForwarding?: typeof stopEventForwarding;
+  buildBootstrapPromptArgs?: typeof buildBootstrapPromptArgs;
+  extractSdkData?: typeof extractSdkData;
+  extractSdkErrorMessage?: typeof extractSdkErrorMessage;
+  withTimeout?: typeof withTimeout;
+  resolveWorkerBridgePluginPath?: typeof resolveWorkerBridgePluginPath;
+  normalizePluginPath?: typeof normalizePluginPath;
+  startWorkerServer?: typeof startWorkerServer;
+  createWorkerSession?: typeof createWorkerSession;
+  applyServerBundleToInstance?: typeof applyServerBundleToInstance;
+};
+
 /** Spawn a new worker instance and bootstrap its session. */
 export async function spawnWorker(input: {
   api: ApiService;
@@ -32,6 +53,7 @@ export async function spawnWorker(input: {
   modelSelection?: OrchestratorConfig["modelSelection"];
   modelAliases?: OrchestratorConfig["modelAliases"];
   timeoutMs: number;
+  deps?: SpawnWorkerDeps;
   callbacks?: SpawnWorkerCallbacks;
   /** Session manager for tracking and event forwarding */
   sessionManager?: WorkerSessionManager;
@@ -40,11 +62,31 @@ export async function spawnWorker(input: {
   /** Parent session ID (for child mode) */
   parentSessionId?: string;
 }): Promise<WorkerInstance> {
+  const deps = input.deps ?? {};
+  const resolveProfileModelFn = deps.resolveProfileModel ?? resolveProfileModel;
+  const loadOpenCodeConfigFn = deps.loadOpenCodeConfig ?? loadOpenCodeConfig;
+  const mergeOpenCodeConfigFn = deps.mergeOpenCodeConfig ?? mergeOpenCodeConfig;
+  const resolveWorkerEnvFn = deps.resolveWorkerEnv ?? resolveWorkerEnv;
+  const resolveWorkerMcpFn = deps.resolveWorkerMcp ?? resolveWorkerMcp;
+  const getDefaultSessionModeFn = deps.getDefaultSessionMode ?? getDefaultSessionMode;
+  const getRepoContextForWorkerFn = deps.getRepoContextForWorker ?? getRepoContextForWorker;
+  const startEventForwardingFn = deps.startEventForwarding ?? startEventForwarding;
+  const stopEventForwardingFn = deps.stopEventForwarding ?? stopEventForwarding;
+  const buildBootstrapPromptArgsFn = deps.buildBootstrapPromptArgs ?? buildBootstrapPromptArgs;
+  const extractSdkDataFn = deps.extractSdkData ?? extractSdkData;
+  const extractSdkErrorMessageFn = deps.extractSdkErrorMessage ?? extractSdkErrorMessage;
+  const withTimeoutFn = deps.withTimeout ?? withTimeout;
+  const resolveWorkerBridgePluginPathFn = deps.resolveWorkerBridgePluginPath ?? resolveWorkerBridgePluginPath;
+  const normalizePluginPathFn = deps.normalizePluginPath ?? normalizePluginPath;
+  const startWorkerServerFn = deps.startWorkerServer ?? startWorkerServer;
+  const createWorkerSessionFn = deps.createWorkerSession ?? createWorkerSession;
+  const applyServerBundleToInstanceFn = deps.applyServerBundleToInstance ?? applyServerBundleToInstance;
+
   const {
     profile: resolvedProfile,
     changes,
     fallbackModel,
-  } = await resolveProfileModel({
+  } = await resolveProfileModelFn({
     api: input.api,
     directory: input.directory,
     profile: input.profile,
@@ -78,14 +120,14 @@ export async function spawnWorker(input: {
   const permissionSummary = summarizePermissions(resolvedProfile.permissions);
 
   // Determine session mode
-  const sessionMode = resolvedProfile.sessionMode ?? getDefaultSessionMode(resolvedProfile);
+  const sessionMode = resolvedProfile.sessionMode ?? getDefaultSessionModeFn(resolvedProfile);
 
   // Resolve env vars for this worker
-  const workerEnv = resolveWorkerEnv(resolvedProfile);
+  const workerEnv = resolveWorkerEnvFn(resolvedProfile);
 
   // Load parent config for MCP resolution
-  const parentConfig = await loadOpenCodeConfig();
-  const workerMcp = await resolveWorkerMcp(resolvedProfile, parentConfig);
+  const parentConfig = await loadOpenCodeConfigFn();
+  const workerMcp = await resolveWorkerMcpFn(resolvedProfile, parentConfig);
 
   const instance: WorkerInstance = {
     profile: resolvedProfile,
@@ -115,7 +157,7 @@ export async function spawnWorker(input: {
   };
 
   try {
-    const workerBridgePluginPath = normalizePluginPath(resolveWorkerBridgePluginPath());
+    const workerBridgePluginPath = normalizePluginPathFn(resolveWorkerBridgePluginPathFn());
     const preferWorkerBridge =
       process.env.OPENCODE_WORKER_BRIDGE === "1" || Boolean(process.env.OPENCODE_WORKER_PLUGIN_PATH);
     const useWorkerBridge = Boolean(workerBridgePluginPath) && preferWorkerBridge;
@@ -132,7 +174,7 @@ export async function spawnWorker(input: {
           }
         : undefined;
 
-    const mergedConfig = await mergeOpenCodeConfig(
+    const mergedConfig = await mergeOpenCodeConfigFn(
       {
         model: resolvedProfile.model,
         plugin: [],
@@ -153,9 +195,9 @@ export async function spawnWorker(input: {
       process.env[key] = value;
     }
 
-    const extractSession = (result: unknown) => extractSdkData(result) as { id?: string } | undefined;
+    const extractSession = (result: unknown) => extractSdkDataFn(result) as { id?: string } | undefined;
 
-    let serverBundle = await startWorkerServer({
+    let serverBundle = await startWorkerServerFn({
       api: input.api,
       hostname,
       port: requestedPort,
@@ -163,9 +205,9 @@ export async function spawnWorker(input: {
       config: mergedConfig,
       pluginPath: useWorkerBridge ? (workerBridgePluginPath as string) : undefined,
     });
-    let { client, server } = applyServerBundleToInstance(instance, serverBundle);
+    let { client, server } = applyServerBundleToInstanceFn(instance, serverBundle);
 
-    let sessionResult = await createWorkerSession({
+    let sessionResult = await createWorkerSessionFn({
       client,
       directory: input.directory,
       timeoutMs: input.timeoutMs,
@@ -173,11 +215,11 @@ export async function spawnWorker(input: {
     });
     let session = extractSession(sessionResult);
     if (!session?.id) {
-      const errMsg = extractSdkErrorMessage(sessionResult) ?? "Failed to create session";
+      const errMsg = extractSdkErrorMessageFn(sessionResult) ?? "Failed to create session";
       const needsBridge = /stream_chunk|worker bridge|bridge tools/i.test(errMsg);
       if (needsBridge && workerBridgePluginPath && !useWorkerBridge) {
         await Promise.resolve(server.close());
-        const mergedWithBridge = await mergeOpenCodeConfig(
+        const mergedWithBridge = await mergeOpenCodeConfigFn(
           {
             model: resolvedProfile.model,
             plugin: [],
@@ -190,7 +232,7 @@ export async function spawnWorker(input: {
             appendPlugins: [workerBridgePluginPath],
           },
         );
-        serverBundle = await startWorkerServer({
+        serverBundle = await startWorkerServerFn({
           api: input.api,
           hostname,
           port: requestedPort,
@@ -198,8 +240,8 @@ export async function spawnWorker(input: {
           config: mergedWithBridge,
           pluginPath: workerBridgePluginPath,
         });
-        ({ client, server } = applyServerBundleToInstance(instance, serverBundle));
-        sessionResult = await createWorkerSession({
+        ({ client, server } = applyServerBundleToInstanceFn(instance, serverBundle));
+        sessionResult = await createWorkerSessionFn({
           client,
           directory: input.directory,
           timeoutMs: input.timeoutMs,
@@ -210,19 +252,19 @@ export async function spawnWorker(input: {
     }
 
     if (!session?.id) {
-      const errMsg = extractSdkErrorMessage(sessionResult) ?? "Failed to create session";
+      const errMsg = extractSdkErrorMessageFn(sessionResult) ?? "Failed to create session";
       throw new Error(errMsg);
     }
 
     instance.sessionId = session.id;
 
     const repoContext = resolvedProfile.injectRepoContext
-      ? await getRepoContextForWorker(input.directory).catch(() => undefined)
+      ? await getRepoContextForWorkerFn(input.directory).catch(() => undefined)
       : undefined;
 
     const bootstrapAbort = new AbortController();
     const bootstrapTimeoutMs = Math.min(input.timeoutMs, 15_000);
-    const bootstrapArgs = buildBootstrapPromptArgs({
+    const bootstrapArgs = buildBootstrapPromptArgsFn({
       sessionId: session.id,
       directory: input.directory,
       profile: resolvedProfile,
@@ -231,7 +273,7 @@ export async function spawnWorker(input: {
     });
     bootstrapArgs.signal = bootstrapAbort.signal;
 
-    void withTimeout(client.session.prompt(bootstrapArgs), bootstrapTimeoutMs, bootstrapAbort).catch(() => {});
+    void withTimeoutFn(client.session.prompt(bootstrapArgs), bootstrapTimeoutMs, bootstrapAbort).catch(() => {});
 
     instance.status = "ready";
     instance.lastActivity = new Date();
@@ -254,7 +296,7 @@ export async function spawnWorker(input: {
     // Start event forwarding for linked mode
     if (sessionMode === "linked" && input.sessionManager && input.communication) {
       const forwardEvents = resolvedProfile.forwardEvents ?? ["tool", "message", "error", "complete", "progress"];
-      instance.eventForwardingHandle = startEventForwarding(instance, input.sessionManager, input.communication, {
+      instance.eventForwardingHandle = startEventForwardingFn(instance, input.sessionManager, input.communication, {
         events: forwardEvents,
       });
     }
@@ -275,7 +317,7 @@ export async function spawnWorker(input: {
     }
 
     // Stop event forwarding if started
-    stopEventForwarding(instance);
+    stopEventForwardingFn(instance);
 
     try {
       await instance.shutdown?.();

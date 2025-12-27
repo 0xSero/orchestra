@@ -16,17 +16,25 @@ export const hasVisionParts = (parts: VisionPart[]): boolean => {
   return parts.some((part) => isImagePart(part));
 };
 
-/** Wrap vision results in a formatted analysis block. */
+/**
+ * Wrap vision results in a formatted block with explicit instructions.
+ * The instructions tell the model this is a TEXT DESCRIPTION of an image,
+ * not the image itself, so it should use this description directly.
+ */
 export const formatVisionAnalysis = (input: { response?: string; error?: string }): string => {
+  const instruction =
+    "[This is a TEXT DESCRIPTION of an image the user pasted. The image has already been analyzed. " +
+    "Use this description to answer the user's question. Do NOT say you cannot see images.]";
+
   if (input.response) {
     const trimmed = input.response.trim();
-    if (trimmed) return `<pasted_image>\n${trimmed}\n</pasted_image>`;
+    if (trimmed) return `<pasted_image>\n${instruction}\n\n${trimmed}\n</pasted_image>`;
   }
   if (input.error) {
     const trimmed = input.error.trim();
-    if (trimmed) return `<pasted_image>\n[Image could not be analyzed: ${trimmed}]\n</pasted_image>`;
+    if (trimmed) return `<pasted_image>\n${instruction}\n\n[Image could not be analyzed: ${trimmed}]\n</pasted_image>`;
   }
-  return "<pasted_image>\n[Image could not be analyzed]\n</pasted_image>";
+  return `<pasted_image>\n${instruction}\n\n[Image could not be analyzed]\n</pasted_image>`;
 };
 
 /** Replace image parts with a text summary of the vision analysis. */

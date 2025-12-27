@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, test, mock } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, mock } from "bun:test";
+import { setNeo4jIntegrationsConfig } from "../../src/memory/neo4j-config";
 
 let dockerAvailable = true;
 let containerExists = false;
@@ -9,16 +10,42 @@ let spawnCalls = 0;
 let startCalls = 0;
 let forceStartError = false;
 let commands: string[] = [];
-let neo4jConfig: { uri: string; username: string; password: string } | undefined = {
-  uri: "bolt://localhost:7687",
-  username: "neo4j",
-  password: "pw",
+const snapshotEnv = () => ({
+  HOME: process.env.HOME,
+  USERPROFILE: process.env.USERPROFILE,
+  OPENCODE_ORCH_PROJECT_DIR: process.env.OPENCODE_ORCH_PROJECT_DIR,
+  OPENCODE_NEO4J_URI: process.env.OPENCODE_NEO4J_URI,
+  OPENCODE_NEO4J_USERNAME: process.env.OPENCODE_NEO4J_USERNAME,
+  OPENCODE_NEO4J_PASSWORD: process.env.OPENCODE_NEO4J_PASSWORD,
+  OPENCODE_NEO4J_DATABASE: process.env.OPENCODE_NEO4J_DATABASE,
+});
+
+const restoreEnv = (snapshot: ReturnType<typeof snapshotEnv>) => {
+  for (const [key, value] of Object.entries(snapshot)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
 };
-let integrationsConfig: Record<string, unknown> | undefined = { enabled: true, autoStart: true };
+
+const setEnvConfig = () => {
+  process.env.OPENCODE_NEO4J_URI = "bolt://localhost:7687";
+  process.env.OPENCODE_NEO4J_USERNAME = "neo4j";
+  process.env.OPENCODE_NEO4J_PASSWORD = "pw";
+  delete process.env.OPENCODE_NEO4J_DATABASE;
+};
+
+const clearEnvConfig = () => {
+  delete process.env.OPENCODE_NEO4J_URI;
+  delete process.env.OPENCODE_NEO4J_USERNAME;
+  delete process.env.OPENCODE_NEO4J_PASSWORD;
+  delete process.env.OPENCODE_NEO4J_DATABASE;
+};
 
 const formatCommand = (command: string, args?: string[]) => [command, ...(args ?? [])].join(" ");
 
 describe("neo4j docker helper", () => {
+  let envState: ReturnType<typeof snapshotEnv>;
+
   const reset = () => {
     dockerAvailable = true;
     containerExists = false;
@@ -29,9 +56,41 @@ describe("neo4j docker helper", () => {
     startCalls = 0;
     forceStartError = false;
     commands = [];
-    neo4jConfig = { uri: "bolt://localhost:7687", username: "neo4j", password: "pw" };
-    integrationsConfig = { enabled: true, autoStart: true };
+    setNeo4jIntegrationsConfig(undefined);
   };
+
+  const withFastTimeout = async <T>(fn: () => Promise<T>): Promise<T> => {
+    const originalNow = Date.now;
+    const originalSetTimeout = globalThis.setTimeout;
+    let now = originalNow();
+    Date.now = () => {
+      now += 60_000;
+      return now;
+    };
+    globalThis.setTimeout = ((handler: (...args: unknown[]) => void) => {
+      handler();
+      return 0 as ReturnType<typeof setTimeout>;
+    }) as typeof setTimeout;
+    try {
+      return await fn();
+    } finally {
+      Date.now = originalNow;
+      globalThis.setTimeout = originalSetTimeout;
+    }
+  };
+
+  beforeEach(() => {
+    envState = snapshotEnv();
+    reset();
+    process.env.HOME = process.cwd();
+    process.env.USERPROFILE = process.cwd();
+    process.env.OPENCODE_ORCH_PROJECT_DIR = process.cwd();
+  });
+
+  afterEach(() => {
+    setNeo4jIntegrationsConfig(undefined);
+    restoreEnv(envState);
+  });
 
   beforeAll(() => {
     mock.module("node:child_process", () => ({
@@ -94,20 +153,9 @@ describe("neo4j docker helper", () => {
         close: async () => {},
       }),
     }));
-
-    mock.module("../../src/memory/neo4j-config", () => ({
-      getNeo4jIntegrationsConfig: () => integrationsConfig,
-      loadNeo4jConfig: () => neo4jConfig,
-      setNeo4jIntegrationsConfig: () => {},
-      NEO4J_CONTAINER_NAME: "opencode-neo4j",
-      NEO4J_DEFAULT_IMAGE: "neo4j:latest",
-      NEO4J_HEALTH_CHECK_INTERVAL_MS: 0,
-      NEO4J_STARTUP_TIMEOUT_MS: 1,
-    }));
   });
 
   test("handles disabled and missing config states", async () => {
-    reset();
     const { ensureNeo4jRunning } = await import("../../src/memory/neo4j-docker");
 
     expect(await ensureNeo4jRunning({ enabled: false })).toEqual({
@@ -120,16 +168,17 @@ describe("neo4j docker helper", () => {
       message: "Neo4j autoStart is disabled",
     });
 
-    neo4jConfig = undefined;
+    clearEnvConfig();
+    setNeo4jIntegrationsConfig({ enabled: false, uri: "bolt://disabled", username: "neo4j", password: "pw" });
     const noConfig = await ensureNeo4jRunning({ enabled: true, autoStart: true });
     expect(noConfig.status).toBe("no_config");
+    setNeo4jIntegrationsConfig(undefined);
   });
 
   test("handles availability and docker states", async () => {
-    reset();
     const { ensureNeo4jRunning } = await import("../../src/memory/neo4j-docker");
 
-    neo4jConfig = { uri: "bolt://localhost:7687", username: "neo4j", password: "pw" };
+    setEnvConfig();
     runOutcomes = [true];
     const running = await ensureNeo4jRunning({});
     expect(running.status).toBe("already_running");
@@ -150,7 +199,7 @@ describe("neo4j docker helper", () => {
 
     runOutcomes = [false, false];
     defaultRunSuccess = false;
-    const failedStart = await ensureNeo4jRunning({});
+    const failedStart = await withFastTimeout(() => ensureNeo4jRunning({}));
     expect(failedStart.status).toBe("failed");
 
     containerExists = false;
@@ -162,14 +211,14 @@ describe("neo4j docker helper", () => {
 
     runOutcomes = [false, false];
     defaultRunSuccess = false;
-    const failedCreate = await ensureNeo4jRunning({});
+    const failedCreate = await withFastTimeout(() => ensureNeo4jRunning({}));
     expect(failedCreate.status).toBe("failed");
   });
 
   test("returns failed status on unexpected errors", async () => {
-    reset();
     const { ensureNeo4jRunning } = await import("../../src/memory/neo4j-docker");
 
+    setEnvConfig();
     containerExists = true;
     dockerAvailable = true;
     runOutcomes = [false];
@@ -177,7 +226,6 @@ describe("neo4j docker helper", () => {
     containerRunning = false;
     forceStartError = true;
 
-    integrationsConfig = { enabled: true, autoStart: true, image: "neo4j:latest" };
     const result = await ensureNeo4jRunning({ enabled: true, autoStart: true, image: "neo4j:latest", uri: "bolt://localhost:7687" });
     expect(result.status).toBe("failed");
   });

@@ -1,11 +1,15 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test, mock } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import type { WorkerProfile } from "../../src/types";
 import type { WorkerRegistry } from "../../src/workers/registry";
+import { cleanupWorkerInstance, spawnWorker, type SpawnWorkerDeps } from "../../src/workers/spawn";
 
-let resolveProfileModelResult: { profile: WorkerProfile; changes: Array<{ profileId: string; from: string; to: string; reason: string }>; fallbackModel?: string };
+let resolveProfileModelResult: {
+  profile: WorkerProfile;
+  changes: Array<{ profileId: string; from: string; to: string; reason: string }>;
+  fallbackModel?: string;
+};
 let workerEnv: Record<string, string> = {};
 let workerMcp: Record<string, unknown> | undefined;
-let bridgePath: string | undefined = "/bridge";
 let defaultSessionMode: "linked" | "child" | "isolated" = "linked";
 let startWorkerServerCalls = 0;
 let createWorkerSessionCalls = 0;
@@ -15,7 +19,7 @@ let stopEventForwardingCalls = 0;
 let closeSessionCalls = 0;
 let startEventForwardingShouldThrow = false;
 let shutdownShouldThrow = false;
-let extractSdkErrorMessageValue: string | undefined;
+let deps: SpawnWorkerDeps;
 
 const baseProfile: WorkerProfile = {
   id: "alpha",
@@ -25,58 +29,50 @@ const baseProfile: WorkerProfile = {
   whenToUse: "testing",
 };
 
-const setupMocks = () => {
-  mock.module("../../src/workers/spawn-model", () => ({
+beforeEach(() => {
+  resolveProfileModelResult = { profile: { ...baseProfile }, changes: [], fallbackModel: undefined };
+  workerEnv = {};
+  workerMcp = undefined;
+  defaultSessionMode = "linked";
+  startWorkerServerCalls = 0;
+  createWorkerSessionCalls = 0;
+  createWorkerSessionResponses = [];
+  startEventForwardingCalls = 0;
+  stopEventForwardingCalls = 0;
+  closeSessionCalls = 0;
+  startEventForwardingShouldThrow = false;
+  shutdownShouldThrow = false;
+
+  delete process.env.OPENCODE_WORKER_BRIDGE;
+  delete process.env.OPENCODE_WORKER_PLUGIN_PATH;
+
+  deps = {
     resolveProfileModel: async () => resolveProfileModelResult,
-  }));
-
-  mock.module("../../src/ux/repo-context", () => ({
+    resolveWorkerEnv: () => workerEnv,
+    resolveWorkerMcp: async () => workerMcp,
+    getDefaultSessionMode: () => defaultSessionMode,
+    loadOpenCodeConfig: async () => ({}),
+    mergeOpenCodeConfig: async (config) => config,
     getRepoContextForWorker: async () => "repo",
-  }));
-
-  mock.module("../../src/workers/event-forwarding", () => ({
     startEventForwarding: () => {
       startEventForwardingCalls += 1;
       if (startEventForwardingShouldThrow) throw new Error("forward failed");
       return { stop: () => {}, isActive: () => true };
     },
-    stopEventForwarding: () => {
+    stopEventForwarding: (instance) => {
       stopEventForwardingCalls += 1;
+      if (instance.eventForwardingHandle) {
+        instance.eventForwardingHandle.stop();
+        instance.eventForwardingHandle = undefined;
+      }
     },
-  }));
-
-  mock.module("../../src/workers/spawn-bootstrap", () => ({
     buildBootstrapPromptArgs: (input: { sessionId: string; directory: string }) => ({
       path: { id: input.sessionId },
       body: { parts: [] },
       query: { directory: input.directory },
     }),
-  }));
-
-  mock.module("../../src/workers/spawn-env", () => ({
-    getDefaultSessionMode: () => defaultSessionMode,
-    resolveWorkerEnv: () => workerEnv,
-    resolveWorkerMcp: async () => workerMcp,
-  }));
-
-  mock.module("../../src/workers/spawn-helpers", () => ({
-    extractSdkData: (value: unknown) => {
-      if (value && typeof value === "object" && "data" in (value as Record<string, unknown>)) {
-        return (value as { data?: unknown }).data ?? value;
-      }
-      return value;
-    },
-    extractSdkErrorMessage: () => extractSdkErrorMessageValue,
-    isValidPort: () => false,
-    withTimeout: async <T>(promise: Promise<T>) => promise,
-  }));
-
-  mock.module("../../src/workers/spawn-plugin", () => ({
-    normalizePluginPath: (value: string | undefined) => value,
-    resolveWorkerBridgePluginPath: () => bridgePath,
-  }));
-
-  mock.module("../../src/workers/spawn-server", () => ({
+    resolveWorkerBridgePluginPath: () => "/tmp/worker-bridge-plugin.mjs",
+    normalizePluginPath: (path) => path,
     startWorkerServer: async () => {
       startWorkerServerCalls += 1;
       return {
@@ -95,42 +91,20 @@ const setupMocks = () => {
       createWorkerSessionCalls += 1;
       return createWorkerSessionResponses.shift() ?? { data: { id: "session-default" } };
     },
-    applyServerBundleToInstance: (instance: { shutdown?: () => Promise<void>; serverUrl?: string }, bundle: { server: { url: string } }) => {
+    applyServerBundleToInstance: (
+      instance: { shutdown?: () => Promise<void>; serverUrl?: string },
+      bundle: { server: { url: string } },
+    ) => {
       instance.shutdown = async () => {
         if (shutdownShouldThrow) throw new Error("shutdown failed");
       };
       instance.serverUrl = bundle.server.url;
       return bundle;
     },
-  }));
-};
-
-let spawnWorker: typeof import("../../src/workers/spawn").spawnWorker;
-let cleanupWorkerInstance: typeof import("../../src/workers/spawn").cleanupWorkerInstance;
+  };
+});
 
 describe("spawn worker", () => {
-  beforeAll(async () => {
-    setupMocks();
-    ({ spawnWorker, cleanupWorkerInstance } = await import("../../src/workers/spawn"));
-  });
-
-  beforeEach(() => {
-    resolveProfileModelResult = { profile: { ...baseProfile }, changes: [], fallbackModel: undefined };
-    workerEnv = {};
-    workerMcp = undefined;
-    bridgePath = "/bridge";
-    defaultSessionMode = "linked";
-    startWorkerServerCalls = 0;
-    createWorkerSessionCalls = 0;
-    createWorkerSessionResponses = [];
-    startEventForwardingCalls = 0;
-    stopEventForwardingCalls = 0;
-    closeSessionCalls = 0;
-    startEventForwardingShouldThrow = false;
-    shutdownShouldThrow = false;
-    extractSdkErrorMessageValue = undefined;
-  });
-
   test("spawns successfully with callbacks and restores env", async () => {
     const callbacks: string[] = [];
     const registry = { register: () => {}, updateStatus: () => {}, unregister: () => {} } as unknown as WorkerRegistry;
@@ -146,10 +120,7 @@ describe("spawn worker", () => {
     delete process.env.NEW_VAR;
 
     workerMcp = { server: { token: "x" } };
-    extractSdkErrorMessageValue = undefined;
     createWorkerSessionResponses = [{ data: { id: "session-1" } }];
-
-    process.env.OPENCODE_WORKER_BRIDGE = "1";
 
     const sessionManager = {
       registerSession: () => callbacks.push("register"),
@@ -168,6 +139,7 @@ describe("spawn worker", () => {
       },
       sessionManager: sessionManager as never,
       communication: {} as never,
+      deps,
     });
 
     expect(instance.status).toBe("ready");
@@ -179,14 +151,12 @@ describe("spawn worker", () => {
     expect(process.env.EXISTING_VAR).toBe("old");
     expect(process.env.NEW_VAR).toBeUndefined();
 
-    delete process.env.OPENCODE_WORKER_BRIDGE;
     delete process.env.EXISTING_VAR;
   });
 
   test("retries session creation with worker bridge", async () => {
     resolveProfileModelResult = { profile: { ...baseProfile }, changes: [], fallbackModel: undefined };
-    extractSdkErrorMessageValue = "worker bridge missing";
-    createWorkerSessionResponses = [{ error: "bridge" }, { data: { id: "session-2" } }];
+    createWorkerSessionResponses = [{ error: { message: "worker bridge missing" } }, { data: { id: "session-2" } }];
 
     const registry = { register: () => {}, updateStatus: () => {}, unregister: () => {} } as unknown as WorkerRegistry;
     const instance = await spawnWorker({
@@ -195,6 +165,7 @@ describe("spawn worker", () => {
       directory: "/tmp",
       profile: { ...baseProfile, model: "auto" },
       timeoutMs: 1000,
+      deps,
     });
 
     expect(instance.sessionId).toBe("session-2");
@@ -204,7 +175,6 @@ describe("spawn worker", () => {
 
   test("throws when session creation fails", async () => {
     resolveProfileModelResult = { profile: { ...baseProfile }, changes: [], fallbackModel: undefined };
-    extractSdkErrorMessageValue = "session failed";
     createWorkerSessionResponses = [{ error: "session failed" }];
     shutdownShouldThrow = true;
 
@@ -217,6 +187,7 @@ describe("spawn worker", () => {
         directory: "/tmp",
         profile: { ...baseProfile, model: "auto" },
         timeoutMs: 1000,
+        deps,
       }),
     ).rejects.toThrow("session failed");
 
@@ -245,6 +216,7 @@ describe("spawn worker", () => {
         timeoutMs: 1000,
         sessionManager: sessionManager as never,
         communication: {} as never,
+        deps,
       }),
     ).rejects.toThrow("forward failed");
 
@@ -253,12 +225,17 @@ describe("spawn worker", () => {
   });
 
   test("cleanupWorkerInstance closes tracked sessions", () => {
+    stopEventForwardingCalls = 0;
     const sessionManager = { closeSession: () => {} };
-    cleanupWorkerInstance({ profile: baseProfile, status: "ready", port: 0, sessionId: "session-9" } as never, sessionManager as never);
+    const instance = {
+      profile: baseProfile,
+      status: "ready",
+      port: 0,
+      sessionId: "session-9",
+      eventForwardingHandle: { stop: () => { stopEventForwardingCalls += 1; }, isActive: () => true },
+    };
+
+    cleanupWorkerInstance(instance as never, sessionManager as never);
     expect(stopEventForwardingCalls).toBe(1);
   });
-});
-
-afterAll(() => {
-  mock.restore();
 });

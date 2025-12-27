@@ -139,15 +139,10 @@ export const createCore: Factory<CoreConfig, Record<string, never>, CoreService>
     await communication.start();
     await database.start();
 
-    // Auto-start Neo4j if configured
+    // Auto-start Neo4j if configured (silent)
     const neo4jCfg = config.config.integrations?.neo4j;
     if (neo4jCfg && neo4jCfg.enabled !== false) {
-      const result = await ensureNeo4jRunning(neo4jCfg);
-      if (result.status === "created" || result.status === "started") {
-        console.log(`[Neo4j] ${result.message}`);
-      } else if (result.status === "failed") {
-        console.log(`[Neo4j] Warning: ${result.message}`);
-      }
+      await ensureNeo4jRunning(neo4jCfg);
     }
 
     await memory.start();
@@ -156,10 +151,8 @@ export const createCore: Factory<CoreConfig, Record<string, never>, CoreService>
     await workflows.start();
     await orchestrator.start();
 
-    // Start skills API in background (non-blocking)
-    skillsApi.start().catch((err) => {
-      console.log("[Core] Skills API failed to start (non-fatal):", err);
-    });
+    // Start skills API in background (non-blocking, silent)
+    skillsApi.start().catch(() => {});
     registerCommunicationToasts({
       api,
       communication,

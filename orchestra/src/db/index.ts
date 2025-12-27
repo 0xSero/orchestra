@@ -233,8 +233,6 @@ export const createDatabase: Factory<DatabaseConfig, Record<string, never>, Data
 
     // Ensure a user exists
     ensureUser();
-
-    console.log(`[DB] Initialized at ${dbPath}`);
   };
 
   const stop = async () => {

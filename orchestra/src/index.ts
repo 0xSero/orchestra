@@ -1,7 +1,36 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Hooks, Plugin } from "@opencode-ai/plugin";
 import { loadOrchestratorConfig } from "./config/orchestrator";
 import { createCore } from "./core";
 import { cleanupStaleWorkers } from "./workers/pid-tracker";
+
+/** Load .env file from a directory into process.env (silent, no overwrites). */
+function loadEnvFile(directory: string): void {
+  const envPath = join(directory, ".env");
+  if (!existsSync(envPath)) return;
+  try {
+    const content = readFileSync(envPath, "utf8");
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eqIndex = trimmed.indexOf("=");
+      if (eqIndex === -1) continue;
+      const key = trimmed.slice(0, eqIndex).trim();
+      let value = trimmed.slice(eqIndex + 1).trim();
+      // Remove quotes if present
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      // Don't overwrite existing env vars
+      if (key && process.env[key] === undefined) {
+        process.env[key] = value;
+      }
+    }
+  } catch {
+    // Silently ignore .env load failures
+  }
+}
 
 const GLOBAL_KEY = "__opencode_orchestra_core__";
 
@@ -20,6 +49,9 @@ if (existingState === undefined || existingState === null) {
 }
 
 export const OrchestratorPlugin: Plugin = async (ctx) => {
+  // Load .env from project directory (before any other initialization)
+  loadEnvFile(ctx.directory);
+
   if (process.env.OPENCODE_ORCHESTRATOR_WORKER === "1") {
     return {};
   }
@@ -34,11 +66,8 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
   }
 
   globalState.startPromise = (async () => {
-    // Clean up any stale workers from previous crashed sessions
-    const cleanup = await cleanupStaleWorkers();
-    if (cleanup.killed.length > 0) {
-      console.log(`[Orchestra] Cleaned up ${cleanup.killed.length} stale worker(s): ${cleanup.killed.join(", ")}`);
-    }
+    // Clean up stale worker entries from previous sessions (silent)
+    await cleanupStaleWorkers();
 
     const { config } = await loadOrchestratorConfig({
       directory: ctx.directory,

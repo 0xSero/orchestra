@@ -122,6 +122,25 @@ memory_record({
 `.trim());
   }
 
+  // Vision/image handling convention
+  sections.push(`
+<vision-convention>
+IMAGE HANDLING:
+When you see content wrapped in <pasted_image>...</pasted_image> tags, this is a TEXT DESCRIPTION of an image that was already analyzed by a vision worker.
+
+- The image has ALREADY been processed - do NOT try to view, read, or analyze the image yourself
+- The text inside <pasted_image> tags IS the image content - treat it as factual description
+- Respond to the user's question using this text description as your source of truth
+- Do NOT say "I cannot see the image" - you have the description, use it
+
+Example:
+User sends: "<pasted_image>A red button with 'Submit' text</pasted_image> What color is the button?"
+You respond: "The button is red."
+
+NOT: "I cannot view images" or "Let me analyze this image"
+</vision-convention>
+`.trim());
+
   // Tool usage guidelines
   sections.push(`
 <tool-guidelines>

@@ -89,8 +89,8 @@ describe("api service", () => {
     expect(calls["session.create"]).toEqual({ query: { foo: "bar", directory: "/tmp/project" } });
     expect(calls["session.list"]).toEqual({ query: { directory: "/tmp/project" } });
 
-    const client = api.createClient({ baseUrl: "http://localhost", directory: "/tmp/project" });
-    expect(client).toBeTruthy();
+    const apiClient = api.createClient({ baseUrl: "http://localhost", directory: "/tmp/project" });
+    expect(apiClient).toBeTruthy();
     await api.start();
     await api.stop();
     const health = await api.health();

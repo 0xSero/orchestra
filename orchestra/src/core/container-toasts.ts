@@ -128,4 +128,33 @@ export const registerCommunicationToasts = (input: {
       showToast(formatJobToast(event.data.job, event.data.status));
     },
   );
+
+  communication.on("orchestra.vision.started", () => {
+    showToast({
+      title: "Analyzing Image",
+      message: "Vision worker is processing your image...",
+      variant: "info",
+    });
+  });
+
+  communication.on(
+    "orchestra.vision.completed",
+    (event: { data: { success: boolean; error?: string; durationMs?: number } }) => {
+      const { success, error, durationMs } = event.data;
+      if (success) {
+        const duration = durationMs ? ` (${(durationMs / 1000).toFixed(1)}s)` : "";
+        showToast({
+          title: "Image Analyzed",
+          message: `Vision analysis complete${duration}`,
+          variant: "success",
+        });
+      } else {
+        showToast({
+          title: "Vision Failed",
+          message: error ?? "Could not analyze image",
+          variant: "error",
+        });
+      }
+    },
+  );
 };

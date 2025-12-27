@@ -101,7 +101,7 @@ export const createSkillsApiServer: Factory<SkillsApiConfig, SkillsApiDeps, Skil
       await new Promise<void>((resolve, reject) => {
         server!.once("error", (err: NodeJS.ErrnoException) => {
           if (err.code === "EADDRINUSE") {
-            console.log(`[SkillsAPI] Port ${port} in use, trying port 0 for auto-assign`);
+            // Port in use, try auto-assign
             server!.listen(0, host, () => resolve());
           } else {
             reject(err);
@@ -109,8 +109,8 @@ export const createSkillsApiServer: Factory<SkillsApiConfig, SkillsApiDeps, Skil
         });
         server!.listen(port, host, () => resolve());
       });
-    } catch (err) {
-      console.log(`[SkillsAPI] Failed to start server (non-fatal):`, err);
+    } catch {
+      // Failed to start server (non-fatal)
       server = undefined;
       return;
     }
@@ -121,7 +121,6 @@ export const createSkillsApiServer: Factory<SkillsApiConfig, SkillsApiDeps, Skil
     } else {
       url = `http://${host}:${port}`;
     }
-    console.log(`[SkillsAPI] Server started at ${url}`);
   };
 
   const stop = async () => {

@@ -56,6 +56,9 @@ export async function routeVisionMessage(
   const prompt = deps.prompt ?? DEFAULT_PROMPT;
   const startedAt = Date.now();
 
+  // Emit vision started event for UI feedback
+  deps.communication?.emit("orchestra.vision.started", { sessionId: input.sessionID, messageId }, { source: "vision" });
+
   try {
     if (deps.ensureWorker) {
       await deps.ensureWorker({ workerId: "vision", reason: "on-demand" });
@@ -95,12 +98,25 @@ export async function routeVisionMessage(
 
     const trimmedResponse = typeof res.response === "string" ? res.response.trim() : "";
     const analysisText = formatVisionAnalysis({ response: trimmedResponse, error: res.error });
-    output.parts = replaceImagesWithText(originalParts, analysisText, {
+    const newParts = replaceImagesWithText(originalParts, analysisText, {
       sessionID: input.sessionID,
       messageID: input.messageID,
     });
 
+    // Mutate output.parts in place AND replace the array
+    output.parts.length = 0;
+    output.parts.push(...newParts);
+
     const succeeded = res.success && trimmedResponse.length > 0;
+    const durationMs = Date.now() - startedAt;
+
+    // Emit vision completed event for UI feedback
+    deps.communication?.emit(
+      "orchestra.vision.completed",
+      { success: succeeded, error: succeeded ? undefined : res.error, durationMs },
+      { source: "vision" },
+    );
+
     try {
       await deps.logSink?.({
         status: succeeded ? "succeeded" : "failed",
@@ -114,18 +130,22 @@ export async function routeVisionMessage(
         requestedBy: agentId,
         startedAt,
         finishedAt: Date.now(),
-        durationMs: Date.now() - startedAt,
+        durationMs,
       });
     } catch {
       // ignore log sink failures
     }
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
-    console.error("[Vision] Failed to process image:", error);
+    const durationMs = Date.now() - startedAt;
     output.parts = replaceImagesWithText(originalParts, formatVisionAnalysis({ error }), {
       sessionID: input.sessionID,
       messageID: input.messageID,
     });
+
+    // Emit vision failed event for UI feedback
+    deps.communication?.emit("orchestra.vision.completed", { success: false, error, durationMs }, { source: "vision" });
+
     try {
       await deps.logSink?.({
         status: "failed",
@@ -136,7 +156,7 @@ export async function routeVisionMessage(
         model: visionModel,
         startedAt,
         finishedAt: Date.now(),
-        durationMs: Date.now() - startedAt,
+        durationMs,
       });
     } catch {
       // ignore log sink failures

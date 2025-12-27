@@ -79,15 +79,12 @@ export const createCommunication: Factory<CommunicationConfig, CommunicationDeps
     on,
     off,
     start: async () => {
-      console.log("[Communication] start called, enableSdkEvents:", enableSdkEvents);
       if (!enableSdkEvents) return;
       if (abortController) return;
       abortController = new AbortController();
 
       try {
-        console.log("[Communication] subscribing to events...");
         const result = (await deps.api.event.subscribe({ signal: abortController.signal })) as EventStreamResult;
-        console.log("[Communication] event subscription established");
         streamTask = (async () => {
           try {
             for await (const event of result.stream) {
@@ -97,8 +94,8 @@ export const createCommunication: Factory<CommunicationConfig, CommunicationDeps
             // ignore stream errors
           }
         })();
-      } catch (err) {
-        console.log("[Communication] event subscription failed (non-fatal):", err);
+      } catch {
+        // event subscription failed (non-fatal)
         abortController = undefined;
       }
     },

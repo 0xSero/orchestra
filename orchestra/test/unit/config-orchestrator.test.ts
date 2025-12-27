@@ -53,6 +53,7 @@ describe("orchestrator config loading", () => {
 
     const result = await loadOrchestratorConfig({ directory: tempDir });
     expect(result.sources.global).toBe(configPath);
-    expect(Object.keys(result.config.profiles).length).toBe(0);
+    expect(Object.keys(result.config.profiles).length).toBeGreaterThan(0);
+    expect(result.config.profiles["glm47-vision-demo"]?.id).toBe("glm47-vision-demo");
   });
 });

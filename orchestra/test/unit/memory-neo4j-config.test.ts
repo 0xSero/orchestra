@@ -2,13 +2,14 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  getNeo4jIntegrationsConfig,
-  loadNeo4jConfig,
-  loadNeo4jConfigFromEnv,
-  loadNeo4jConfigFromIntegrations,
-  setNeo4jIntegrationsConfig,
-} from "../../src/memory/neo4j-config";
+
+type Neo4jConfigModule = typeof import("../../src/memory/neo4j-config");
+
+let getNeo4jIntegrationsConfig: Neo4jConfigModule["getNeo4jIntegrationsConfig"];
+let loadNeo4jConfig: Neo4jConfigModule["loadNeo4jConfig"];
+let loadNeo4jConfigFromEnv: Neo4jConfigModule["loadNeo4jConfigFromEnv"];
+let loadNeo4jConfigFromIntegrations: Neo4jConfigModule["loadNeo4jConfigFromIntegrations"];
+let setNeo4jIntegrationsConfig: Neo4jConfigModule["setNeo4jIntegrationsConfig"];
 
 describe("neo4j config", () => {
   const envSnapshot = () => ({
@@ -32,6 +33,9 @@ describe("neo4j config", () => {
   let envState: ReturnType<typeof envSnapshot>;
 
   beforeEach(async () => {
+    const moduleUrl = new URL("../../src/memory/neo4j-config.ts", import.meta.url);
+    const mod = (await import(`${moduleUrl.href}?v=${Date.now()}`)) as Neo4jConfigModule;
+    ({ getNeo4jIntegrationsConfig, loadNeo4jConfig, loadNeo4jConfigFromEnv, loadNeo4jConfigFromIntegrations, setNeo4jIntegrationsConfig } = mod);
     envState = envSnapshot();
     tempDir = await mkdtemp(join(tmpdir(), "neo4j-config-"));
     process.env.HOME = tempDir;

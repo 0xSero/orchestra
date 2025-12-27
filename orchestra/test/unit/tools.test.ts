@@ -81,7 +81,7 @@ describe("tool hooks", () => {
     const systemTransform = createSystemTransform(config, workers);
     const output = { system: [] as string[] };
     await systemTransform({}, output);
-    expect(output.system.some((entry) => entry.includes("summary"))).toBe(true);
+    expect(output.system.some((entry) => entry.includes("<orchestrator-role>"))).toBe(true);
     expect(output.system.some((entry) => entry.includes("pending-vision-analysis"))).toBe(true);
 
     const compactionTransform = createCompactionTransform(config, workers);
