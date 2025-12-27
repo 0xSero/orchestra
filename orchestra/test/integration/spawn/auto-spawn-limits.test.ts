@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import type { ToolContext } from "@opencode-ai/plugin";
 import type { WorkerProfile } from "../../../src/types";
 import { createTestCoreRuntime } from "../../helpers/core-runtime";
 import { setupE2eEnv } from "../../helpers/e2e-env";
@@ -37,10 +38,15 @@ describe("delegateTask integration", () => {
   test("auto-spawns a worker and returns a real response", async () => {
     expect(core?.workers.getWorker("coder")).toBeUndefined();
 
-    const ctx = { agent: "test", sessionID: "test-session", messageID: "msg" };
+    const ctx: ToolContext = {
+      agent: "test",
+      sessionID: "test-session",
+      messageID: "msg",
+      abort: new AbortController().signal,
+    };
     const result = await core!.tools.tool.delegate_task.execute(
       { task: "Reply with exactly: DELEGATE_OK", autoSpawn: true },
-      ctx as any,
+      ctx,
     );
 
     expect(core?.workers.getWorker("coder")).toBeTruthy();

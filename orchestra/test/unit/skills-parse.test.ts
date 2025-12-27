@@ -28,4 +28,16 @@ You are a careful coder.`;
     expect(serialized).toContain("model: auto");
     expect(serialized).toContain("Read documentation.");
   });
+
+  test("throws when frontmatter markers are missing", () => {
+    expect(() => parseSkillFile("no frontmatter")).toThrow("Skill file must start");
+    expect(() => parseSkillFile("---\nname: coder\n")).toThrow("Skill frontmatter must be closed");
+  });
+
+  test("handles UTF-8 BOM", () => {
+    const content = `\uFEFF---\nname: bom\nmodel: auto\n---\n\nHello`;
+    const parsed = parseSkillFile(content);
+    expect(parsed.frontmatter.name).toBe("bom");
+    expect(parsed.body).toBe("Hello");
+  });
 });

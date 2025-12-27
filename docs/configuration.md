@@ -30,6 +30,18 @@ Complete configuration guide for the Open Orchestra plugin with diagrams and det
 Environment variables override specific integrations (Neo4j/Linear/PostHog) and runtime knobs
 like skills API port and vision prompt/timeout.
 
+## Environment Overrides
+
+Common environment variables recognized by the orchestrator runtime:
+
+- `OPENCODE_VISION_TIMEOUT_MS` - Vision routing timeout (ms).
+- `OPENCODE_VISION_PROMPT` - Override the default vision prompt.
+- `OPENCODE_WORKER_BRIDGE` - Set to `1` to force the worker bridge plugin.
+- `OPENCODE_WORKER_PLUGIN_PATH` - Override the worker bridge plugin path.
+- `OPENCODE_ORCH_PROJECT_DIR` - Override project dir resolution in workers.
+- `OPENCODE_NEO4J_URI`, `OPENCODE_NEO4J_USERNAME`, `OPENCODE_NEO4J_PASSWORD`, `OPENCODE_NEO4J_DATABASE`
+- `LINEAR_API_KEY`, `LINEAR_TEAM_ID`, `LINEAR_API_URL`, `LINEAR_PROJECT_PREFIX`
+
 ## Config File Locations
 
 | Location | Purpose | Priority |

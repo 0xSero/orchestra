@@ -52,14 +52,16 @@ export function SdkWorkspace() {
     return JSON.parse(raw);
   };
 
-  const normalizeOutput = (value: any) => {
+  const normalizeOutput = (value: unknown): unknown => {
     if (!value || typeof value !== "object") return value;
-    if ("data" in value || "error" in value || "response" in value) {
+    const record = value as Record<string, unknown>;
+    if ("data" in record || "error" in record || "response" in record) {
+      const response = record.response as { status?: number } | undefined;
       return {
-        ok: !value.error,
-        status: value.response?.status,
-        data: value.data ?? null,
-        error: value.error ?? null,
+        ok: !record.error,
+        status: response?.status,
+        data: record.data ?? null,
+        error: record.error ?? null,
       };
     }
     return value;
@@ -76,6 +78,9 @@ export function SdkWorkspace() {
       const input = parseInput();
       const result = await action.run(client, input);
       const normalized = normalizeOutput(result);
+      const normalizedRecord =
+        typeof normalized === "object" && normalized ? (normalized as Record<string, unknown>) : null;
+      const isOk = !(normalizedRecord && "error" in normalizedRecord && normalizedRecord.error);
       const output = JSON.stringify(normalized, null, 2);
 
       setRuns((prev) =>
@@ -86,7 +91,7 @@ export function SdkWorkspace() {
             actionLabel: action.label,
             startedAt,
             durationMs: Date.now() - startedAt,
-            ok: !(normalized as any)?.error,
+            ok: isOk,
             output,
           },
           ...prev,

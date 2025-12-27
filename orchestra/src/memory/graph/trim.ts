@@ -20,13 +20,15 @@ export async function trimMemoryByKeyPrefix(input: {
   projectId?: string;
   keyPrefix: string;
   keepLatest: number;
+  deps?: { withSession?: typeof withNeo4jSession };
 }): Promise<{ deleted: number }> {
   const scope = input.scope;
   const projectId = requireProjectId(scope, input.projectId);
   const keepLatest = Math.max(0, Math.floor(input.keepLatest));
+  const withSession = input.deps?.withSession ?? withNeo4jSession;
 
   if (keepLatest === 0) {
-    const deleted = await withNeo4jSession(input.cfg, async (session) => {
+    const deleted = await withSession(input.cfg, async (session) => {
       const matchPattern = scope === "project" ? `{ scope: $scope, projectId: $projectId }` : `{ scope: $scope }`;
       const res = await session.run(
         `
@@ -48,7 +50,7 @@ RETURN size(nodes) AS deleted
     return { deleted };
   }
 
-  const deleted = await withNeo4jSession(input.cfg, async (session) => {
+  const deleted = await withSession(input.cfg, async (session) => {
     const matchPattern = scope === "project" ? `{ scope: $scope, projectId: $projectId }` : `{ scope: $scope }`;
     const res = await session.run(
       `
@@ -77,6 +79,7 @@ RETURN size(toDelete) AS deleted
 export async function trimGlobalMessageProjects(input: {
   cfg: Neo4jConfig;
   keepProjects: number;
+  deps?: { withSession?: typeof withNeo4jSession };
 }): Promise<{ projectsDropped: number; messagesDeleted: number }> {
   const keepProjects = Math.max(0, Math.floor(input.keepProjects));
   if (keepProjects <= 0) {
@@ -85,11 +88,14 @@ export async function trimGlobalMessageProjects(input: {
       scope: "global",
       keyPrefix: "message:",
       keepLatest: 0,
+      deps: input.deps,
     });
     return { projectsDropped: 0, messagesDeleted: deleted };
   }
 
-  return await withNeo4jSession(input.cfg, async (session) => {
+  const withSession = input.deps?.withSession ?? withNeo4jSession;
+
+  return await withSession(input.cfg, async (session) => {
     const res = await session.run(
       `
 MATCH (n:Memory { scope: $scope })

@@ -27,8 +27,13 @@ describe("SkillsProvider", () => {
       },
     ];
 
-    (globalThis as any).EventSource = MockEventSource;
-    (globalThis as any).fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const globalScope = globalThis as typeof globalThis & {
+      EventSource?: typeof MockEventSource;
+      fetch?: typeof fetch;
+    };
+
+    globalScope.EventSource = MockEventSource;
+    globalScope.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.toString();
       const method = init?.method ?? "GET";
 
@@ -94,7 +99,7 @@ describe("SkillsProvider", () => {
       }
 
       return { ok: false, status: 404, json: async () => ({}) };
-    });
+    }) as typeof fetch;
   });
 
   afterEach(() => {

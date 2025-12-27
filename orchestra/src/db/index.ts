@@ -1,7 +1,7 @@
+import { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { Database } from "bun:sqlite";
 import type { Factory, ServiceLifecycle } from "../types";
 import {
   CREATE_TABLES_SQL,
@@ -150,7 +150,7 @@ export const createDatabase: Factory<DatabaseConfig, Record<string, never>, Data
 
     if (existing) {
       const updates: string[] = [];
-      const values: unknown[] = [];
+      const values: Array<string | number | null> = [];
 
       if (cfg.model !== undefined) {
         updates.push("model = ?");

@@ -17,9 +17,6 @@
   "dependencies": {
     "@kobalte/core": "^0.13.7",
     "@opencode-ai/sdk": "^1.0.203",
-    "@solid-primitives/audio": "^1.3.10",
-    "@solid-primitives/keyboard": "^1.2.8",
-    "@solid-primitives/resize-observer": "^2.0.27",
     "@solid-primitives/storage": "^4.3.1",
     "@solidjs/router": "^0.14.10",
     "clsx": "^2.1.1",
@@ -29,6 +26,7 @@
   },
   "devDependencies": {
     "@solidjs/testing-library": "^0.8.10",
+    "@vitest/coverage-v8": "^4.0.16",
     "autoprefixer": "^10.4.20",
     "jsdom": "^25.0.1",
     "postcss": "^8.4.49",

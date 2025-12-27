@@ -90,7 +90,7 @@ export async function loadOrchestratorConfig(input: {
 
   const config: OrchestratorConfig = {
     basePort: mergedFile.basePort ?? defaultsFile.basePort ?? 14096,
-    autoSpawn: mergedFile.autoSpawn ?? defaultsFile.autoSpawn ?? true,
+    autoSpawn: mergedFile.autoSpawn ?? defaultsFile.autoSpawn ?? false,
     spawnOnDemand,
     spawnPolicy,
     startupTimeout: mergedFile.startupTimeout ?? defaultsFile.startupTimeout ?? 30000,

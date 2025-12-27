@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { isAbsolute, resolve as resolvePath } from "node:path";
-import { extractVisionAttachments, formatVisionAnalysis } from "../ux/vision-routing";
+import { extractVisionAttachments, formatVisionAnalysis, type VisionPart } from "../ux/vision-routing";
 import type { CommandDefinition } from "./index";
 
 const DEFAULT_PROMPT =
@@ -54,7 +54,7 @@ export function createVisionCommands(): Record<string, CommandDefinition> {
 
         const mimeType = pickFirstString(named.mime ?? named.mimeType);
         const base64 = pickFirstString(named.base64);
-        const parts: any[] = [];
+        const parts: VisionPart[] = [];
 
         if (base64) {
           parts.push({ type: "image", base64, ...(mimeType ? { mimeType } : {}) });

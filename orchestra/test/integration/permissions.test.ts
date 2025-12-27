@@ -36,8 +36,9 @@ describe("permissions integration", () => {
 
     runtime = await createTestWorkerRuntime({ profiles: { "perm-check": profile }, directory, timeoutMs: 120_000 });
     const instance = await runtime.workers.spawn(profile);
-    const res = await instance.client!.config.get({ query: { directory } } as any);
-    const tools = (res.data as any)?.tools ?? {};
+    const res = await instance.client!.config.get({ query: { directory } });
+    const data = "data" in res ? (res as { data?: { tools?: Record<string, boolean> } }).data : undefined;
+    const tools = data?.tools ?? {};
 
     expect(tools.write).toBe(false);
     expect(tools.edit).toBe(false);

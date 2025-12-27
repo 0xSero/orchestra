@@ -1,83 +1,21 @@
 import type { ApiService } from "../api";
 import type { CommunicationService } from "../communication";
-import type { WorkerForwardEvent, WorkerSessionMode } from "../types/worker";
-
-/**
- * Represents a tracked worker session with activity data.
- */
-export interface TrackedSession {
-  /** Worker ID */
-  workerId: string;
-  /** Session ID */
-  sessionId: string;
-  /** Session mode */
-  mode: WorkerSessionMode;
-  /** Parent session ID (for child sessions) */
-  parentSessionId?: string;
-  /** Server URL (for isolated/linked sessions) */
-  serverUrl?: string;
-  /** When the session was created */
-  createdAt: Date;
-  /** Last activity timestamp */
-  lastActivity: Date;
-  /** Current status */
-  status: "active" | "idle" | "busy" | "error" | "closed";
-  /** Message count */
-  messageCount: number;
-  /** Tool execution count */
-  toolCount: number;
-  /** Recent activity log (circular buffer) */
-  recentActivity: SessionActivity[];
-  /** Error if any */
-  error?: string;
-}
-
-/**
- * A single activity event from a worker session.
- */
-export interface SessionActivity {
-  /** Unique activity ID */
-  id: string;
-  /** Activity type */
-  type: WorkerForwardEvent;
-  /** Timestamp */
-  timestamp: Date;
-  /** Activity summary */
-  summary: string;
-  /** Full details (optional) */
-  details?: unknown;
-}
-
-/**
- * Event emitted when session state changes.
- */
-export interface SessionManagerEvent {
-  type: "session.created" | "session.activity" | "session.status" | "session.closed" | "session.error";
-  session: TrackedSession;
-  activity?: SessionActivity;
-}
-
-export type SessionManagerEventHandler = (event: SessionManagerEvent) => void;
-
-/**
- * Serialized session for API responses.
- */
-export interface SerializedSession {
-  workerId: string;
-  sessionId: string;
-  mode: WorkerSessionMode;
-  parentSessionId?: string;
-  serverUrl?: string;
-  createdAt: string;
-  lastActivity: string;
-  status: TrackedSession["status"];
-  messageCount: number;
-  toolCount: number;
-  recentActivityCount: number;
-  error?: string;
-}
+import type { WorkerSessionMode } from "../types/worker";
+import type {
+  SerializedSession,
+  SessionActivity,
+  SessionManagerEvent,
+  SessionManagerEventHandler,
+  TrackedSession,
+} from "./session-manager-types";
 
 const MAX_RECENT_ACTIVITY = 50;
+/** Maximum number of sessions to track before cleanup */
+const MAX_SESSIONS = 1000;
+/** Session TTL in milliseconds (1 hour) - sessions inactive longer than this are cleaned up */
+const SESSION_TTL_MS = 60 * 60 * 1000;
+/** Cleanup interval in milliseconds (5 minutes) */
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
 /**
  * Central manager for tracking all worker sessions.
@@ -88,13 +26,72 @@ export class WorkerSessionManager {
   private workerToSession = new Map<string, string>();
   private listeners = new Set<SessionManagerEventHandler>();
   private activityCounter = 0;
+  private cleanupTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(
     private deps: {
       api: ApiService;
       communication: CommunicationService;
     },
-  ) {}
+  ) {
+    // Start periodic cleanup of stale sessions
+    this.cleanupTimer = setInterval(() => this.cleanupStaleSessions(), CLEANUP_INTERVAL_MS);
+    // Prevent timer from keeping the process alive
+    if (this.cleanupTimer.unref) {
+      this.cleanupTimer.unref();
+    }
+  }
+
+  /**
+   * Stop the cleanup timer. Call this when shutting down.
+   */
+  dispose(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = undefined;
+    }
+  }
+
+  /**
+   * Clean up stale sessions that exceed TTL or when session count exceeds max.
+   */
+  private cleanupStaleSessions(): void {
+    const now = Date.now();
+    const sessionsToRemove: string[] = [];
+
+    // Find sessions that exceed TTL
+    for (const [sessionId, session] of this.sessions) {
+      const inactiveMs = now - session.lastActivity.getTime();
+      const isStale = inactiveMs > SESSION_TTL_MS;
+      const isClosed = session.status === "closed" || session.status === "error";
+
+      // Remove stale sessions or closed/error sessions older than 5 minutes
+      if (isStale || (isClosed && inactiveMs > 5 * 60 * 1000)) {
+        sessionsToRemove.push(sessionId);
+      }
+    }
+
+    // If still over limit after TTL cleanup, remove oldest sessions
+    if (this.sessions.size - sessionsToRemove.length > MAX_SESSIONS) {
+      const sortedSessions = Array.from(this.sessions.entries())
+        .filter(([id]) => !sessionsToRemove.includes(id))
+        .sort((a, b) => a[1].lastActivity.getTime() - b[1].lastActivity.getTime());
+
+      const excessCount = this.sessions.size - sessionsToRemove.length - MAX_SESSIONS;
+      for (let i = 0; i < excessCount && i < sortedSessions.length; i++) {
+        sessionsToRemove.push(sortedSessions[i][0]);
+      }
+    }
+
+    // Remove sessions
+    for (const sessionId of sessionsToRemove) {
+      const session = this.sessions.get(sessionId);
+      if (session) {
+        this.sessions.delete(sessionId);
+        this.workerToSession.delete(session.workerId);
+      }
+    }
+  }
 
   /**
    * Register a new worker session.

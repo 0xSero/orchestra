@@ -1,5 +1,6 @@
 import { basename, extname, resolve as resolvePath } from "node:path";
 import { pathToFileURL } from "node:url";
+import type { FilePartInput, TextPartInput } from "@opencode-ai/sdk";
 
 export type WorkerAttachment = {
   type: "image" | "file";
@@ -22,11 +23,13 @@ export function normalizeBase64Image(input: string): string {
   return match ? match[1] : input;
 }
 
+type PromptPart = TextPartInput | FilePartInput;
+
 export async function buildPromptParts(input: {
   message: string;
   attachments?: WorkerAttachment[];
-}): Promise<Array<Record<string, unknown>>> {
-  const parts: Array<Record<string, unknown>> = [{ type: "text", text: input.message }];
+}): Promise<PromptPart[]> {
+  const parts: PromptPart[] = [{ type: "text", text: input.message }];
 
   if (!input.attachments || input.attachments.length === 0) return parts;
 
@@ -61,25 +64,29 @@ export async function buildPromptParts(input: {
 
 export function extractTextFromPromptResponse(data: unknown): { text: string; debug?: string } {
   const asObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
-  const readParts = (v: unknown): unknown[] | undefined => {
+  const readParts = (v: unknown): Record<string, unknown>[] | undefined => {
     if (!asObj(v)) return undefined;
-    const parts = (v as any).parts;
-    if (Array.isArray(parts)) return parts;
+    const parts = v.parts;
+    if (Array.isArray(parts)) return parts.filter(asObj);
     return undefined;
   };
 
-  const parts = readParts(data) ?? readParts(asObj(data) ? (data as any).message : undefined) ?? [];
+  const message = asObj(data) ? data.message : undefined;
+  const parts = readParts(data) ?? readParts(message) ?? [];
   if (!Array.isArray(parts) || parts.length === 0) return { text: "", debug: "no_parts" };
 
   let text = "";
+  let reasoning = "";
   const partTypes: string[] = [];
   for (const part of parts) {
     if (!asObj(part)) continue;
-    const type = typeof (part as any).type === "string" ? (part as any).type : "unknown";
+    const type = typeof part.type === "string" ? part.type : "unknown";
     partTypes.push(type);
-    if (type === "text" && typeof (part as any).text === "string") text += (part as any).text;
+    if (type === "text" && typeof part.text === "string") text += part.text;
+    if (type === "reasoning" && typeof part.text === "string") reasoning += part.text;
   }
 
-  const debug = text.length > 0 ? undefined : `parts:${[...new Set(partTypes)].join(",")}`;
-  return { text, debug };
+  const output = text.length > 0 ? text : reasoning;
+  const debug = output.length > 0 ? undefined : `parts:${[...new Set(partTypes)].join(",")}`;
+  return { text: output, debug };
 }

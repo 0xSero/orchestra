@@ -9,13 +9,15 @@ type DbRouterDeps = {
   onPreferencesChanged?: (key?: string) => void;
 };
 
+const asRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
+
 function setCors(res: ServerResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
-async function readJson(req: IncomingMessage): Promise<any> {
+async function readJson(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
@@ -126,13 +128,19 @@ export function createDbRouter(deps: DbRouterDeps) {
       if (segments.length === 3 && req.method === "PUT") {
         try {
           const body = await readJson(req);
-          if (body?.updates && typeof body.updates === "object") {
+          if (asRecord(body) && body.updates && typeof body.updates === "object") {
             for (const [key, value] of Object.entries(body.updates as Record<string, string | null>)) {
               deps.db.setPreference(key, value ?? null);
               deps.onPreferencesChanged?.(key);
             }
-          } else if (typeof body?.key === "string") {
-            deps.db.setPreference(body.key, body.value ?? null);
+          } else if (asRecord(body) && typeof body.key === "string") {
+            const rawValue = body.value;
+            if (rawValue !== undefined && rawValue !== null && typeof rawValue !== "string") {
+              sendJson(res, 400, { error: "Preference value must be a string or null" });
+              return;
+            }
+            const value = typeof rawValue === "string" ? rawValue : null;
+            deps.db.setPreference(body.key, value);
             deps.onPreferencesChanged?.(body.key);
           } else {
             sendJson(res, 400, { error: "Invalid preference update payload" });
@@ -181,6 +189,10 @@ export function createDbRouter(deps: DbRouterDeps) {
       if (segments.length === 4 && req.method === "PUT") {
         try {
           const body = await readJson(req);
+          if (!asRecord(body)) {
+            sendJson(res, 400, { error: "Invalid worker config payload" });
+            return;
+          }
           const updates: {
             model?: string | null;
             temperature?: number | null;

@@ -154,11 +154,6 @@ export function pickDocsModel(models: ModelCatalogEntry[]): ModelCatalogEntry | 
   return [...models].sort((a, b) => score(b) - score(a))[0];
 }
 
-export async function fetchOpencodeConfig(client: any, directory: string): Promise<Config | undefined> {
-  const res = await client.config.get({ query: { directory } }).catch(() => undefined);
-  return res?.data as Config | undefined;
-}
-
 /**
  * Expected shape of the config.providers response.
  * The SDK response type is complex, so we define the expected data shape here.
@@ -168,11 +163,22 @@ type ProvidersResponseData = {
   default?: Record<string, string>;
 };
 
+export type CatalogClient = {
+  config: {
+    get: (args: { query: { directory: string } }) => Promise<{ data?: Config }>;
+    providers: (args: { query: { directory: string } }) => Promise<{ data?: ProvidersResponseData }>;
+  };
+};
+
+export async function fetchOpencodeConfig(client: CatalogClient, directory: string): Promise<Config | undefined> {
+  const res = await client.config.get({ query: { directory } }).catch(() => undefined);
+  return res?.data;
+}
+
 export async function fetchProviders(
-  client: { config: { providers: (args: { query: { directory: string } }) => Promise<{ data?: unknown }> } },
+  client: CatalogClient,
   directory: string,
 ): Promise<{ providers: Provider[]; defaults: Record<string, string> }> {
   const res = await client.config.providers({ query: { directory } });
-  const data = res.data as ProvidersResponseData | undefined;
-  return { providers: data?.providers ?? [], defaults: data?.default ?? {} };
+  return { providers: res.data?.providers ?? [], defaults: res.data?.default ?? {} };
 }

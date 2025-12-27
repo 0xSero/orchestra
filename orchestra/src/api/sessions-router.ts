@@ -1,6 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { WorkerManager } from "../workers";
-import type { TrackedSession, WorkerSessionManager } from "../workers/session-manager";
+import type { SessionManagerEvent, TrackedSession, WorkerManager, WorkerSessionManager } from "../workers";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
@@ -34,11 +33,11 @@ function serializeSession(session: TrackedSession): JsonValue {
     status: session.status,
     messageCount: session.messageCount,
     toolCount: session.toolCount,
-    recentActivity: session.recentActivity.map((a) => ({
-      id: a.id,
-      type: a.type,
-      timestamp: a.timestamp.toISOString(),
-      summary: a.summary,
+    recentActivity: session.recentActivity.map((activity) => ({
+      id: activity.id,
+      type: activity.type,
+      timestamp: activity.timestamp.toISOString(),
+      summary: activity.summary,
     })),
     error: session.error ?? null,
   };
@@ -52,7 +51,7 @@ export function createSessionsRouter(deps: SessionsRouterDeps) {
   const eventSubscribers = new Set<ServerResponse>();
 
   // Subscribe to session manager events and broadcast to SSE clients
-  deps.sessionManager.on((event) => {
+  deps.sessionManager.on((event: SessionManagerEvent) => {
     const payload = `event: ${event.type}\ndata: ${JSON.stringify({
       type: event.type,
       session: serializeSession(event.session),

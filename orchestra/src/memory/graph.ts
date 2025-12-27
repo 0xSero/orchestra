@@ -11,11 +11,13 @@ export async function upsertMemory(input: {
   key: string;
   value: string;
   tags?: string[];
+  deps?: { withSession?: typeof withNeo4jSession };
 }): Promise<MemoryNode> {
   const scope = input.scope;
   const projectId = requireProjectId(scope, input.projectId);
+  const withSession = input.deps?.withSession ?? withNeo4jSession;
 
-  return await withNeo4jSession(input.cfg, async (session) => {
+  return await withSession(input.cfg, async (session) => {
     const mergePattern =
       scope === "project" ? `{ scope: $scope, projectId: $projectId, key: $key }` : `{ scope: $scope, key: $key }`;
     const res = await session.run(
@@ -48,12 +50,14 @@ export async function linkMemory(input: {
   fromKey: string;
   toKey: string;
   type?: string;
+  deps?: { withSession?: typeof withNeo4jSession };
 }): Promise<{ ok: true }> {
   const scope = input.scope;
   const projectId = requireProjectId(scope, input.projectId);
   const type = input.type ?? "relates_to";
+  const withSession = input.deps?.withSession ?? withNeo4jSession;
 
-  await withNeo4jSession(input.cfg, async (session) => {
+  await withSession(input.cfg, async (session) => {
     await session.run(
       `
 MATCH (a:Memory ${scope === "project" ? `{ scope: $scope, projectId: $projectId, key: $fromKey }` : `{ scope: $scope, key: $fromKey }`})
@@ -80,11 +84,13 @@ export async function getMemoryByKey(input: {
   scope: MemoryScope;
   projectId?: string;
   key: string;
+  deps?: { withSession?: typeof withNeo4jSession };
 }): Promise<MemoryNode | undefined> {
   const scope = input.scope;
   const projectId = requireProjectId(scope, input.projectId);
+  const withSession = input.deps?.withSession ?? withNeo4jSession;
 
-  return await withNeo4jSession(input.cfg, async (session) => {
+  return await withSession(input.cfg, async (session) => {
     const matchPattern =
       scope === "project" ? `{ scope: $scope, projectId: $projectId, key: $key }` : `{ scope: $scope, key: $key }`;
     const res = await session.run(
@@ -111,12 +117,14 @@ export async function searchMemory(input: {
   projectId?: string;
   query: string;
   limit?: number;
+  deps?: { withSession?: typeof withNeo4jSession };
 }): Promise<MemoryNode[]> {
   const scope = input.scope;
   const projectId = requireProjectId(scope, input.projectId);
   const limit = Math.floor(Math.max(1, Math.min(50, input.limit ?? 10)));
+  const withSession = input.deps?.withSession ?? withNeo4jSession;
 
-  return await withNeo4jSession(input.cfg, async (session) => {
+  return await withSession(input.cfg, async (session) => {
     const matchPattern = scope === "project" ? `{ scope: $scope, projectId: $projectId }` : `{ scope: $scope }`;
     const res = await session.run(
       `
@@ -144,12 +152,14 @@ export async function recentMemory(input: {
   scope: MemoryScope;
   projectId?: string;
   limit?: number;
+  deps?: { withSession?: typeof withNeo4jSession };
 }): Promise<MemoryNode[]> {
   const scope = input.scope;
   const projectId = requireProjectId(scope, input.projectId);
   const limit = Math.floor(Math.max(1, Math.min(50, input.limit ?? 10)));
+  const withSession = input.deps?.withSession ?? withNeo4jSession;
 
-  return await withNeo4jSession(input.cfg, async (session) => {
+  return await withSession(input.cfg, async (session) => {
     const matchPattern = scope === "project" ? `{ scope: $scope, projectId: $projectId }` : `{ scope: $scope }`;
     const res = await session.run(
       `

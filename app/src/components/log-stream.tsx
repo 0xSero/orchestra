@@ -10,19 +10,26 @@ export const LogsPanel: Component = () => {
   const { events, sessions } = useOpenCode();
 
   const describeEvent = (event: OpenCodeEventItem): string => {
-    const payload = event.payload as any;
-    const props = payload?.properties ?? {};
+    const payload = event.payload;
+    const asRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
+    const payloadRecord = asRecord(payload) ? payload : {};
+    const props = asRecord(payloadRecord.properties) ? payloadRecord.properties : {};
 
-    if (payload?.type === "orchestra.event") {
-      return payload?.payload?.type ?? "orchestra.event";
+    if (payloadRecord.type === "orchestra.event") {
+      const inner = asRecord(payloadRecord.payload) ? payloadRecord.payload : undefined;
+      return typeof inner?.type === "string" ? inner.type : "orchestra.event";
     }
-    if (payload?.type?.startsWith("session.") && props?.info?.title) {
-      return `${payload.type}: ${props.info.title}`;
+    if (typeof payloadRecord.type === "string" && payloadRecord.type.startsWith("session.")) {
+      const info = asRecord(props.info) ? props.info : undefined;
+      if (info && typeof info.title === "string") {
+        return `${payloadRecord.type}: ${info.title}`;
+      }
     }
-    if (payload?.type === "message.updated") {
-      return `message.updated: ${props?.info?.role ?? "message"}`;
+    if (payloadRecord.type === "message.updated") {
+      const info = asRecord(props.info) ? props.info : undefined;
+      return `message.updated: ${typeof info?.role === "string" ? info.role : "message"}`;
     }
-    return payload?.type ?? event.type;
+    return typeof payloadRecord.type === "string" ? payloadRecord.type : event.type;
   };
 
   return (

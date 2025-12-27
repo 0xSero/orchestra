@@ -42,4 +42,34 @@ describe("worker attachments", () => {
 
     await result.cleanup();
   });
+
+  test("keeps attachments already inside base dir and respects mime extensions", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "orch-attachments-inner-"));
+    const innerPath = join(baseDir, "image.gif");
+    await writeFile(innerPath, "data", "utf8");
+
+    const inside = await prepareWorkerAttachments({
+      baseDir,
+      workerId: "tester",
+      attachments: [{ type: "image", path: innerPath, mimeType: "image/gif" }],
+    });
+    expect(inside.attachments?.[0]?.path).toBe(innerPath);
+
+    const base64 = Buffer.from("hello", "utf8").toString("base64");
+    const webp = await prepareWorkerAttachments({
+      baseDir,
+      workerId: "tester",
+      attachments: [{ type: "image", base64, mimeType: "image/webp" }],
+    });
+    expect(webp.attachments?.[0]?.path?.endsWith(".webp")).toBe(true);
+    await webp.cleanup();
+
+    const gif = await prepareWorkerAttachments({
+      baseDir,
+      workerId: "tester",
+      attachments: [{ type: "image", base64, mimeType: "image/gif" }],
+    });
+    expect(gif.attachments?.[0]?.path?.endsWith(".gif")).toBe(true);
+    await gif.cleanup();
+  });
 });

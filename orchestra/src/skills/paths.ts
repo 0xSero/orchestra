@@ -48,13 +48,15 @@ export function inferProjectDir(startDir: string = process.cwd()): string | unde
 }
 
 export function resolveProjectDir(projectDir?: string): string | undefined {
-  if (projectDir && hasProjectSkillDirs(projectDir)) return projectDir;
-  const envDir =
-    process.env.OPENCODE_PROJECT_DIR ?? process.env.OPENCODE_WORKDIR ?? process.env.OPENCODE_WORKTREE;
-  if (envDir && hasProjectSkillDirs(envDir)) return envDir;
+  const explicitDir =
+    projectDir ?? process.env.OPENCODE_PROJECT_DIR ?? process.env.OPENCODE_WORKDIR ?? process.env.OPENCODE_WORKTREE;
+  if (explicitDir) {
+    if (hasProjectSkillDirs(explicitDir)) return explicitDir;
+    return inferProjectDir(explicitDir) ?? explicitDir;
+  }
   if (hasProjectSkillDirs(MODULE_ROOT)) return MODULE_ROOT;
   const inferred = inferProjectDir();
-  return inferred ?? projectDir;
+  return inferred;
 }
 
 export function getProjectSkillsDir(projectDir: string): string {

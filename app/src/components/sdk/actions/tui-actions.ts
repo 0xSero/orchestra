@@ -1,0 +1,88 @@
+import type { SdkAction } from "../sdk-action-types";
+
+export const tuiActions: SdkAction[] = [
+  {
+    id: "tui.appendPrompt",
+    group: "TUI",
+    label: "Append Prompt",
+    template: { body: { text: "Hello from SDK" } },
+    run: (client, input) => client.tui.appendPrompt(input),
+  },
+  {
+    id: "tui.openHelp",
+    group: "TUI",
+    label: "Open Help",
+    template: {},
+    run: (client, input) => client.tui.openHelp(input),
+  },
+  {
+    id: "tui.openSessions",
+    group: "TUI",
+    label: "Open Sessions",
+    template: {},
+    run: (client, input) => client.tui.openSessions(input),
+  },
+  {
+    id: "tui.openThemes",
+    group: "TUI",
+    label: "Open Themes",
+    template: {},
+    run: (client, input) => client.tui.openThemes(input),
+  },
+  {
+    id: "tui.openModels",
+    group: "TUI",
+    label: "Open Models",
+    template: {},
+    run: (client, input) => client.tui.openModels(input),
+  },
+  {
+    id: "tui.submitPrompt",
+    group: "TUI",
+    label: "Submit Prompt",
+    template: {},
+    run: (client, input) => client.tui.submitPrompt(input),
+  },
+  {
+    id: "tui.clearPrompt",
+    group: "TUI",
+    label: "Clear Prompt",
+    template: {},
+    run: (client, input) => client.tui.clearPrompt(input),
+  },
+  {
+    id: "tui.executeCommand",
+    group: "TUI",
+    label: "Execute TUI Command",
+    template: { body: { command: "agent.cycle" } },
+    run: (client, input) => client.tui.executeCommand(input),
+  },
+  {
+    id: "tui.showToast",
+    group: "TUI",
+    label: "Show Toast",
+    template: { body: { title: "SDK", message: "Toast from control panel", variant: "info" } },
+    run: (client, input) => client.tui.showToast(input),
+  },
+  {
+    id: "tui.publish",
+    group: "TUI",
+    label: "Publish Event",
+    template: { body: { type: "tui.toast.show", properties: { message: "Event payload", variant: "info" } } },
+    run: (client, input) => client.tui.publish(input),
+  },
+  {
+    id: "tui.control.next",
+    group: "TUI",
+    label: "Control Next",
+    template: {},
+    run: (client, input) => client.tui.control.next(input),
+  },
+  {
+    id: "tui.control.response",
+    group: "TUI",
+    label: "Control Response",
+    template: { body: { id: "<request-id>", response: "ok" } },
+    run: (client, input) => client.tui.control.response(input),
+  },
+];

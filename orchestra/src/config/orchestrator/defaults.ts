@@ -3,14 +3,14 @@ import type { OrchestratorConfigFile } from "../../types";
 export function buildDefaultOrchestratorConfigFile(): OrchestratorConfigFile {
   return {
     basePort: 14096,
-    autoSpawn: true,
+    autoSpawn: false, // Workers spawn on-demand, not automatically
     spawnOnDemand: ["vision"],
     spawnPolicy: {
       default: {
-        autoSpawn: true,
-        onDemand: true,
+        autoSpawn: false, // Don't auto-spawn on plugin init
+        onDemand: true, // Allow on-demand spawning via tools
         allowManual: true,
-        warmPool: true,
+        warmPool: false, // Don't pre-warm workers
         reuseExisting: true,
       },
       profiles: {},
@@ -103,7 +103,7 @@ export function buildDefaultOrchestratorConfigFile(): OrchestratorConfigFile {
       },
     },
     integrations: {
-      linear: { enabled: false },
+      linear: { enabled: true },
       neo4j: { enabled: false },
       monitoring: { enabled: false },
     },
@@ -121,6 +121,6 @@ export function buildDefaultOrchestratorConfigFile(): OrchestratorConfigFile {
         enabled: true,
       },
     ],
-    workers: ["docs", "memory"], // Only spawn docs and memory on startup
+    workers: [], // No auto-spawn - orchestrator decides when to spawn workers
   };
 }

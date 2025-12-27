@@ -21,6 +21,36 @@ export type WorkerSendResult = {
 const DEFAULT_TIMEOUT_MS = 600_000;
 const READY_WAIT_CAP_MS = 5 * 60_000;
 
+type WorkerClient = NonNullable<WorkerInstance["client"]>;
+type SessionPromptArgs = Parameters<WorkerClient["session"]["prompt"]>[0] & { throwOnError?: false };
+
+const asRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
+
+const extractSdkError = (value: unknown): unknown | undefined => {
+  if (asRecord(value) && "error" in value) return (value as { error?: unknown }).error;
+  return undefined;
+};
+
+const extractSdkData = (value: unknown): unknown => {
+  if (asRecord(value) && "data" in value) return (value as { data?: unknown }).data ?? value;
+  return value;
+};
+
+const extractSdkErrorMessage = (value: unknown): string => {
+  if (value instanceof Error) return value.message;
+  if (typeof value === "string") return value;
+  if (asRecord(value)) {
+    const data = value.data;
+    if (asRecord(data) && typeof data.message === "string") return data.message;
+    if (typeof value.message === "string") return value.message;
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+};
+
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, abort?: AbortController): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
@@ -113,28 +143,24 @@ export async function sendWorkerMessage(input: {
     const parts = await buildPromptParts({ message: taskText, attachments: prepared.attachments });
 
     const abort = new AbortController();
-    const result = await withTimeout(
-      instance.client.session.prompt({
-        path: { id: instance.sessionId },
-        body: { parts: parts as any },
-        query: { directory: instance.directory ?? process.cwd() },
-        signal: abort.signal as any,
-      } as any),
-      timeoutMs,
-      abort,
-    );
+    const promptArgs: SessionPromptArgs = {
+      path: { id: instance.sessionId },
+      body: { parts },
+      query: { directory: instance.directory ?? process.cwd() },
+      signal: abort.signal,
+      throwOnError: false,
+    };
 
-    const sdkError: any = (result as any)?.error;
+    const result = await withTimeout(instance.client.session.prompt(promptArgs), timeoutMs, abort);
+
+    const sdkError = extractSdkError(result);
     if (sdkError) {
-      const msg =
-        sdkError?.data?.message ??
-        sdkError?.message ??
-        (typeof sdkError === "string" ? sdkError : JSON.stringify(sdkError));
+      const msg = extractSdkErrorMessage(sdkError);
       instance.warning = `Last request failed: ${msg}`;
       throw new Error(msg);
     }
 
-    const promptData = (result as any)?.data ?? result;
+    const promptData = extractSdkData(result);
     const extracted = extractTextFromPromptResponse(promptData);
     const responseText = extracted.text.trim();
 

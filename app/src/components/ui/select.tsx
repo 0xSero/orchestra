@@ -94,9 +94,11 @@ export const SelectContent: Component<SelectContentProps> = (props) => {
   );
 };
 
+type SelectItemValue = { label: string };
+
 // Select Item
 interface SelectItemProps extends JSX.HTMLAttributes<HTMLDivElement> {
-  item: CollectionNode<any>;
+  item: CollectionNode<SelectItemValue>;
 }
 
 export const SelectItem: Component<SelectItemProps> = (props) => {

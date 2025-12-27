@@ -6,9 +6,10 @@ import { join } from "node:path";
 import { createSkillsApiServer } from "../src/api/skills-server";
 import { createSkillsService } from "../src/skills/service";
 
-async function waitForSse(baseUrl: string, matcher: RegExp, timeoutMs = 4000) {
+async function waitForSse(baseUrl: string, matcher: RegExp, timeoutMs = 4000, onReady?: () => void) {
   return await new Promise<string>((resolve, reject) => {
     let buffer = "";
+    let ready = false;
     const timer = setTimeout(() => {
       reject(new Error("Timed out waiting for SSE event"));
     }, timeoutMs);
@@ -17,7 +18,15 @@ async function waitForSse(baseUrl: string, matcher: RegExp, timeoutMs = 4000) {
       res.setEncoding("utf8");
       res.on("data", (chunk) => {
         buffer += chunk;
+        if (!ready && buffer.includes(": connected")) {
+          ready = true;
+          onReady?.();
+        }
         if (matcher.test(buffer)) {
+          if (!ready) {
+            ready = true;
+            onReady?.();
+          }
           clearTimeout(timer);
           resolve(buffer);
           req.destroy();
@@ -54,7 +63,12 @@ describe("skills e2e", () => {
 
     try {
       const baseUrl = api.url!;
-      const ssePromise = waitForSse(baseUrl, /skill\.created/);
+      let readyResolve: (() => void) | undefined;
+      const ready = new Promise<void>((resolve) => {
+        readyResolve = resolve;
+      });
+      const ssePromise = waitForSse(baseUrl, /skill\.created/, 4000, () => readyResolve?.());
+      await ready;
 
       await fetch(`${baseUrl}/api/skills`, {
         method: "POST",

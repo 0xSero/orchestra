@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { createOpencode } from "@opencode-ai/sdk";
+import { createOpencode, type TextPartInput } from "@opencode-ai/sdk";
 import { mergeOpenCodeConfig } from "../src/config/opencode";
 import { extractTextFromPromptResponse } from "../src/workers/prompt";
 import { setupE2eEnv } from "./helpers/e2e-env";
@@ -34,7 +34,7 @@ describe("e2e", () => {
 
       const res = await client.session.prompt({
         path: { id: session!.id },
-        body: { parts: [{ type: "text", text: "Reply with exactly: pong" }] as any },
+        body: { parts: [{ type: "text", text: "Reply with exactly: pong" } satisfies TextPartInput] },
         query: { directory: process.cwd() },
       });
 

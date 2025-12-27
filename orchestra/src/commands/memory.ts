@@ -23,8 +23,11 @@ function parseTags(value: string | string[] | undefined): string[] {
 async function resolveProjectId(api: ApiService): Promise<string | undefined> {
   try {
     const res = await api.project.current({});
-    const data = (res as any)?.data ?? res;
-    if (data?.id) return String(data.id);
+    const data = res && typeof res === "object" && "data" in res ? (res as { data?: unknown }).data : (res as unknown);
+    if (data && typeof data === "object" && "id" in data) {
+      const idValue = (data as { id?: unknown }).id;
+      if (idValue) return String(idValue);
+    }
   } catch {
     // ignore
   }

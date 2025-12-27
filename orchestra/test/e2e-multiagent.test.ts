@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { ToolContext } from "@opencode-ai/plugin";
 import type { WorkerProfile } from "../src/types";
 import type { WorkerJob } from "../src/workers/jobs";
 import { createTestCoreRuntime } from "./helpers/core-runtime";
@@ -79,22 +80,22 @@ describe.serial("e2e (multiagent)", () => {
       await core?.workers.spawn(profileB);
 
       // Async job: run a background worker request and await it.
-      const mockContext = {
+      const mockContext: ToolContext = {
         agent: "test",
         sessionID: "test-session",
         messageID: "test-msg",
         abort: new AbortController().signal,
       };
       const started = await core!.tools.tool.ask_worker_async.execute(
-        { workerId: "workerA", message: "Reply with exactly: ASYNC_OK" } as any,
-        mockContext as any,
+        { workerId: "workerA", message: "Reply with exactly: ASYNC_OK" },
+        mockContext,
       );
       const parsed = JSON.parse(String(started));
       expect(typeof parsed.jobId).toBe("string");
 
       const jobJson = await core!.tools.tool.await_worker_job.execute(
-        { jobId: parsed.jobId, timeoutMs: 90_000 } as any,
-        mockContext as any,
+        { jobId: parsed.jobId, timeoutMs: 90_000 },
+        mockContext,
       );
       const job = JSON.parse(String(jobJson));
       expect(job.id).toBe(parsed.jobId);

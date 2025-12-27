@@ -5,6 +5,7 @@ import type { Factory, OrchestratorConfig, ServiceLifecycle, WorkerInstance } fr
 import type { WorkerManager } from "../workers";
 import type { WorkerAttachment } from "../workers/prompt";
 import type { WorkflowEngine } from "../workflows/factory";
+import type { WorkflowRunResult } from "../workflows/types";
 import { selectWorkerId } from "./router";
 
 export type OrchestratorDeps = {
@@ -26,7 +27,7 @@ export type OrchestratorService = ServiceLifecycle & {
     task: string;
     attachments?: WorkerAttachment[];
     autoSpawn?: boolean;
-  }) => Promise<any>;
+  }) => Promise<WorkflowRunResult>;
 };
 
 export const createOrchestrator: Factory<OrchestratorConfig, OrchestratorDeps, OrchestratorService> = ({

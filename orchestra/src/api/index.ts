@@ -81,14 +81,14 @@ type SdkArgs = { query?: Record<string, unknown> } & Record<string, unknown>;
 /**
  * Helper to inject directory into SDK request arguments.
  *
- * Note: Returns `any` because the SDK client methods expect specific option types
- * (e.g., Options<SessionGetData>). The actual type validation happens in the SDK.
- * Using `any` here allows the wrapper to remain flexible while the SDK enforces
- * the actual type constraints at runtime.
+ * The SDK uses complex generics; we normalize to a simple shape here and cast
+ * back to the SDK's expected types at call sites.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function withDirectory(directory: string | undefined, args: unknown): any {
-  if (!directory) return args;
+function withDirectory(directory: string | undefined, args: unknown): SdkArgs {
+  if (!directory) {
+    if (!args || typeof args !== "object") return {};
+    return args as SdkArgs;
+  }
   if (!args || typeof args !== "object") return { query: { directory } };
   const typedArgs = args as SdkArgs;
   return { ...typedArgs, query: { ...(typedArgs.query ?? {}), directory } };
@@ -97,54 +97,62 @@ function withDirectory(directory: string | undefined, args: unknown): any {
 export const createApi: Factory<ApiConfig, ApiDeps, ApiService> = ({ config, deps }) => {
   const client = deps.client ?? createOpencodeClient({ baseUrl: config.baseUrl });
   const directory = config.directory;
+  const withDirectoryArgs = <T>(args: unknown): T => withDirectory(directory, args) as T;
 
   return {
     client,
     createClient: ({ baseUrl, directory: dir }) => createOpencodeClient({ baseUrl, directory: dir }),
     createServer: createOpencode,
     session: {
-      create: (args) => client.session.create(withDirectory(directory, args)),
-      list: (args) => client.session.list(withDirectory(directory, args)),
-      get: (args) => client.session.get(withDirectory(directory, args)),
-      prompt: (args) => client.session.prompt(withDirectory(directory, args)),
-      promptAsync: (args) => client.session.promptAsync(withDirectory(directory, args)),
-      messages: (args) => client.session.messages(withDirectory(directory, args)),
-      messageDelete: (args) => client.session.delete(withDirectory(directory, args)),
-      abort: (args) => client.session.abort(withDirectory(directory, args)),
+      create: (args) => client.session.create(withDirectoryArgs<Parameters<typeof client.session.create>[0]>(args)),
+      list: (args) => client.session.list(withDirectoryArgs<Parameters<typeof client.session.list>[0]>(args)),
+      get: (args) => client.session.get(withDirectoryArgs<Parameters<typeof client.session.get>[0]>(args)),
+      prompt: (args) => client.session.prompt(withDirectoryArgs<Parameters<typeof client.session.prompt>[0]>(args)),
+      promptAsync: (args) =>
+        client.session.promptAsync(withDirectoryArgs<Parameters<typeof client.session.promptAsync>[0]>(args)),
+      messages: (args) =>
+        client.session.messages(withDirectoryArgs<Parameters<typeof client.session.messages>[0]>(args)),
+      messageDelete: (args) =>
+        client.session.delete(withDirectoryArgs<Parameters<typeof client.session.delete>[0]>(args)),
+      abort: (args) => client.session.abort(withDirectoryArgs<Parameters<typeof client.session.abort>[0]>(args)),
     },
     event: {
-      subscribe: (args) => client.event.subscribe(withDirectory(directory, args)),
+      subscribe: (args) =>
+        client.event.subscribe(withDirectoryArgs<Parameters<typeof client.event.subscribe>[0]>(args)),
     },
     file: {
-      read: (args) => client.file.read(withDirectory(directory, args)),
+      read: (args) => client.file.read(withDirectoryArgs<Parameters<typeof client.file.read>[0]>(args)),
     },
     find: {
-      text: (args) => client.find.text(withDirectory(directory, args)),
-      files: (args) => client.find.files(withDirectory(directory, args)),
+      text: (args) => client.find.text(withDirectoryArgs<Parameters<typeof client.find.text>[0]>(args)),
+      files: (args) => client.find.files(withDirectoryArgs<Parameters<typeof client.find.files>[0]>(args)),
     },
     project: {
-      list: (args) => client.project.list(withDirectory(directory, args)),
-      current: (args) => client.project.current(withDirectory(directory, args)),
+      list: (args) => client.project.list(withDirectoryArgs<Parameters<typeof client.project.list>[0]>(args)),
+      current: (args) => client.project.current(withDirectoryArgs<Parameters<typeof client.project.current>[0]>(args)),
     },
     path: {
-      get: (args) => client.path.get(withDirectory(directory, args)),
+      get: (args) => client.path.get(withDirectoryArgs<Parameters<typeof client.path.get>[0]>(args)),
     },
     config: {
-      get: (args) => client.config.get(withDirectory(directory, args)),
-      providers: (args) => client.config.providers(withDirectory(directory, args)),
+      get: (args) => client.config.get(withDirectoryArgs<Parameters<typeof client.config.get>[0]>(args)),
+      providers: (args) =>
+        client.config.providers(withDirectoryArgs<Parameters<typeof client.config.providers>[0]>(args)),
     },
     app: {
-      agents: (args) => client.app.agents(withDirectory(directory, args)),
-      log: (args) => client.app.log(withDirectory(directory, args)),
+      agents: (args) => client.app.agents(withDirectoryArgs<Parameters<typeof client.app.agents>[0]>(args)),
+      log: (args) => client.app.log(withDirectoryArgs<Parameters<typeof client.app.log>[0]>(args)),
     },
     tui: {
-      appendPrompt: (args) => client.tui.appendPrompt(withDirectory(directory, args)),
-      showToast: (args) => client.tui.showToast(withDirectory(directory, args)),
-      submitPrompt: (args) => client.tui.submitPrompt(withDirectory(directory, args)),
-      publish: (args) => client.tui.publish(withDirectory(directory, args)),
+      appendPrompt: (args) =>
+        client.tui.appendPrompt(withDirectoryArgs<Parameters<typeof client.tui.appendPrompt>[0]>(args)),
+      showToast: (args) => client.tui.showToast(withDirectoryArgs<Parameters<typeof client.tui.showToast>[0]>(args)),
+      submitPrompt: (args) =>
+        client.tui.submitPrompt(withDirectoryArgs<Parameters<typeof client.tui.submitPrompt>[0]>(args)),
+      publish: (args) => client.tui.publish(withDirectoryArgs<Parameters<typeof client.tui.publish>[0]>(args)),
     },
     auth: {
-      set: (args) => client.auth.set(withDirectory(directory, args)),
+      set: (args) => client.auth.set(withDirectoryArgs<Parameters<typeof client.auth.set>[0]>(args)),
     },
     start: async () => {},
     stop: async () => {},

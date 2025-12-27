@@ -1,5 +1,6 @@
 import type { OrchestratorConfig, WorkerProfile } from "../types";
 import { normalizeAliases } from "./aliases";
+import type { CatalogClient } from "./catalog";
 import { fetchOpencodeConfig, fetchProviders } from "./catalog";
 import { resolveModel } from "./resolver";
 
@@ -11,7 +12,7 @@ export type ProfileModelHydrationChange = {
 };
 
 export async function hydrateProfileModelsFromOpencode(input: {
-  client: any;
+  client: CatalogClient;
   directory: string;
   profiles: Record<string, WorkerProfile>;
   modelAliases?: OrchestratorConfig["modelAliases"];

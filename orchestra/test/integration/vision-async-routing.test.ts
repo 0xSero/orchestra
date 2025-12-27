@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { deflateSync } from "node:zlib";
 import type { WorkerProfile } from "../../src/types";
-import { createVisionRoutingState, routeVisionMessage } from "../../src/ux/vision-routing";
+import { createVisionRoutingState, routeVisionMessage, type VisionChatOutput } from "../../src/ux/vision-routing";
 import { createTestWorkerRuntime } from "../helpers/worker-runtime";
 
 const VISION_MODEL = "opencode/gpt-5-nano";
@@ -86,7 +86,7 @@ describe("vision routing", () => {
   });
 
   test("replaces image parts with inline vision analysis", async () => {
-    const output = {
+    const output: VisionChatOutput = {
       message: { role: "user" },
       parts: [
         { type: "text", text: "What color is this image?" },
@@ -119,13 +119,13 @@ describe("vision routing", () => {
 
     expect(jobId).toBeUndefined();
     const analysisPart = output.parts.find(
-      (part: any) =>
-        part?.type === "text" &&
+      (part) =>
+        part.type === "text" &&
         typeof part.text === "string" &&
         (part.text.includes("[VISION ANALYSIS]") || part.text.includes("[VISION ANALYSIS FAILED]")),
     );
     expect(analysisPart).toBeTruthy();
-    const hasImageParts = output.parts.some((part: any) => part?.type === "file" || part?.type === "image");
+    const hasImageParts = output.parts.some((part) => part.type === "file" || part.type === "image");
     expect(hasImageParts).toBe(false);
   }, 180_000);
 });

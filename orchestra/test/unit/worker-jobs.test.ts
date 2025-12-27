@@ -36,4 +36,20 @@ describe("worker job registry", () => {
     const stored = registry.get(job.id)!;
     expect(stored.report?.summary).toBe("done");
   });
+
+  test("lists jobs and records failures", () => {
+    const registry = new WorkerJobRegistry();
+    const job = registry.create({ workerId: "coder", message: "ping" });
+
+    registry.setError(job.id, { error: "boom" });
+    const listed = registry.list({ workerId: "coder", limit: 1 });
+    expect(listed[0]?.status).toBe("failed");
+  });
+
+  test("await rejects on timeout", async () => {
+    const registry = new WorkerJobRegistry();
+    const job = registry.create({ workerId: "coder", message: "ping" });
+
+    await expect(registry.await(job.id, { timeoutMs: 1 })).rejects.toThrow("Timed out waiting for job");
+  });
 });

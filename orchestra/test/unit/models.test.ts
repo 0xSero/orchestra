@@ -1,0 +1,390 @@
+import { describe, expect, test } from "bun:test";
+import type { Provider } from "@opencode-ai/sdk";
+import type { OrchestratorConfig, WorkerProfile } from "../../src/types";
+import { normalizeAliases, resolveAlias } from "../../src/models/aliases";
+import { resolveCapabilityOverride } from "../../src/models/capability-overrides";
+import {
+  fetchOpencodeConfig,
+  fetchProviders,
+  filterProviders,
+  flattenProviders,
+  fullModelID,
+  isFullModelID,
+  parseFullModelID,
+  pickDocsModel,
+  pickFastModel,
+  pickVisionModel,
+  resolveModelRef,
+} from "../../src/models/catalog";
+import { averageCostPer1kTokens, scoreCost } from "../../src/models/cost";
+import { hydrateProfileModelsFromOpencode } from "../../src/models/hydrate";
+import { resolveModel } from "../../src/models/resolver";
+
+const providers: Provider[] = [
+  {
+    id: "opencode",
+    source: "config",
+    models: {
+      "gpt-5-nano": {
+        id: "gpt-5-nano",
+        name: "GPT-5 Nano Vision",
+        status: "active",
+        capabilities: {
+          attachment: true,
+          toolcall: true,
+          reasoning: true,
+          input: { text: true, image: true },
+        },
+        limit: { context: 128000, output: 4096 },
+        cost: { input: 0.01, output: 0.02 },
+      },
+      "legacy-model": {
+        id: "legacy-model",
+        name: "Legacy",
+        status: "deprecated",
+        capabilities: { input: { text: true } },
+        limit: { context: 16000, output: 1024 },
+      },
+    },
+  },
+  {
+    id: "fast-provider",
+    source: "env",
+    key: "fast-key",
+    models: {
+      "fast-mini": {
+        id: "fast-mini",
+        name: "Fast Mini",
+        capabilities: { input: { text: true } },
+        limit: { context: 32000, output: 2048 },
+        cost: { input: 0.001, output: 0.002 },
+      },
+    },
+  },
+  {
+    id: "api-provider",
+    source: "api",
+    models: {
+      "api-model": {
+        id: "api-model",
+        name: "API Model",
+        capabilities: { input: { text: true } },
+      },
+    },
+  },
+];
+
+describe("model helpers", () => {
+  test("normalizes aliases and resolves alias values", () => {
+    const aliases = normalizeAliases({ "My-Alias": "opencode/gpt-5-nano", other: 123 as unknown as string });
+    expect(aliases["my-alias"]).toBe("opencode/gpt-5-nano");
+    expect(resolveAlias("My-Alias", aliases)).toBe("opencode/gpt-5-nano");
+  });
+
+  test("resolves capability overrides by case-insensitive key", () => {
+    const override = resolveCapabilityOverride("opencode/gpt-5-nano", {
+      "OpenCode/GPT-5-NANO": { supportsVision: false },
+    });
+    expect(override?.supportsVision).toBe(false);
+  });
+
+  test("computes costs and scores", () => {
+    expect(averageCostPer1kTokens({ inputCostPer1kTokens: 0.01, outputCostPer1kTokens: 0.03 } as never)).toBe(0.02);
+    expect(scoreCost({ inputCostPer1kTokens: 0.2, outputCostPer1kTokens: 0.2 } as never, {
+      maxCostPer1kTokens: 0.1,
+    })).toEqual({ score: -100, tooExpensive: true });
+    expect(scoreCost({} as never, { mode: "economical" })).toEqual({ score: -20, tooExpensive: false });
+  });
+
+  test("flattens providers and picks models", () => {
+    const flattened = flattenProviders(providers);
+    expect(flattened.some((entry) => entry.full === "opencode/gpt-5-nano")).toBe(true);
+    expect(isFullModelID("opencode/gpt-5-nano")).toBe(true);
+    expect(parseFullModelID("opencode/gpt-5-nano")).toEqual({ providerID: "opencode", modelID: "gpt-5-nano" });
+    expect(fullModelID("opencode", "gpt-5-nano")).toBe("opencode/gpt-5-nano");
+
+    const vision = pickVisionModel(flattened);
+    expect(vision?.modelID).toBe("gpt-5-nano");
+
+    const fast = pickFastModel(flattened);
+    expect(fast?.modelID).toBe("fast-mini");
+
+    const docs = pickDocsModel(flattened);
+    expect(docs?.modelID).toBe("gpt-5-nano");
+  });
+
+  test("scores vision models with heuristics", () => {
+    const candidates = [
+      {
+        full: "zhipu/glm-4.6v",
+        providerID: "zhipu",
+        modelID: "glm-4.6v",
+        name: "GLM Vision",
+        status: "deprecated",
+        capabilities: { attachment: true, toolcall: true, input: { image: true } },
+        limit: { context: 64000 },
+      },
+      {
+        full: "other/vision-lite",
+        providerID: "other",
+        modelID: "vision-lite",
+        name: "Vision Lite",
+        status: "active",
+        capabilities: { attachment: true, input: { image: true } },
+        limit: { context: 32000 },
+      },
+    ] as unknown as ReturnType<typeof flattenProviders>;
+
+    const picked = pickVisionModel(candidates);
+    expect(picked?.modelID).toBe("vision-lite");
+  });
+
+  test("filters configured providers", () => {
+    const filtered = filterProviders(providers, "configured");
+    const ids = filtered.map((p) => p.id);
+    expect(ids).toContain("opencode");
+    expect(ids).toContain("fast-provider");
+    expect(ids).not.toContain("api-provider");
+  });
+
+  test("resolves models via aliases, auto tags, and errors", () => {
+    const aliases = { alias: "opencode/gpt-5-nano" };
+    const defaults = { opencode: "gpt-5-nano" };
+    const selection: OrchestratorConfig["modelSelection"] = {
+      mode: "balanced",
+      preferredProviders: ["opencode", "fast-provider"],
+    };
+
+    const aliasResolved = resolveModel("alias", { providers, aliases });
+    expect("error" in aliasResolved).toBe(false);
+
+    const autoResolved = resolveModel("auto", { providers, defaults, selection });
+    expect("error" in autoResolved).toBe(false);
+    if (!("error" in autoResolved)) {
+      expect(autoResolved.full).toBe("opencode/gpt-5-nano");
+    }
+
+    const visionResolved = resolveModel("auto:vision", { providers, defaults, selection });
+    expect("error" in visionResolved).toBe(false);
+
+    const unknownProvider = resolveModel("missing/gpt", { providers });
+    expect("error" in unknownProvider).toBe(true);
+
+    const missingModel = resolveModel("opencode/missing", { providers });
+    expect("error" in missingModel).toBe(true);
+
+    const missingExact = resolveModel("unknown-model", { providers });
+    expect("error" in missingExact).toBe(true);
+  });
+
+  test("resolves additional auto tags and exact matches", () => {
+    const defaults = { opencode: "gpt-5-nano" };
+
+    const autoFast = resolveModel("auto:fast", { providers, defaults });
+    expect("error" in autoFast).toBe(false);
+
+    const autoDocs = resolveModel("auto:docs", { providers, defaults });
+    expect("error" in autoDocs).toBe(false);
+
+    const autoCode = resolveModel("auto:code", { providers, defaults });
+    expect("error" in autoCode).toBe(false);
+
+    const autoCheap = resolveModel("auto:cheap", { providers, defaults });
+    expect("error" in autoCheap).toBe(false);
+
+    const modelMatches = resolveModel("gpt-5-nano", { providers, selection: { preferredProviders: ["opencode"] } });
+    expect("error" in modelMatches).toBe(false);
+  });
+
+  test("reports auto tag errors with suggestions", () => {
+    const simpleProviders: Provider[] = [
+      {
+        id: "provider",
+        source: "config",
+        models: {
+          "basic-model": {
+            id: "basic-model",
+            name: "Basic",
+            capabilities: { input: { text: true } },
+          },
+        },
+      },
+    ];
+
+    const result = resolveModel("auto:docs", { providers: simpleProviders });
+    expect("error" in result).toBe(true);
+    if ("error" in result) {
+      expect(result.suggestions?.length ?? 0).toBe(0);
+    }
+  });
+
+  test("handles auto defaults when providers are missing", () => {
+    const result = resolveModel("auto", {
+      providers,
+      defaults: { missing: "model" },
+      selection: { preferredProviders: ["missing"] },
+    });
+    expect("error" in result).toBe(false);
+  });
+
+  test("returns suggestions for partial matches", () => {
+    const result = resolveModel("gpt", { providers });
+    expect("error" in result).toBe(true);
+    if ("error" in result) {
+      expect(result.suggestions?.length).toBeGreaterThan(0);
+    }
+  });
+
+  test("resolveModelRef returns error when invalid", () => {
+    const ref = resolveModelRef("missing-model", providers);
+    expect("error" in ref).toBe(true);
+  });
+});
+
+describe("catalog fetch helpers", () => {
+  test("fetches config and providers data", async () => {
+    const client = {
+      config: {
+        get: async () => ({ data: { model: "opencode/gpt-5-nano" } }),
+        providers: async () => ({
+          data: {
+            providers,
+            default: { opencode: "gpt-5-nano" },
+          },
+        }),
+      },
+    };
+
+    const cfg = await fetchOpencodeConfig(client, "/tmp");
+    expect(cfg?.model).toBe("opencode/gpt-5-nano");
+
+    const providerRes = await fetchProviders(client, "/tmp");
+    expect(providerRes.providers.length).toBeGreaterThan(0);
+    expect(providerRes.defaults.opencode).toBe("gpt-5-nano");
+  });
+});
+
+describe("hydrateProfileModelsFromOpencode", () => {
+  test("hydrates auto models using defaults", async () => {
+    const client = {
+      config: {
+        get: async () => ({ data: { model: "opencode/gpt-5-nano" } }),
+        providers: async () => ({
+          data: {
+            providers,
+            default: { opencode: "gpt-5-nano" },
+          },
+        }),
+      },
+    };
+
+    const profiles: Record<string, WorkerProfile> = {
+      explorer: {
+        id: "explorer",
+        name: "Explorer",
+        model: "auto",
+        purpose: "Explore",
+        whenToUse: "explore",
+      },
+    };
+
+    const result = await hydrateProfileModelsFromOpencode({
+      client,
+      directory: "/tmp",
+      profiles,
+      modelAliases: { alias: "opencode/gpt-5-nano" },
+    });
+
+    expect(result.profiles.explorer.model).toBe("opencode/gpt-5-nano");
+    expect(result.changes.length).toBe(1);
+  });
+
+  test("throws when vision profile maps to non-vision model", async () => {
+    const client = {
+      config: {
+        get: async () => ({ data: { model: "fast-provider/fast-mini" } }),
+        providers: async () => ({
+          data: {
+            providers,
+            default: { opencode: "gpt-5-nano" },
+          },
+        }),
+      },
+    };
+
+    const profiles: Record<string, WorkerProfile> = {
+      vision: {
+        id: "vision",
+        name: "Vision",
+        model: "fast-provider/fast-mini",
+        purpose: "Vision",
+        whenToUse: "vision",
+        supportsVision: true,
+      },
+    };
+
+    await expect(
+      hydrateProfileModelsFromOpencode({
+        client,
+        directory: "/tmp",
+        profiles,
+      }),
+    ).rejects.toThrow("requires vision");
+  });
+
+  test("falls back when auto resolution fails", async () => {
+    const client = {
+      config: {
+        get: async () => ({ data: { model: "" } }),
+        providers: async () => ({ data: { providers: [], default: {} } }),
+      },
+    };
+
+    const profiles: Record<string, WorkerProfile> = {
+      explorer: {
+        id: "explorer",
+        name: "Explorer",
+        model: "auto:fast",
+        purpose: "Explore",
+        whenToUse: "explore",
+      },
+    };
+
+    const result = await hydrateProfileModelsFromOpencode({
+      client,
+      directory: "/tmp",
+      profiles,
+    });
+    expect(result.fallbackModel).toBe("opencode/gpt-5-nano");
+    expect(result.profiles.explorer.model).toBe("opencode/gpt-5-nano");
+  });
+
+  test("throws on invalid explicit model with suggestions", async () => {
+    const client = {
+      config: {
+        get: async () => ({ data: { model: "opencode/gpt-5-nano" } }),
+        providers: async () => ({
+          data: { providers, default: { opencode: "gpt-5-nano" } },
+        }),
+      },
+    };
+
+    const profiles: Record<string, WorkerProfile> = {
+      explorer: {
+        id: "explorer",
+        name: "Explorer",
+        model: "bad-model",
+        purpose: "Explore",
+        whenToUse: "explore",
+      },
+    };
+
+    await expect(
+      hydrateProfileModelsFromOpencode({
+        client,
+        directory: "/tmp",
+        profiles,
+      }),
+    ).rejects.toThrow('Invalid model for profile "explorer"');
+  });
+});

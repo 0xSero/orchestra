@@ -1,4 +1,4 @@
-import { createServer, type Server } from "node:http";
+import { createServer as createHttpServer, type Server } from "node:http";
 import type { DatabaseService } from "../db";
 import type { SkillsService } from "../skills/service";
 import type { Factory, ServiceLifecycle } from "../types";
@@ -20,6 +20,7 @@ export type SkillsApiDeps = {
   db?: DatabaseService;
   onWorkerConfigChanged?: (workerId?: string) => void;
   onPreferencesChanged?: (key?: string) => void;
+  createServer?: typeof createHttpServer;
 };
 
 export type SkillsApiServer = ServiceLifecycle & {
@@ -58,6 +59,7 @@ export const createSkillsApiServer: Factory<SkillsApiConfig, SkillsApiDeps, Skil
     // System router for process management
     const systemHandler = createSystemRouter();
 
+    const createServer = deps.createServer ?? createHttpServer;
     server = createServer((req, res) => {
       const url = req.url ?? "";
 

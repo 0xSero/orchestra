@@ -457,8 +457,7 @@
     @apply flex-1 flex h-full overflow-hidden;
     background:
       radial-gradient(1200px 500px at 15% -10%, rgba(214, 170, 96, 0.12), transparent 55%),
-      radial-gradient(900px 600px at 85% -20%, rgba(90, 150, 130, 0.12), transparent 60%),
-      hsl(var(--background));
+      radial-gradient(900px 600px at 85% -20%, rgba(90, 150, 130, 0.12), transparent 60%), hsl(var(--background));
   }
 
   .skills-sidebar {
@@ -521,7 +520,9 @@
 
   .skill-item.selected {
     @apply border-primary/60 bg-background;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(214, 170, 96, 0.2);
+    box-shadow:
+      0 10px 28px rgba(0, 0, 0, 0.18),
+      0 0 0 1px rgba(214, 170, 96, 0.2);
   }
 
   .skill-item-header {

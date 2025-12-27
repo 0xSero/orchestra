@@ -18,13 +18,20 @@ type PermissionCategory = NonNullable<ToolPermissions["categories"]>;
 
 export function PermissionsConfig(props: { value: ToolPermissions; onChange: (v: ToolPermissions) => void }) {
   const categories = createMemo(() => props.value.categories ?? {});
+  const categoryOptions: Record<keyof PermissionCategory, readonly string[]> = {
+    filesystem: FILESYSTEM_OPTIONS,
+    execution: EXECUTION_OPTIONS,
+    network: NETWORK_OPTIONS,
+  };
 
   const updateCategory = (key: keyof PermissionCategory, value: string) => {
+    const isValid = categoryOptions[key].includes(value);
+    const nextValue = isValid && value ? (value as PermissionCategory[typeof key]) : undefined;
     props.onChange({
       ...props.value,
       categories: {
         ...(props.value.categories ?? {}),
-        [key]: value ? (value as any) : undefined,
+        [key]: nextValue,
       },
     });
   };

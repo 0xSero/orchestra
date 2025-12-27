@@ -801,3 +801,13 @@ Worker profiles are defined as skills following the Agent Skills Standard with O
 ```
 
 The skills API (`/api/skills`) exposes CRUD + SSE for the control panel, and profiles are reloaded on skill changes.
+
+## Vision Routing Flow (Mermaid)
+
+```mermaid
+flowchart LR
+  UserMessage[User Message + Image Parts] --> Router[Vision Router]
+  Router -->|spawn vision worker| VisionWorker[Vision Worker]
+  VisionWorker --> Analysis[Vision Analysis Text]
+  Analysis -->|replaceImagesWithText| SessionOutput[Session Output]
+```

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { createOpencode } from "@opencode-ai/sdk";
+import { createOpencode, type Provider } from "@opencode-ai/sdk";
 import { mergeOpenCodeConfig } from "../../src/config/opencode";
-import { fetchProviders } from "../../src/models/catalog";
+import { type CatalogClient, fetchProviders } from "../../src/models/catalog";
 import { resolveModel } from "../../src/models/resolver";
 import { setupE2eEnv } from "../helpers/e2e-env";
 
@@ -9,9 +9,9 @@ const MODEL = "opencode/gpt-5-nano";
 
 describe("model resolver (integration)", () => {
   let restoreEnv: (() => void) | undefined;
-  let client: any;
+  let client: CatalogClient;
   let server: { close: () => void } | undefined;
-  let providers: any[] = [];
+  let providers: Provider[] = [];
   let defaults: Record<string, string> = {};
 
   beforeAll(async () => {

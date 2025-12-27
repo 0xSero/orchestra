@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { SkillsService } from "../skills/service";
+import type { SkillInput, SkillScope } from "../types";
 import type { WorkerManager } from "../workers";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
@@ -9,13 +10,15 @@ type SkillsRouterDeps = {
   workers?: WorkerManager;
 };
 
+const asRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
+
 function setCors(res: ServerResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
-async function readJson(req: IncomingMessage): Promise<any> {
+async function readJson(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
@@ -33,7 +36,7 @@ function sendJson(res: ServerResponse, status: number, body: JsonValue) {
   res.end(JSON.stringify(body));
 }
 
-function normalizeScope(value: any) {
+function normalizeScope(value: unknown): SkillScope {
   return value === "global" ? "global" : "project";
 }
 
@@ -97,7 +100,9 @@ export function createSkillsRouter(deps: SkillsRouterDeps) {
     if (segments.length === 2 && req.method === "POST") {
       try {
         const body = await readJson(req);
-        const skill = await deps.skills.create(body.input, normalizeScope(body.scope));
+        const record = asRecord(body) ? body : {};
+        const input = (asRecord(record.input) ? (record.input as unknown) : {}) as SkillInput;
+        const skill = await deps.skills.create(input, normalizeScope(record.scope));
         sendJson(res, 201, skill as unknown as JsonValue);
       } catch (err) {
         sendJson(res, 400, { error: err instanceof Error ? err.message : "Failed to create skill" });
@@ -128,7 +133,9 @@ export function createSkillsRouter(deps: SkillsRouterDeps) {
     if (segments.length === 3 && req.method === "PUT") {
       try {
         const body = await readJson(req);
-        const skill = await deps.skills.update(skillId, body.updates ?? {}, normalizeScope(body.scope));
+        const record = asRecord(body) ? body : {};
+        const updates = (asRecord(record.updates) ? record.updates : {}) as Partial<SkillInput>;
+        const skill = await deps.skills.update(skillId, updates, normalizeScope(record.scope));
         sendJson(res, 200, skill as unknown as JsonValue);
       } catch (err) {
         sendJson(res, 400, { error: err instanceof Error ? err.message : "Failed to update skill" });
@@ -139,7 +146,8 @@ export function createSkillsRouter(deps: SkillsRouterDeps) {
     if (segments.length === 3 && req.method === "DELETE") {
       try {
         const body = await readJson(req);
-        await deps.skills.delete(skillId, normalizeScope(body.scope));
+        const record = asRecord(body) ? body : {};
+        await deps.skills.delete(skillId, normalizeScope(record.scope));
         sendJson(res, 200, { success: true });
       } catch (err) {
         sendJson(res, 400, { error: err instanceof Error ? err.message : "Failed to delete skill" });
@@ -150,7 +158,13 @@ export function createSkillsRouter(deps: SkillsRouterDeps) {
     if (segments.length === 4 && segments[3] === "duplicate" && req.method === "POST") {
       try {
         const body = await readJson(req);
-        const skill = await deps.skills.duplicate(skillId, body.newId, normalizeScope(body.scope));
+        const record = asRecord(body) ? body : {};
+        const newId = typeof record.newId === "string" ? record.newId : "";
+        if (!newId) {
+          sendJson(res, 400, { error: "Missing newId" });
+          return;
+        }
+        const skill = await deps.skills.duplicate(skillId, newId, normalizeScope(record.scope));
         sendJson(res, 201, skill as unknown as JsonValue);
       } catch (err) {
         sendJson(res, 400, { error: err instanceof Error ? err.message : "Failed to duplicate skill" });

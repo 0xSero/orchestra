@@ -3,6 +3,7 @@ import type { CommunicationService } from "../communication";
 import type { MemoryService } from "../memory";
 import type { Factory, OrchestratorConfig, ServiceLifecycle, WorkerInstance, WorkerProfile } from "../types";
 import { type WorkerJob, WorkerJobRegistry } from "./jobs";
+import { killAllTrackedWorkers, trackWorkerPid, untrackWorkerPid } from "./pid-tracker";
 import { WorkerRegistry } from "./registry";
 import { sendWorkerMessage, type WorkerSendOptions } from "./send";
 import { createSessionManager, type WorkerSessionManager } from "./session-manager";
@@ -21,6 +22,9 @@ export type WorkerManagerDeps = {
   api?: ApiService;
   communication?: CommunicationService;
   memory?: MemoryService;
+  spawnWorker?: typeof spawnWorker;
+  cleanupWorkerInstance?: typeof cleanupWorkerInstance;
+  sendWorkerMessage?: typeof sendWorkerMessage;
 };
 
 export type WorkerManager = ServiceLifecycle & {
@@ -63,6 +67,9 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
   }
   const api = deps.api;
   const communication = deps.communication;
+  const spawnWorkerFn = deps.spawnWorker ?? spawnWorker;
+  const cleanupWorkerFn = deps.cleanupWorkerInstance ?? cleanupWorkerInstance;
+  const sendWorkerMessageFn = deps.sendWorkerMessage ?? sendWorkerMessage;
   const registry = new WorkerRegistry();
   const jobs = new WorkerJobRegistry();
   const inFlight = new Map<string, Promise<WorkerInstance>>();
@@ -98,7 +105,7 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
     const inFlightSpawn = inFlight.get(profile.id);
     if (inFlightSpawn) return await inFlightSpawn;
 
-    const spawnPromise = spawnWorker({
+    const spawnPromise = spawnWorkerFn({
       api,
       registry,
       directory: config.directory,
@@ -112,7 +119,16 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
     });
     inFlight.set(profile.id, spawnPromise);
     try {
-      return await spawnPromise;
+      const instance = await spawnPromise;
+      // Track the worker PID for cleanup on shutdown
+      if (instance.port) {
+        void trackWorkerPid({
+          pid: process.pid, // We track the parent; actual server PID is internal to SDK
+          workerId: profile.id,
+          port: instance.port,
+        });
+      }
+      return instance;
     } finally {
       inFlight.delete(profile.id);
     }
@@ -134,6 +150,7 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
   const onSpawn = (instance: WorkerInstance) => forwardWorkerEvent("spawn", instance);
   const onUpdate = (instance: WorkerInstance) => forwardWorkerEvent("update", instance);
   const onStop = (instance: WorkerInstance) => forwardWorkerEvent("stop", instance);
+  const onError = (instance: WorkerInstance) => forwardWorkerEvent("error", instance);
 
   // Callbacks for model resolution events
   const spawnCallbacks: SpawnWorkerCallbacks = {
@@ -172,8 +189,10 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
       if (!instance) return false;
       try {
         // Clean up session manager and event forwarding
-        cleanupWorkerInstance(instance, sessionManager);
+        cleanupWorkerFn(instance, sessionManager);
         await instance.shutdown?.();
+        // Remove from PID tracking
+        void untrackWorkerPid(workerId);
       } finally {
         instance.status = "stopped";
         registry.updateStatus(workerId, "stopped");
@@ -194,7 +213,7 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
         if (!instance || !memory?.enabled) return;
         if (instance.client && instance.sessionId) {
           await memory.inject({
-            client: instance.client as any,
+            client: instance.client,
             sessionId: instance.sessionId,
             directory: instance.directory,
           });
@@ -209,7 +228,7 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
         }
       };
 
-      const result = await sendWorkerMessage({
+      const result = await sendWorkerMessageFn({
         registry,
         workerId,
         message,
@@ -255,11 +274,15 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
       registry.on("spawn", onSpawn);
       registry.on("update", onUpdate);
       registry.on("stop", onStop);
+      registry.on("error", onError);
     },
     stop: async () => {
       registry.off("spawn", onSpawn);
       registry.off("update", onUpdate);
       registry.off("stop", onStop);
+      registry.off("error", onError);
+      // Kill all tracked workers spawned by this process
+      await killAllTrackedWorkers();
     },
     health: async () => ({ ok: true }),
   };

@@ -6,8 +6,14 @@ export function isProcessAlive(pid: number, options?: IsProcessAliveOptions): bo
   try {
     process.kill(pid, 0);
     return true;
-  } catch (err: any) {
-    if (options?.treatEpermAsAlive && err && typeof err === "object" && "code" in err && err.code === "EPERM") {
+  } catch (err: unknown) {
+    if (
+      options?.treatEpermAsAlive &&
+      err &&
+      typeof err === "object" &&
+      "code" in err &&
+      (err as { code?: string }).code === "EPERM"
+    ) {
       return true;
     }
     return false;

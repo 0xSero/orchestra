@@ -17,8 +17,16 @@ import type { WorkerProfile } from "../../types";
  * Get all profiles from skills directory.
  * This is the primary source of truth for worker profiles.
  */
-export async function loadSubagentProfiles(projectDir?: string): Promise<Record<string, WorkerProfile>> {
-  const skills = await loadAllSkills(projectDir);
+type ProfileLoaderDeps = {
+  loadAllSkills?: typeof loadAllSkills;
+};
+
+export async function loadSubagentProfiles(
+  projectDir?: string,
+  deps?: ProfileLoaderDeps,
+): Promise<Record<string, WorkerProfile>> {
+  const loader = deps?.loadAllSkills ?? loadAllSkills;
+  const skills = await loader(projectDir);
   const profiles: Record<string, WorkerProfile> = {};
 
   for (const [id, skill] of skills) {
@@ -96,9 +104,10 @@ export function validateProfile(profile: Partial<WorkerProfile>): string[] {
 export async function getAllProfiles(
   projectDir?: string,
   configOverrides?: Array<Partial<WorkerProfile> & { id: string }>,
+  deps?: ProfileLoaderDeps,
 ): Promise<Record<string, WorkerProfile>> {
   // 1. Load base profiles from skills
-  const baseProfiles = await loadSubagentProfiles(projectDir);
+  const baseProfiles = await loadSubagentProfiles(projectDir, deps);
 
   // 2. Apply config overrides
   const withOverrides = applyProfileOverrides(baseProfiles, configOverrides);
@@ -129,8 +138,8 @@ export async function getAllProfiles(
 /**
  * List available profile IDs.
  */
-export async function listProfileIds(projectDir?: string): Promise<string[]> {
-  const profiles = await loadSubagentProfiles(projectDir);
+export async function listProfileIds(projectDir?: string, deps?: ProfileLoaderDeps): Promise<string[]> {
+  const profiles = await loadSubagentProfiles(projectDir, deps);
   return Object.keys(profiles).sort();
 }
 

@@ -49,21 +49,22 @@ export async function loadOpenCodeConfig(): Promise<Record<string, unknown>> {
 
 export async function mergeOpenCodeConfig(
   override?: Record<string, unknown>,
-  options?: { dropOrchestratorPlugin?: boolean; appendPlugins?: string[] },
+  options?: { dropOrchestratorPlugin?: boolean; appendPlugins?: string[]; baseConfig?: unknown },
 ): Promise<Record<string, unknown>> {
-  const base = await loadOpenCodeConfig();
+  const base = options?.baseConfig ?? (await loadOpenCodeConfig());
+  const baseRecord = isPlainObject(base) ? base : undefined;
   if (!override || Object.keys(override).length === 0) {
     if (options?.dropOrchestratorPlugin || (options?.appendPlugins?.length ?? 0) > 0) {
-      const merged = isPlainObject(base) ? { ...base } : {};
-      merged.plugin = mergePlugins(base?.plugin, undefined, {
+      const merged = baseRecord ? { ...baseRecord } : {};
+      merged.plugin = mergePlugins(baseRecord?.plugin, undefined, {
         dropOrchestrator: options?.dropOrchestratorPlugin,
         append: options?.appendPlugins,
       });
       return merged;
     }
-    return base;
+    return baseRecord ? baseRecord : {};
   }
-  if (!isPlainObject(base)) {
+  if (!baseRecord) {
     const merged = { ...override };
     merged.plugin = mergePlugins(undefined, override?.plugin, {
       dropOrchestrator: options?.dropOrchestratorPlugin,
@@ -71,8 +72,8 @@ export async function mergeOpenCodeConfig(
     });
     return merged;
   }
-  const merged = deepMerge(base, override);
-  merged.plugin = mergePlugins(base?.plugin, override?.plugin, {
+  const merged = deepMerge(baseRecord, override);
+  merged.plugin = mergePlugins(baseRecord?.plugin, override?.plugin, {
     dropOrchestrator: options?.dropOrchestratorPlugin,
     append: options?.appendPlugins,
   });

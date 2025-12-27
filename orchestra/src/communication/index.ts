@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import type { Event as OpenCodeEvent } from "@opencode-ai/sdk";
 import type { ApiService } from "../api";
 import type { Factory, ServiceLifecycle } from "../types";
 import type { OrchestraEvent, OrchestraEventMap, OrchestraEventMeta, OrchestraEventName } from "./events";
@@ -25,6 +26,11 @@ export const createCommunication: Factory<CommunicationConfig, CommunicationDeps
   const emitter = new EventEmitter();
   emitter.setMaxListeners(config.maxListeners ?? 50);
   const enableSdkEvents = config.enableSdkEvents !== false;
+
+  type AnyOrchestraEventHandler = (event: OrchestraEvent<OrchestraEventName>) => void;
+  type EventStreamResult = {
+    stream: AsyncGenerator<OpenCodeEvent, unknown, unknown>;
+  };
 
   let abortController: AbortController | undefined;
   let streamTask: Promise<void> | undefined;
@@ -60,12 +66,12 @@ export const createCommunication: Factory<CommunicationConfig, CommunicationDeps
   };
 
   const on = <T extends OrchestraEventName>(type: T, handler: (event: OrchestraEvent<T>) => void) => {
-    emitter.on(type, handler as any);
-    return () => emitter.off(type, handler as any);
+    emitter.on(type, handler as AnyOrchestraEventHandler);
+    return () => emitter.off(type, handler as AnyOrchestraEventHandler);
   };
 
   const off = <T extends OrchestraEventName>(type: T, handler: (event: OrchestraEvent<T>) => void) => {
-    emitter.off(type, handler as any);
+    emitter.off(type, handler as AnyOrchestraEventHandler);
   };
 
   return {
@@ -80,7 +86,7 @@ export const createCommunication: Factory<CommunicationConfig, CommunicationDeps
 
       try {
         console.log("[Communication] subscribing to events...");
-        const result = await deps.api.event.subscribe({ signal: abortController.signal } as any);
+        const result = (await deps.api.event.subscribe({ signal: abortController.signal })) as EventStreamResult;
         console.log("[Communication] event subscription established");
         streamTask = (async () => {
           try {

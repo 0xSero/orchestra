@@ -3,150 +3,18 @@
  */
 
 import { useNavigate } from "@solidjs/router";
-import { type Component, createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import { type Component, createEffect, createMemo, createSignal, Show } from "solid-js";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useLayout } from "@/context/layout";
 import { useOpenCode } from "@/context/opencode";
 import { useSkills } from "@/context/skills";
-import { cn, formatShortcut } from "@/lib/utils";
+import { formatShortcut } from "@/lib/utils";
+import { buildCommandList, type Command } from "./command-palette-commands";
+import { CommandGroup } from "./command-palette-group";
+import { SearchIcon } from "./command-palette-icons";
 
-// Icons
-const SearchIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  >
-    <circle cx="11" cy="11" r="8" />
-    <path d="m21 21-4.3-4.3" />
-  </svg>
-);
-
-const PlusIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  >
-    <path d="M5 12h14" />
-    <path d="M12 5v14" />
-  </svg>
-);
-
-const RefreshIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  >
-    <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-    <path d="M3 3v5h5" />
-    <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-    <path d="M16 16h5v5" />
-  </svg>
-);
-
-const TerminalIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  >
-    <polyline points="4 17 10 11 4 5" />
-    <line x1="12" x2="20" y1="19" y2="19" />
-  </svg>
-);
-
-const ListIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  >
-    <line x1="8" x2="21" y1="6" y2="6" />
-    <line x1="8" x2="21" y1="12" y2="12" />
-    <line x1="8" x2="21" y1="18" y2="18" />
-    <line x1="3" x2="3.01" y1="6" y2="6" />
-    <line x1="3" x2="3.01" y1="12" y2="12" />
-    <line x1="3" x2="3.01" y1="18" y2="18" />
-  </svg>
-);
-
-const SettingsIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  >
-    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-    <circle cx="12" cy="12" r="3" />
-  </svg>
-);
-
-const SidebarIcon = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  >
-    <rect width="18" height="18" x="3" y="3" rx="2" />
-    <path d="M9 3v18" />
-  </svg>
-);
-
-interface Command {
-  id: string;
-  title: string;
-  description?: string;
-  icon: Component;
-  shortcut?: string;
-  category: "worker" | "skills" | "view" | "settings";
-  action: () => void;
-}
-
+/** Global command palette for quick actions. */
 export const CommandPalette: Component = () => {
   const {
     state,
@@ -166,141 +34,22 @@ export const CommandPalette: Component = () => {
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   let inputRef: HTMLInputElement | undefined;
 
-  // Define commands
-  const commands = createMemo((): Command[] => {
-    const cmds: Command[] = [
-      // Worker commands
-      {
-        id: "spawn-worker",
-        title: "Spawn New Worker",
-        description: "Create a new worker instance",
-        icon: PlusIcon,
-        category: "worker",
-        action: () => {
-          closeCommandPalette();
-          openSpawnDialog();
-        },
-      },
-      {
-        id: "refresh-sessions",
-        title: "Refresh Sessions",
-        description: "Reload session list from server",
-        icon: RefreshIcon,
-        category: "worker",
-        action: async () => {
-          await refresh();
-          closeCommandPalette();
-        },
-      },
-      {
-        id: "open-skills",
-        title: "Open Recipes",
-        description: "Switch to recipes management",
-        icon: ListIcon,
-        category: "skills",
-        action: () => {
-          setActivePanel("skills");
-          closeCommandPalette();
-        },
-      },
-      {
-        id: "refresh-skills",
-        title: "Refresh Recipes",
-        description: "Reload recipes from the API",
-        icon: RefreshIcon,
-        category: "skills",
-        action: async () => {
-          await refreshSkills();
-          closeCommandPalette();
-        },
-      },
-      {
-        id: "create-skill",
-        title: "Create Recipe",
-        description: "Start a new recipe profile",
-        icon: PlusIcon,
-        category: "skills",
-        action: () => {
-          setActivePanel("skills");
-          openCreateDialog();
-          closeCommandPalette();
-        },
-      },
-
-      // View commands
-      {
-        id: "toggle-sidebar",
-        title: "Toggle Sidebar",
-        icon: SidebarIcon,
-        shortcut: "mod+B",
-        category: "view",
-        action: () => {
-          toggleSidebar();
-          closeCommandPalette();
-        },
-      },
-      {
-        id: "toggle-jobs",
-        title: "Toggle Activity",
-        icon: ListIcon,
-        category: "view",
-        action: () => {
-          toggleJobQueue();
-          closeCommandPalette();
-        },
-      },
-      {
-        id: "toggle-logs",
-        title: "Toggle Logs",
-        icon: TerminalIcon,
-        category: "view",
-        action: () => {
-          toggleLogs();
-          closeCommandPalette();
-        },
-      },
-
-      // Settings commands
-      {
-        id: "settings",
-        title: "Open Settings",
-        icon: SettingsIcon,
-        category: "settings",
-        action: () => {
-          setActivePanel("settings");
-          closeCommandPalette();
-        },
-      },
-      {
-        id: "onboarding",
-        title: "Open Onboarding",
-        description: "Run the 5-minute guided demos",
-        icon: SettingsIcon,
-        category: "settings",
-        action: () => {
-          navigate("/onboarding");
-          closeCommandPalette();
-        },
-      },
-    ];
-
-    // Add session-specific commands for each session
-    for (const session of sessions()) {
-      cmds.push({
-        id: `select-session-${session.id}`,
-        title: `Go to ${session.title || "Untitled"}`,
-        description: `Session ${session.id.slice(0, 8)}...`,
-        icon: TerminalIcon,
-        category: "worker",
-        action: () => {
-          selectWorker(session.id);
-          closeCommandPalette();
-        },
-      });
-    }
-
-    return cmds;
-  });
+  const commands = createMemo(() =>
+    buildCommandList({
+      sessions: sessions(),
+      closeCommandPalette,
+      openSpawnDialog,
+      toggleSidebar,
+      toggleJobQueue,
+      toggleLogs,
+      selectWorker,
+      setActivePanel,
+      refreshSessions: refresh,
+      refreshSkills,
+      openCreateDialog,
+      navigate,
+    }),
+  );
 
   // Filter commands based on query
   const filteredCommands = createMemo(() => {
@@ -314,6 +63,14 @@ export const CommandPalette: Component = () => {
         cmd.category.toLowerCase().includes(q)
       );
     });
+  });
+
+  const indexById = createMemo(() => {
+    const map = new Map<string, number>();
+    filteredCommands().forEach((cmd, idx) => {
+      map.set(cmd.id, idx);
+    });
+    return map;
   });
 
   // Group commands by category
@@ -397,117 +154,34 @@ export const CommandPalette: Component = () => {
               when={filteredCommands().length > 0}
               fallback={<div class="py-6 text-center text-sm text-muted-foreground">No commands found</div>}
             >
-              {/* Workers section */}
-              <Show when={groupedCommands().worker.length > 0}>
-                <div class="mb-2">
-                  <p class="px-2 py-1 text-xs text-muted-foreground uppercase tracking-wider">Workers</p>
-                  <For each={groupedCommands().worker}>
-                    {(cmd, _) => {
-                      const globalIndex = () => {
-                        let i = 0;
-                        for (const c of filteredCommands()) {
-                          if (c.id === cmd.id) return i;
-                          i++;
-                        }
-                        return -1;
-                      };
-
-                      return (
-                        <CommandItem
-                          command={cmd}
-                          isSelected={selectedIndex() === globalIndex()}
-                          onSelect={cmd.action}
-                          onHover={() => setSelectedIndex(globalIndex())}
-                        />
-                      );
-                    }}
-                  </For>
-                </div>
-              </Show>
-
-              {/* View section */}
-              <Show when={groupedCommands().skills.length > 0}>
-                <div class="mb-2">
-                  <p class="px-2 py-1 text-xs text-muted-foreground uppercase tracking-wider">Recipes</p>
-                  <For each={groupedCommands().skills}>
-                    {(cmd) => {
-                      const globalIndex = () => {
-                        let i = 0;
-                        for (const c of filteredCommands()) {
-                          if (c.id === cmd.id) return i;
-                          i++;
-                        }
-                        return -1;
-                      };
-
-                      return (
-                        <CommandItem
-                          command={cmd}
-                          isSelected={selectedIndex() === globalIndex()}
-                          onSelect={cmd.action}
-                          onHover={() => setSelectedIndex(globalIndex())}
-                        />
-                      );
-                    }}
-                  </For>
-                </div>
-              </Show>
-
-              {/* View section */}
-              <Show when={groupedCommands().view.length > 0}>
-                <div class="mb-2">
-                  <p class="px-2 py-1 text-xs text-muted-foreground uppercase tracking-wider">View</p>
-                  <For each={groupedCommands().view}>
-                    {(cmd) => {
-                      const globalIndex = () => {
-                        let i = 0;
-                        for (const c of filteredCommands()) {
-                          if (c.id === cmd.id) return i;
-                          i++;
-                        }
-                        return -1;
-                      };
-
-                      return (
-                        <CommandItem
-                          command={cmd}
-                          isSelected={selectedIndex() === globalIndex()}
-                          onSelect={cmd.action}
-                          onHover={() => setSelectedIndex(globalIndex())}
-                        />
-                      );
-                    }}
-                  </For>
-                </div>
-              </Show>
-
-              {/* Settings section */}
-              <Show when={groupedCommands().settings.length > 0}>
-                <div class="mb-2">
-                  <p class="px-2 py-1 text-xs text-muted-foreground uppercase tracking-wider">Settings</p>
-                  <For each={groupedCommands().settings}>
-                    {(cmd) => {
-                      const globalIndex = () => {
-                        let i = 0;
-                        for (const c of filteredCommands()) {
-                          if (c.id === cmd.id) return i;
-                          i++;
-                        }
-                        return -1;
-                      };
-
-                      return (
-                        <CommandItem
-                          command={cmd}
-                          isSelected={selectedIndex() === globalIndex()}
-                          onSelect={cmd.action}
-                          onHover={() => setSelectedIndex(globalIndex())}
-                        />
-                      );
-                    }}
-                  </For>
-                </div>
-              </Show>
+              <CommandGroup
+                title="Workers"
+                commands={groupedCommands().worker}
+                indexById={indexById()}
+                selectedIndex={selectedIndex()}
+                onSelectIndex={setSelectedIndex}
+              />
+              <CommandGroup
+                title="Recipes"
+                commands={groupedCommands().skills}
+                indexById={indexById()}
+                selectedIndex={selectedIndex()}
+                onSelectIndex={setSelectedIndex}
+              />
+              <CommandGroup
+                title="View"
+                commands={groupedCommands().view}
+                indexById={indexById()}
+                selectedIndex={selectedIndex()}
+                onSelectIndex={setSelectedIndex}
+              />
+              <CommandGroup
+                title="Settings"
+                commands={groupedCommands().settings}
+                indexById={indexById()}
+                selectedIndex={selectedIndex()}
+                onSelectIndex={setSelectedIndex}
+              />
             </Show>
           </div>
         </ScrollArea>
@@ -528,41 +202,5 @@ export const CommandPalette: Component = () => {
         </div>
       </DialogContent>
     </Dialog>
-  );
-};
-
-// Command item component
-interface CommandItemProps {
-  command: Command;
-  isSelected: boolean;
-  onSelect: () => void;
-  onHover: () => void;
-}
-
-const CommandItem: Component<CommandItemProps> = (props) => {
-  return (
-    <button
-      class={cn(
-        "w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors",
-        props.isSelected ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
-      )}
-      onClick={props.onSelect}
-      onMouseEnter={props.onHover}
-    >
-      <span class="text-muted-foreground">
-        <props.command.icon />
-      </span>
-      <div class="flex-1 min-w-0">
-        <p class="text-sm text-foreground">{props.command.title}</p>
-        <Show when={props.command.description}>
-          <p class="text-xs text-muted-foreground truncate">{props.command.description}</p>
-        </Show>
-      </div>
-      <Show when={props.command.shortcut}>
-        <kbd class="px-1.5 py-0.5 text-xs rounded bg-muted text-muted-foreground">
-          {formatShortcut(props.command.shortcut!)}
-        </kbd>
-      </Show>
-    </button>
   );
 };

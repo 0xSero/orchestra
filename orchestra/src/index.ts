@@ -1,12 +1,13 @@
-import type { Plugin } from "@opencode-ai/plugin";
+import type { Hooks, Plugin } from "@opencode-ai/plugin";
 import { loadOrchestratorConfig } from "./config/orchestrator";
 import { createCore } from "./core";
+import { cleanupStaleWorkers } from "./workers/pid-tracker";
 
 const GLOBAL_KEY = "__opencode_orchestra_core__";
 
 type GlobalCoreState = {
   core?: ReturnType<typeof createCore>;
-  hooks?: ReturnType<typeof createCore>["hooks"];
+  hooks?: Hooks;
   startPromise?: Promise<void>;
   exitHandlersSet?: boolean;
 };
@@ -20,19 +21,25 @@ if (existingState === undefined || existingState === null) {
 
 export const OrchestratorPlugin: Plugin = async (ctx) => {
   if (process.env.OPENCODE_ORCHESTRATOR_WORKER === "1") {
-    return {} as any;
+    return {};
   }
 
   if (globalState.hooks) {
-    return globalState.hooks as any;
+    return globalState.hooks;
   }
 
   if (globalState.startPromise) {
     await globalState.startPromise;
-    return (globalState.hooks ?? {}) as any;
+    return globalState.hooks ?? {};
   }
 
   globalState.startPromise = (async () => {
+    // Clean up any stale workers from previous crashed sessions
+    const cleanup = await cleanupStaleWorkers();
+    if (cleanup.killed.length > 0) {
+      console.log(`[Orchestra] Cleaned up ${cleanup.killed.length} stale worker(s): ${cleanup.killed.join(", ")}`);
+    }
+
     const { config } = await loadOrchestratorConfig({
       directory: ctx.directory,
       worktree: ctx.worktree || undefined,
@@ -62,7 +69,7 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
   })();
 
   await globalState.startPromise;
-  return (globalState.hooks ?? {}) as any;
+  return globalState.hooks ?? {};
 };
 
 export default OrchestratorPlugin;

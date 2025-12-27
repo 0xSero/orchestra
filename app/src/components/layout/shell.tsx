@@ -2,7 +2,7 @@
  * Shell Component - Main app layout with responsive sidebar
  */
 
-import { type Component, type ParentComponent, Show } from "solid-js";
+import { type Component, type ParentComponent, type ParentProps, Show } from "solid-js";
 import { useLayout } from "@/context/layout";
 import { cn } from "@/lib/utils";
 
@@ -47,9 +47,7 @@ export const Shell: ParentComponent = (props) => {
 };
 
 // Sidebar component with mobile drawer
-interface SidebarProps {
-  children: any;
-}
+type SidebarProps = ParentProps;
 
 export const Sidebar: Component<SidebarProps> = (props) => {
   const { state, setSidebarOpen, isMobile } = useLayout();
@@ -101,9 +99,7 @@ export const MainContent: ParentComponent = (props) => {
 };
 
 // Header component
-interface HeaderProps {
-  children: any;
-}
+type HeaderProps = ParentProps;
 
 export const Header: Component<HeaderProps> = (props) => {
   const { toggleSidebar, isMobile, isTablet } = useLayout();
@@ -126,8 +122,7 @@ export const Header: Component<HeaderProps> = (props) => {
 };
 
 // Panel container for split views
-interface PanelContainerProps {
-  children: any;
+interface PanelContainerProps extends ParentProps {
   direction?: "horizontal" | "vertical";
 }
 
@@ -142,8 +137,7 @@ export const PanelContainer: Component<PanelContainerProps> = (props) => {
 };
 
 // Individual panel
-interface PanelProps {
-  children: any;
+interface PanelProps extends ParentProps {
   size?: "auto" | "sm" | "md" | "lg" | "full";
   class?: string;
 }
@@ -165,10 +159,7 @@ export const Panel: Component<PanelProps> = (props) => {
 };
 
 // Panel header
-interface PanelHeaderProps {
-  title: string;
-  children?: any;
-}
+type PanelHeaderProps = ParentProps<{ title: string }>;
 
 export const PanelHeader: Component<PanelHeaderProps> = (props) => {
   return (
@@ -185,9 +176,7 @@ export const PanelContent: ParentComponent<{ class?: string }> = (props) => {
 };
 
 // Footer component for mobile bottom nav
-interface FooterProps {
-  children: any;
-}
+type FooterProps = ParentProps;
 
 export const Footer: Component<FooterProps> = (props) => {
   return (

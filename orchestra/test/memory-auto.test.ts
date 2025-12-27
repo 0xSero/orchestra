@@ -104,4 +104,25 @@ describe("memory auto record (file)", () => {
     expect(injection).toBeTruthy();
     expect(injection).toContain("Memory (auto)");
   });
+
+  test("trims global memory when limits are configured", async () => {
+    const projectId = `global-project-${Date.now()}`;
+    const sessionId = "session-global";
+
+    await recordMessageMemory({
+      sessionId,
+      role: "user",
+      userId: "tester",
+      scope: "global",
+      projectId,
+      text: "global-memory",
+      messageId: `msg-global-${Date.now()}`,
+      maxChars: 2000,
+      summaries: { enabled: false, sessionMaxChars: 500, projectMaxChars: 500 },
+      trim: { maxMessagesGlobal: 1, maxProjectsGlobal: 1, maxMessagesPerSession: 1 },
+    });
+
+    const recent = await recentMemory({ scope: "global", limit: 5 });
+    expect(recent.length).toBeGreaterThan(0);
+  });
 });

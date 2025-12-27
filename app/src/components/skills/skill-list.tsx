@@ -55,11 +55,7 @@ export function SkillList() {
       </div>
 
       <div class="skills-search">
-        <Input
-          placeholder="Search agents..."
-          value={search()}
-          onInput={(e) => setSearch(e.currentTarget.value)}
-        />
+        <Input placeholder="Search agents..." value={search()} onInput={(e) => setSearch(e.currentTarget.value)} />
       </div>
 
       <ScrollArea class="skills-list">

@@ -4,6 +4,7 @@
  */
 
 import { type Component, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { getTypeBadgeClass, getTypeLabel, PROCESS_FILTERS, type ProcessType } from "./system-monitor-utils";
 
 type ProcessInfo = {
   pid: number;
@@ -11,7 +12,7 @@ type ProcessInfo = {
   memory: number;
   started: string;
   command: string;
-  type: "opencode-serve" | "opencode-main" | "vite" | "bun" | "other";
+  type: ProcessType;
 };
 
 type SystemStats = {
@@ -86,8 +87,11 @@ export const SystemMonitor: Component = () => {
 
   // Computed stats
   const serverCount = createMemo(() => stats()?.processes.filter((p) => p.type === "opencode-serve").length ?? 0);
-  const serverMemory = createMemo(() =>
-    stats()?.processes.filter((p) => p.type === "opencode-serve").reduce((sum, p) => sum + p.memory, 0) ?? 0
+  const serverMemory = createMemo(
+    () =>
+      stats()
+        ?.processes.filter((p) => p.type === "opencode-serve")
+        .reduce((sum, p) => sum + p.memory, 0) ?? 0,
   );
 
   // Filtered processes
@@ -98,36 +102,6 @@ export const SystemMonitor: Component = () => {
     if (f === "all") return s.processes;
     return s.processes.filter((p) => p.type === f);
   });
-
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case "opencode-serve":
-        return "Server";
-      case "opencode-main":
-        return "Main";
-      case "vite":
-        return "Vite";
-      case "bun":
-        return "Bun";
-      default:
-        return "Other";
-    }
-  };
-
-  const getTypeBadgeClass = (type: string) => {
-    switch (type) {
-      case "opencode-serve":
-        return "bg-amber-500/15 text-amber-600 dark:text-amber-400";
-      case "opencode-main":
-        return "bg-blue-500/15 text-blue-600 dark:text-blue-400";
-      case "vite":
-        return "bg-purple-500/15 text-purple-600 dark:text-purple-400";
-      case "bun":
-        return "bg-pink-500/15 text-pink-600 dark:text-pink-400";
-      default:
-        return "bg-muted text-muted-foreground";
-    }
-  };
 
   return (
     <div class="flex-1 flex flex-col bg-background overflow-hidden">
@@ -189,7 +163,7 @@ export const SystemMonitor: Component = () => {
       {/* Filter tabs */}
       <div class="flex-shrink-0 border-b border-border px-6 py-2 bg-muted/30">
         <div class="flex items-center gap-1">
-          {["all", "opencode-serve", "opencode-main", "vite", "bun", "other"].map((f) => (
+          {PROCESS_FILTERS.map((f) => (
             <button
               class={`px-2.5 py-1 text-xs rounded transition-colors ${
                 filter() === f
@@ -200,9 +174,7 @@ export const SystemMonitor: Component = () => {
             >
               {f === "all" ? "All" : getTypeLabel(f)}
               <Show when={f !== "all"}>
-                <span class="ml-1 opacity-60">
-                  ({stats()?.processes.filter((p) => p.type === f).length ?? 0})
-                </span>
+                <span class="ml-1 opacity-60">({stats()?.processes.filter((p) => p.type === f).length ?? 0})</span>
               </Show>
             </button>
           ))}
@@ -212,9 +184,7 @@ export const SystemMonitor: Component = () => {
       {/* Error state */}
       <Show when={error()}>
         <div class="flex-shrink-0 px-6 py-3 bg-destructive/5 border-b border-destructive/20">
-          <p class="text-xs text-destructive">
-            Connection error: Could not reach Orchestra server on port 4097
-          </p>
+          <p class="text-xs text-destructive">Connection error: Could not reach Orchestra server on port 4097</p>
         </div>
       </Show>
 
@@ -240,17 +210,23 @@ export const SystemMonitor: Component = () => {
                     <span class="font-mono text-muted-foreground">{proc.pid}</span>
                   </td>
                   <td class="px-3 py-2">
-                    <span class={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${getTypeBadgeClass(proc.type)}`}>
+                    <span
+                      class={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${getTypeBadgeClass(proc.type)}`}
+                    >
                       {getTypeLabel(proc.type)}
                     </span>
                   </td>
                   <td class="px-3 py-2 text-right">
-                    <span class={`font-mono ${proc.memory > 100 ? "text-amber-600 dark:text-amber-400 font-medium" : "text-foreground"}`}>
+                    <span
+                      class={`font-mono ${proc.memory > 100 ? "text-amber-600 dark:text-amber-400 font-medium" : "text-foreground"}`}
+                    >
                       {proc.memory.toFixed(0)} MB
                     </span>
                   </td>
                   <td class="px-3 py-2 text-right">
-                    <span class={`font-mono ${proc.cpu > 5 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>
+                    <span
+                      class={`font-mono ${proc.cpu > 5 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
+                    >
                       {proc.cpu.toFixed(1)}%
                     </span>
                   </td>
@@ -286,9 +262,7 @@ export const SystemMonitor: Component = () => {
 
         {/* Loading state */}
         <Show when={loading() && !stats()}>
-          <div class="flex items-center justify-center h-48 text-muted-foreground text-sm">
-            Loading...
-          </div>
+          <div class="flex items-center justify-center h-48 text-muted-foreground text-sm">Loading...</div>
         </Show>
       </div>
 

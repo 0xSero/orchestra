@@ -1,3 +1,4 @@
+import type { TextPartInput } from "@opencode-ai/sdk";
 import type { ApiService } from "../api";
 import type { Factory, MemoryConfig, ServiceLifecycle } from "../types";
 import { recordMessageMemory } from "./auto";
@@ -5,14 +6,28 @@ import { buildMemoryInjection } from "./inject";
 import { loadNeo4jConfig, type Neo4jConfig } from "./neo4j";
 import type { MemoryScope } from "./store";
 
+type SessionPromptArgs = {
+  path: { id: string };
+  body: {
+    noReply?: boolean;
+    parts: TextPartInput[];
+  };
+  query?: { directory?: string };
+};
+
 type SessionClient = {
   session: {
-    prompt: (args: any) => Promise<any>;
+    prompt: (args: SessionPromptArgs) => Promise<unknown>;
   };
 };
 
 export type MemoryDeps = {
   api?: ApiService;
+  memory?: {
+    recordMessageMemory?: typeof recordMessageMemory;
+    buildMemoryInjection?: typeof buildMemoryInjection;
+    loadNeo4jConfig?: typeof loadNeo4jConfig;
+  };
 };
 
 export type MemoryService = ServiceLifecycle & {
@@ -35,7 +50,11 @@ export const createMemoryStore: Factory<MemoryConfig | undefined, MemoryDeps, Me
   const autoRecord = cfg.autoRecord !== false;
   const autoInject = cfg.autoInject !== false;
   const requestedScope: MemoryScope = cfg.scope ?? "project";
-  const neo4j: Neo4jConfig | undefined = loadNeo4jConfig();
+  const memoryDeps = deps.memory ?? {};
+  const recordMessage = memoryDeps.recordMessageMemory ?? recordMessageMemory;
+  const buildInjection = memoryDeps.buildMemoryInjection ?? buildMemoryInjection;
+  const loadConfig = memoryDeps.loadNeo4jConfig ?? loadNeo4jConfig;
+  const neo4j: Neo4jConfig | undefined = loadConfig();
 
   let projectId: string | undefined;
   let projectResolved = false;
@@ -50,7 +69,6 @@ export const createMemoryStore: Factory<MemoryConfig | undefined, MemoryDeps, Me
       const data = (res as { data?: { id?: string } })?.data ?? (res as { id?: string });
       if (data?.id) projectId = data.id;
     } catch {
-      // ignore
     }
     return projectId;
   };
@@ -74,7 +92,7 @@ export const createMemoryStore: Factory<MemoryConfig | undefined, MemoryDeps, Me
     inject: async ({ client, sessionId, directory }) => {
       if (!enabled || !autoInject) return false;
       const { scope, projectId: pid } = await resolveProjectForScope();
-      const injection = await buildMemoryInjection({
+      const injection = await buildInjection({
         enabled: true,
         cfg: neo4j,
         scope,
@@ -100,24 +118,27 @@ export const createMemoryStore: Factory<MemoryConfig | undefined, MemoryDeps, Me
     record: async (input) => {
       if (!enabled || !autoRecord) return;
       const { scope, projectId: pid } = await resolveProjectForScope();
-      await recordMessageMemory({
-        cfg: neo4j,
-        text: input.text,
-        sessionId: input.sessionId,
-        messageId: input.messageId,
-        role: input.role,
-        userId: input.userId,
-        scope,
-        projectId: pid,
-        maxChars: cfg.maxChars,
-        summaries: cfg.summaries,
-        trim: cfg.trim,
-      }).catch(() => {});
+      try {
+        await recordMessage({
+          cfg: neo4j,
+          text: input.text,
+          sessionId: input.sessionId,
+          messageId: input.messageId,
+          role: input.role,
+          userId: input.userId,
+          scope,
+          projectId: pid,
+          maxChars: cfg.maxChars,
+          summaries: cfg.summaries,
+          trim: cfg.trim,
+        });
+      } catch {
+      }
     },
     start: async () => {
       if (!enabled) return;
       // Don't block startup - resolve project ID in background
-      resolveProjectId().catch(() => {});
+      void resolveProjectId();
     },
     stop: async () => {},
     health: async () => ({

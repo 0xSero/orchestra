@@ -43,9 +43,17 @@ export async function buildMemoryInjection(input: {
     includeGlobal?: boolean;
     maxGlobalEntries?: number;
   };
+  deps?: {
+    loadNeo4jConfig?: typeof loadNeo4jConfig;
+    getMemoryByKey?: typeof getMemoryByKey;
+    recentMemory?: typeof recentMemory;
+  };
 }): Promise<string | undefined> {
   if (!input.enabled) return undefined;
-  const cfg = input.cfg ?? loadNeo4jConfig();
+  const loadConfig = input.deps?.loadNeo4jConfig ?? loadNeo4jConfig;
+  const getByKey = input.deps?.getMemoryByKey ?? getMemoryByKey;
+  const recent = input.deps?.recentMemory ?? recentMemory;
+  const cfg = input.cfg ?? loadConfig();
 
   const maxChars = clamp(input.inject?.maxChars ?? 2000, 200, 20000);
   const maxEntries = clamp(input.inject?.maxEntries ?? 8, 0, 50);
@@ -66,12 +74,17 @@ export async function buildMemoryInjection(input: {
   const sessionSummaryKey = sessionId ? `summary:session:${sessionId}` : undefined;
 
   if (includeProjectSummary && projectSummaryKey) {
-    const node = await getMemoryByKey({
-      cfg,
-      scope,
-      projectId: scope === "project" ? projectId : undefined,
-      key: projectSummaryKey,
-    }).catch(() => undefined);
+    let node;
+    try {
+      node = await getByKey({
+        cfg,
+        scope,
+        projectId: scope === "project" ? projectId : undefined,
+        key: projectSummaryKey,
+      });
+    } catch {
+      node = undefined;
+    }
     if (node?.value?.trim()) {
       lines.push("### Project");
       lines.push(shorten(node.value.trim(), clamp(Math.floor(maxChars * 0.5), 200, 6000)));
@@ -80,9 +93,12 @@ export async function buildMemoryInjection(input: {
   }
 
   if (includeSessionSummary && scope === "project" && projectId && sessionSummaryKey) {
-    const node = await getMemoryByKey({ cfg, scope: "project", projectId, key: sessionSummaryKey }).catch(
-      () => undefined,
-    );
+    let node;
+    try {
+      node = await getByKey({ cfg, scope: "project", projectId, key: sessionSummaryKey });
+    } catch {
+      node = undefined;
+    }
     if (node?.value?.trim()) {
       lines.push("### Session");
       lines.push(shorten(node.value.trim(), clamp(Math.floor(maxChars * 0.35), 200, 4000)));
@@ -95,7 +111,12 @@ export async function buildMemoryInjection(input: {
     projectIdToRead: string | undefined,
     limit: number,
   ): Promise<MemoryNode[]> => {
-    const nodes = await recentMemory({ cfg, scope: scopeToRead, projectId: projectIdToRead, limit }).catch(() => []);
+    let nodes;
+    try {
+      nodes = await recent({ cfg, scope: scopeToRead, projectId: projectIdToRead, limit });
+    } catch {
+      nodes = [];
+    }
     const filtered = nodes.filter((n) => {
       if (!includeMessages && isMessageLike(n)) return false;
       if (isAutoScaffold(n)) return false;

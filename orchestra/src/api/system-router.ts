@@ -2,7 +2,9 @@ import { exec } from "node:child_process";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { promisify } from "node:util";
 
-const execAsync = promisify(exec);
+type ExecAsync = (command: string) => Promise<{ stdout: string; stderr: string }>;
+
+const defaultExecAsync = promisify(exec) as ExecAsync;
 
 export type ProcessInfo = {
   pid: number;
@@ -20,7 +22,7 @@ export type SystemStats = {
   count: number;
 };
 
-async function getOpencodeProcesses(): Promise<SystemStats> {
+async function getOpencodeProcesses(execAsync: ExecAsync): Promise<SystemStats> {
   try {
     const { stdout } = await execAsync(
       `/bin/ps aux | /usr/bin/grep -E 'opencode|node.*vite|bun.*serve' | /usr/bin/grep -v grep`,
@@ -73,7 +75,7 @@ async function getOpencodeProcesses(): Promise<SystemStats> {
   }
 }
 
-async function killProcess(pid: number): Promise<{ success: boolean; error?: string }> {
+async function killProcess(execAsync: ExecAsync, pid: number): Promise<{ success: boolean; error?: string }> {
   try {
     await execAsync(`kill ${pid}`);
     return { success: true };
@@ -82,16 +84,19 @@ async function killProcess(pid: number): Promise<{ success: boolean; error?: str
   }
 }
 
-async function killAllOpencodeServe(): Promise<{ killed: number; errors: string[] }> {
+async function killAllOpencodeServe(
+  execAsync: ExecAsync,
+  getProcesses: (execAsync: ExecAsync) => Promise<SystemStats> = getOpencodeProcesses,
+): Promise<{ killed: number; errors: string[] }> {
   try {
-    const stats = await getOpencodeProcesses();
+    const stats = await getProcesses(execAsync);
     const servePids = stats.processes.filter((p) => p.type === "opencode-serve").map((p) => p.pid);
 
     let killed = 0;
     const errors: string[] = [];
 
     for (const pid of servePids) {
-      const result = await killProcess(pid);
+      const result = await killProcess(execAsync, pid);
       if (result.success) {
         killed++;
       } else if (result.error) {
@@ -114,23 +119,11 @@ function sendJson(res: ServerResponse, status: number, data: unknown) {
   res.end(JSON.stringify(data));
 }
 
-function parseBody(req: IncomingMessage): Promise<Record<string, unknown>> {
-  return new Promise((resolve) => {
-    let body = "";
-    req.on("data", (chunk) => {
-      body += chunk;
-    });
-    req.on("end", () => {
-      try {
-        resolve(JSON.parse(body || "{}"));
-      } catch {
-        resolve({});
-      }
-    });
-  });
-}
-
-export function createSystemRouter() {
+export function createSystemRouter(
+  deps: { execAsync?: ExecAsync; getOpencodeProcesses?: (execAsync: ExecAsync) => Promise<SystemStats> } = {},
+) {
+  const execAsync = deps.execAsync ?? defaultExecAsync;
+  const getProcesses = deps.getOpencodeProcesses ?? getOpencodeProcesses;
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const url = req.url ?? "";
     const method = req.method ?? "GET";
@@ -147,7 +140,7 @@ export function createSystemRouter() {
 
     // GET /api/system/processes - List all opencode processes
     if (url === "/api/system/processes" && method === "GET") {
-      const stats = await getOpencodeProcesses();
+      const stats = await getProcesses(execAsync);
       sendJson(res, 200, stats);
       return;
     }
@@ -156,7 +149,7 @@ export function createSystemRouter() {
     const killMatch = url.match(/^\/api\/system\/processes\/(\d+)$/);
     if (killMatch && method === "DELETE") {
       const pid = parseInt(killMatch[1], 10);
-      const result = await killProcess(pid);
+      const result = await killProcess(execAsync, pid);
       if (result.success) {
         sendJson(res, 200, { success: true, pid });
       } else {
@@ -167,7 +160,7 @@ export function createSystemRouter() {
 
     // POST /api/system/processes/kill-all-serve - Kill all opencode serve processes
     if (url === "/api/system/processes/kill-all-serve" && method === "POST") {
-      const result = await killAllOpencodeServe();
+      const result = await killAllOpencodeServe(execAsync, getProcesses);
       sendJson(res, 200, result);
       return;
     }

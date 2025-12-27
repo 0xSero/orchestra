@@ -1,12 +1,11 @@
-import { appendFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
-import type { PluginInput } from "@opencode-ai/plugin";
+import type { Hooks, PluginInput } from "@opencode-ai/plugin";
+import type { Config } from "@opencode-ai/sdk";
 import { createApi } from "../api";
 import { createSkillsApiServer } from "../api/skills-server";
+import type { CommandRouter } from "../commands";
 import { createCommandRouter } from "../commands";
 import { createCommunication } from "../communication";
 import { createDatabase } from "../db";
-import { applyWorkerConfigOverrides } from "../db/overrides";
 import { createMemoryStore } from "../memory";
 import { ensureNeo4jRunning, setNeo4jIntegrationsConfig } from "../memory/neo4j";
 import { createOrchestrator } from "../orchestrator";
@@ -21,23 +20,18 @@ import {
   type VisionChatOutput,
 } from "../ux/vision-routing";
 import { createWorkerManager } from "../workers";
-import { getAllProfiles } from "../workers/profiles";
 import { createWorkflowEngine } from "../workflows/factory";
+import { createProfileSync } from "./container-profiles";
+import { registerCommunicationToasts } from "./container-toasts";
+import { getVisionRuntimeConfig } from "./container-vision";
 
 export type CoreConfig = {
   ctx: PluginInput;
   config: OrchestratorConfig;
 };
 
-export type CoreHooks = {
-  tool: Record<string, any>;
-  config: any;
-  "tool.execute.before": any;
-  "chat.message": any;
-  "experimental.chat.messages.transform": any;
-  "experimental.chat.system.transform": any;
-  "experimental.session.compacting": any;
-  "tui.command.execute": any;
+export type CoreHooks = Hooks & {
+  "tui.command.execute": CommandRouter["execute"];
 };
 
 export type CoreService = ServiceLifecycle & {
@@ -57,6 +51,7 @@ export type CoreService = ServiceLifecycle & {
   };
 };
 
+/** Create the orchestrator core services, hooks, and lifecycle handlers. */
 export const createCore: Factory<CoreConfig, Record<string, never>, CoreService> = ({ config }) => {
   setNeo4jIntegrationsConfig(config.config.integrations?.neo4j);
 
@@ -95,23 +90,7 @@ export const createCore: Factory<CoreConfig, Record<string, never>, CoreService>
     projectDir,
   });
   const visionState = createVisionRoutingState();
-  const visionTimeoutMs = (() => {
-    const raw = process.env.OPENCODE_VISION_TIMEOUT_MS;
-    const value = raw ? Number(raw) : undefined;
-    return Number.isFinite(value ?? NaN) && (value as number) > 0 ? (value as number) : 300_000;
-  })();
-  const visionPrompt = process.env.OPENCODE_VISION_PROMPT?.trim() || undefined;
-
-  const writeVisionLog = async (entry: Record<string, unknown>) => {
-    try {
-      const logDir = join(projectDir, ".opencode", "vision");
-      await mkdir(logDir, { recursive: true });
-      const payload = { loggedAt: new Date().toISOString(), ...entry };
-      await appendFile(join(logDir, "jobs.jsonl"), `${JSON.stringify(payload)}\n`);
-    } catch {
-      // ignore logging failures
-    }
-  };
+  const { timeoutMs: visionTimeoutMs, prompt: visionPrompt, logSink } = getVisionRuntimeConfig(projectDir);
 
   const visionDeps = {
     workers,
@@ -120,25 +99,14 @@ export const createCore: Factory<CoreConfig, Record<string, never>, CoreService>
     communication,
     timeoutMs: visionTimeoutMs,
     ...(visionPrompt ? { prompt: visionPrompt } : {}),
-    logSink: writeVisionLog,
+    logSink,
   };
-
-  const syncProfiles = (next: Record<string, (typeof profiles)[string]>) => {
-    for (const key of Object.keys(profiles)) {
-      delete profiles[key];
-    }
-    for (const [key, profile] of Object.entries(next)) {
-      profiles[key] = profile;
-    }
-  };
-
-  const refreshProfiles = async () => {
-    // Pass existing profiles from config as base, then merge with any SKILL.md overrides
-    const configProfilesArray = Object.values(baseProfiles).map((p) => ({ ...p }));
-    const merged = await getAllProfiles(projectDir, configProfilesArray);
-    const workerConfigs = database.getAllWorkerConfigs();
-    syncProfiles(applyWorkerConfigOverrides(merged, workerConfigs));
-  };
+  const { refreshProfiles } = createProfileSync({
+    projectDir,
+    baseProfiles,
+    profiles,
+    database,
+  });
 
   const skillsApi = createSkillsApiServer({
     config: { enabled: true },
@@ -192,112 +160,11 @@ export const createCore: Factory<CoreConfig, Record<string, never>, CoreService>
     skillsApi.start().catch((err) => {
       console.log("[Core] Skills API failed to start (non-fatal):", err);
     });
-
-    const toastsEnabled = config.config.ui?.toasts !== false;
-    const showToast = (body: { title: string; message: string; variant: "info" | "success" | "warning" | "error" }) => {
-      if (!toastsEnabled) return;
-      api.tui.showToast({ body }).catch((err) => console.log("[Toast] Failed:", err));
-    };
-
-    // Show startup toast
-    const profileCount = Object.keys(profiles).length;
-    const autoSpawn = config.config.spawn ?? [];
-    showToast({
-      title: "Orchestra Plugin Ready",
-      message: `${profileCount} worker profiles loaded${autoSpawn.length > 0 ? `, auto-spawning: ${autoSpawn.join(", ")}` : ""}`,
-      variant: "success",
-    });
-
-    // Emit startup event
-    communication.emit(
-      "orchestra.started",
-      { profileCount, autoSpawn, fallbackModel: undefined },
-      { source: "orchestrator" },
-    );
-
-    // Listen for model resolution events and show toasts
-    communication.on("orchestra.model.resolved", (event) => {
-      const { resolution } = event.data;
-      showToast({
-        title: `Model Resolved: ${resolution.profileId}`,
-        message: `${resolution.from} → ${resolution.to}`,
-        variant: "info",
-      });
-    });
-
-    communication.on("orchestra.model.fallback", (event) => {
-      const { profileId, model, reason } = event.data;
-      showToast({
-        title: `Model Fallback: ${profileId}`,
-        message: `Using ${model} (${reason})`,
-        variant: "warning",
-      });
-    });
-
-    // Listen for worker spawn events and show toasts
-    communication.on("orchestra.worker.spawned", (event) => {
-      const { worker } = event.data;
-      showToast({
-        title: `Spawning: ${worker.profile.name}`,
-        message: `Model: ${worker.profile.model}`,
-        variant: "info",
-      });
-    });
-
-    communication.on("orchestra.worker.reused", (event) => {
-      const { worker } = event.data;
-      showToast({
-        title: `Reusing: ${worker.profile.name}`,
-        message: `Port ${worker.port}`,
-        variant: "info",
-      });
-    });
-
-    communication.on("orchestra.worker.ready", (event) => {
-      const { worker } = event.data;
-      showToast({
-        title: `Ready: ${worker.profile.name}`,
-        message: `Port ${worker.port}`,
-        variant: "success",
-      });
-    });
-
-    communication.on("orchestra.worker.error", (event) => {
-      const { worker, error } = event.data;
-      showToast({
-        title: `Worker Error: ${worker.profile.name}`,
-        message: typeof error === "string" ? error : "Worker encountered an error",
-        variant: "error",
-      });
-    });
-
-    communication.on("orchestra.worker.stopped", (event) => {
-      const { worker } = event.data;
-      showToast({
-        title: `Stopped: ${worker.profile.name}`,
-        message: `Port ${worker.port}`,
-        variant: "warning",
-      });
-    });
-
-    communication.on("orchestra.worker.wakeup", (event) => {
-      const { workerId, reason, summary } = event.data;
-      showToast({
-        title: `Worker Wakeup: ${workerId}`,
-        message: summary ? `${reason}: ${summary}` : reason,
-        variant: "info",
-      });
-    });
-
-    communication.on("orchestra.worker.job", (event) => {
-      const { job, status } = event.data;
-      const label = status === "created" ? "Job Queued" : status === "succeeded" ? "Job Complete" : "Job Failed";
-      const type = status === "failed" ? "error" : status === "succeeded" ? "success" : "info";
-      showToast({
-        title: `${label}: ${job.workerId}`,
-        message: `Job ${job.id}`,
-        variant: type,
-      });
+    registerCommunicationToasts({
+      api,
+      communication,
+      profiles,
+      config: config.config,
     });
   };
 
@@ -314,7 +181,7 @@ export const createCore: Factory<CoreConfig, Record<string, never>, CoreService>
 
   const hooks: CoreHooks = {
     tool: tools.tool,
-    config: async (input: { agent?: Record<string, unknown>; command?: Record<string, unknown> }) => {
+    config: async (input: Config) => {
       // Inject the orchestrator agent if enabled in config
       const agentCfg = config.config.agent;
       if (agentCfg?.enabled !== false) {
@@ -349,11 +216,8 @@ export const createCore: Factory<CoreConfig, Record<string, never>, CoreService>
       );
     },
     // tui.command.execute hook input type is defined by the SDK plugin system
-    "tui.command.execute": async (input: unknown) => commands.execute(input as Parameters<typeof commands.execute>[0]),
-    "experimental.chat.messages.transform": async (
-      _input: unknown,
-      output: { messages: Array<{ info?: { id?: string; role?: string }; parts?: any[] }> },
-    ) => {
+    "tui.command.execute": async (input) => commands.execute(input),
+    "experimental.chat.messages.transform": async (_input, output) => {
       syncVisionProcessedMessages(output, visionState);
     },
     "experimental.chat.system.transform": tools.systemTransform,

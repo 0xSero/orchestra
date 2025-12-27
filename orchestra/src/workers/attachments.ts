@@ -43,24 +43,18 @@ export async function prepareWorkerAttachments(input: {
   for (const attachment of input.attachments) {
     if (attachment.type !== "image") {
       normalized.push(attachment);
-      continue;
-    }
-
-    if (attachment.path) {
+    } else if (attachment.path) {
       if (isPathInside(input.baseDir, attachment.path)) {
         normalized.push(attachment);
-        continue;
+      } else {
+        await ensureTempDir();
+        const ext = extForMime(attachment.mimeType, attachment.path);
+        const dest = join(tempDir, `${input.workerId}-${Date.now()}-${counter++}${ext}`);
+        await copyFile(attachment.path, dest);
+        created.push(dest);
+        normalized.push({ ...attachment, path: dest, base64: undefined });
       }
-      await ensureTempDir();
-      const ext = extForMime(attachment.mimeType, attachment.path);
-      const dest = join(tempDir, `${input.workerId}-${Date.now()}-${counter++}${ext}`);
-      await copyFile(attachment.path, dest);
-      created.push(dest);
-      normalized.push({ ...attachment, path: dest, base64: undefined });
-      continue;
-    }
-
-    if (attachment.base64) {
+    } else if (attachment.base64) {
       await ensureTempDir();
       const ext = extForMime(attachment.mimeType);
       const dest = join(tempDir, `${input.workerId}-${Date.now()}-${counter++}${ext}`);
@@ -68,10 +62,9 @@ export async function prepareWorkerAttachments(input: {
       await writeFile(dest, decoded);
       created.push(dest);
       normalized.push({ type: "image", path: dest, mimeType: attachment.mimeType });
-      continue;
+    } else {
+      normalized.push(attachment);
     }
-
-    normalized.push(attachment);
   }
 
   return {

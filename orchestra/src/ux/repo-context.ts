@@ -39,12 +39,30 @@ function clampText(input: string, maxChars: number): { text: string; truncated: 
   return { text: `${input.slice(0, Math.max(0, maxChars))}\n\n...(truncated)\n`, truncated: true };
 }
 
+/**
+ * Check if a directory is a git repository by looking for .git directory.
+ * This is faster and safer than running git commands.
+ */
+function isGitRepository(directory: string): boolean {
+  try {
+    return existsSync(join(directory, ".git"));
+  } catch {
+    return false;
+  }
+}
+
 function getGitInfo(directory: string): RepoContext["git"] | undefined {
+  // Check for .git directory first to avoid unnecessary process spawning
+  if (!isGitRepository(directory)) {
+    return undefined;
+  }
+
   try {
     const branch = execSync("git rev-parse --abbrev-ref HEAD", {
       cwd: directory,
       encoding: "utf8",
       stdio: ["pipe", "pipe", "pipe"],
+      timeout: 5000, // 5 second timeout to prevent hanging
     }).trim();
 
     let remoteUrl: string | undefined;
@@ -53,6 +71,7 @@ function getGitInfo(directory: string): RepoContext["git"] | undefined {
         cwd: directory,
         encoding: "utf8",
         stdio: ["pipe", "pipe", "pipe"],
+        timeout: 5000,
       }).trim();
     } catch {
       // No remote configured
@@ -64,6 +83,7 @@ function getGitInfo(directory: string): RepoContext["git"] | undefined {
         cwd: directory,
         encoding: "utf8",
         stdio: ["pipe", "pipe", "pipe"],
+        timeout: 10000, // Longer timeout for status as it can be slower
       }).trim();
       hasUncommittedChanges = status.length > 0;
     } catch {
