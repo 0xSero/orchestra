@@ -1,5 +1,5 @@
-import type { WorkflowDefinition, WorkflowStepDefinition } from "./types";
 import type { WorkflowStepConfig } from "../types";
+import type { WorkflowDefinition, WorkflowStepDefinition } from "./types";
 
 const defaultSteps: WorkflowStepDefinition[] = [
   {
@@ -53,7 +53,7 @@ function resolveStep(base: WorkflowStepDefinition | undefined, override: Workflo
     title: override.title ?? base?.title ?? override.id,
     workerId: override.workerId ?? base?.workerId ?? "coder",
     prompt,
-    carry: typeof override.carry === "boolean" ? override.carry : base?.carry ?? true,
+    carry: typeof override.carry === "boolean" ? override.carry : (base?.carry ?? true),
   };
 }
 

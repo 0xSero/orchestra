@@ -8,7 +8,12 @@ export type ProfileSuggestion = {
 
 const keywordBoosts: Array<{ pattern: RegExp; profileId: string; score: number; reason: string }> = [
   { pattern: /image|vision|screenshot|diagram|ocr/i, profileId: "vision", score: 40, reason: "vision task" },
-  { pattern: /docs?|documentation|reference|api|research|cite|example/i, profileId: "docs", score: 35, reason: "documentation" },
+  {
+    pattern: /docs?|documentation|reference|api|research|cite|example/i,
+    profileId: "docs",
+    score: 35,
+    reason: "documentation",
+  },
   { pattern: /code|implement|bug|fix|refactor|test|build/i, profileId: "coder", score: 30, reason: "coding task" },
   { pattern: /architecture|design|plan|tradeoff|strategy/i, profileId: "architect", score: 25, reason: "architecture" },
   { pattern: /search|find|locate|where|explore/i, profileId: "explorer", score: 20, reason: "codebase search" },
@@ -23,7 +28,7 @@ function tokenize(text: string): string[] {
 export function suggestProfiles(
   query: string,
   profiles: Record<string, WorkerProfile>,
-  options?: { limit?: number }
+  options?: { limit?: number },
 ): ProfileSuggestion[] {
   const tokens = tokenize(query);
   const suggestions: ProfileSuggestion[] = [];
@@ -39,13 +44,7 @@ export function suggestProfiles(
       }
     }
 
-    const haystack = [
-      profile.id,
-      profile.name,
-      profile.purpose,
-      profile.whenToUse,
-      ...(profile.tags ?? []),
-    ]
+    const haystack = [profile.id, profile.name, profile.purpose, profile.whenToUse, ...(profile.tags ?? [])]
       .join(" ")
       .toLowerCase();
 

@@ -1,14 +1,14 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { createWorkflowEngine } from "../../src/workflows/factory";
-import { buildBuiltinWorkflows } from "../../src/workflows/builtins";
-import { setupE2eEnv } from "../helpers/e2e-env";
 import type { WorkerProfile } from "../../src/types";
+import { buildBuiltinWorkflows } from "../../src/workflows/builtins";
+import { createWorkflowEngine } from "../../src/workflows/factory";
+import { setupE2eEnv } from "../helpers/e2e-env";
 import { createTestWorkerRuntime } from "../helpers/worker-runtime";
 
 const MODEL = "opencode/gpt-5-nano";
 const directory = process.cwd();
 
-const SYSTEM_PROMPT = "Test mode: reply with exactly \"OK\" and nothing else.";
+const SYSTEM_PROMPT = 'Test mode: reply with exactly "OK" and nothing else.';
 
 function makeProfile(input: Omit<WorkerProfile, "model" | "systemPrompt">): WorkerProfile {
   return { ...input, model: MODEL, systemPrompt: SYSTEM_PROMPT };
@@ -66,27 +66,23 @@ describe("builtin workflows integration", () => {
     restoreEnv?.();
   });
 
-  test(
-    "runs a built-in workflow successfully",
-    async () => {
-      const workflow = buildBuiltinWorkflows().find((entry) => entry.id === "bug-triage");
-      if (!workflow) throw new Error("Expected built-in workflow 'bug-triage' to exist.");
+  test("runs a built-in workflow successfully", async () => {
+    const workflow = buildBuiltinWorkflows().find((entry) => entry.id === "bug-triage");
+    if (!workflow) throw new Error("Expected built-in workflow 'bug-triage' to exist.");
 
-      const result = await workflowEngine.run(
-        { workflowId: workflow.id, task, limits },
-        {
-          resolveWorker: async (workerId) => workerId,
-          sendToWorker: async (workerId, message, options) =>
-            runtime!.workers.send(workerId, message, { attachments: options.attachments, timeout: options.timeoutMs }),
-        }
-      );
+    const result = await workflowEngine.run(
+      { workflowId: workflow.id, task, limits },
+      {
+        resolveWorker: async (workerId) => workerId,
+        sendToWorker: async (workerId, message, options) =>
+          runtime!.workers.send(workerId, message, { attachments: options.attachments, timeout: options.timeoutMs }),
+      },
+    );
 
-      expect(result.steps.length).toBe(workflow.steps.length);
-      for (const step of result.steps) {
-        expect(step.status).toBe("success");
-        expect((step.response ?? "").length).toBeGreaterThan(0);
-      }
-    },
-    240_000
-  );
+    expect(result.steps.length).toBe(workflow.steps.length);
+    for (const step of result.steps) {
+      expect(step.status).toBe("success");
+      expect((step.response ?? "").length).toBeGreaterThan(0);
+    }
+  }, 240_000);
 });

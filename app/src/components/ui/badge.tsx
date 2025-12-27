@@ -28,14 +28,7 @@ export const Badge: Component<BadgeProps> = (props) => {
   const [local, others] = splitProps(props, ["variant", "class", "children"]);
 
   return (
-    <span
-      class={cn(
-        badgeVariants.base,
-        badgeVariants.variant[local.variant ?? "default"],
-        local.class
-      )}
-      {...others}
-    >
+    <span class={cn(badgeVariants.base, badgeVariants.variant[local.variant ?? "default"], local.class)} {...others}>
       {local.children}
     </span>
   );
@@ -64,16 +57,11 @@ export const StatusDot: Component<StatusDotProps> = (props) => {
         <span
           class={cn(
             "absolute inline-flex h-full w-full animate-ping rounded-full opacity-75",
-            statusColors[local.status]
+            statusColors[local.status],
           )}
         />
       )}
-      <span
-        class={cn(
-          "relative inline-flex h-2 w-2 rounded-full",
-          statusColors[local.status]
-        )}
-      />
+      <span class={cn("relative inline-flex h-2 w-2 rounded-full", statusColors[local.status])} />
     </span>
   );
 };

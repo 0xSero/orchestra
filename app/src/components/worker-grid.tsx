@@ -3,12 +3,22 @@
  */
 
 import { type Component, For, Show } from "solid-js";
-import { useOpenCode } from "@/context/opencode";
 import { useLayout } from "@/context/layout";
+import { useOpenCode } from "@/context/opencode";
 import { WorkerCard } from "./worker-card";
 
 const MessageIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="32"
+    height="32"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
   </svg>
 );
@@ -51,11 +61,7 @@ export const WorkerGrid: Component = () => {
               <WorkerCard
                 session={session}
                 selected={selectedWorkerId() === session.id}
-                onClick={() =>
-                  selectWorker(
-                    selectedWorkerId() === session.id ? null : session.id
-                  )
-                }
+                onClick={() => selectWorker(selectedWorkerId() === session.id ? null : session.id)}
                 onDelete={() => handleDelete(session.id)}
               />
             )}

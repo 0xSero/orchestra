@@ -1,7 +1,7 @@
 import type { Neo4jConfig } from "../neo4j";
 import { withNeo4jSession } from "../neo4j";
-import { requireProjectId } from "./shared";
 import type { MemoryScope } from "./shared";
+import { requireProjectId } from "./shared";
 
 export async function trimMemoryByKeyPrefix(input: {
   cfg: Neo4jConfig;
@@ -16,9 +16,7 @@ export async function trimMemoryByKeyPrefix(input: {
 
   if (keepLatest === 0) {
     const deleted = await withNeo4jSession(input.cfg, async (session) => {
-      const matchPattern = scope === "project"
-        ? `{ scope: $scope, projectId: $projectId }`
-        : `{ scope: $scope }`;
+      const matchPattern = scope === "project" ? `{ scope: $scope, projectId: $projectId }` : `{ scope: $scope }`;
       const res = await session.run(
         `
 MATCH (n:Memory ${matchPattern})
@@ -31,7 +29,7 @@ RETURN size(nodes) AS deleted
           scope,
           ...(scope === "project" ? { projectId } : {}),
           prefix: input.keyPrefix,
-        }
+        },
       );
       const rec = res.records?.[0] as any;
       return rec ? (rec.get("deleted") as number) : 0;
@@ -40,9 +38,7 @@ RETURN size(nodes) AS deleted
   }
 
   const deleted = await withNeo4jSession(input.cfg, async (session) => {
-    const matchPattern = scope === "project"
-      ? `{ scope: $scope, projectId: $projectId }`
-      : `{ scope: $scope }`;
+    const matchPattern = scope === "project" ? `{ scope: $scope, projectId: $projectId }` : `{ scope: $scope }`;
     const res = await session.run(
       `
 MATCH (n:Memory ${matchPattern})
@@ -58,7 +54,7 @@ RETURN size(toDelete) AS deleted
         ...(scope === "project" ? { projectId } : {}),
         prefix: input.keyPrefix,
         keepLatest,
-      }
+      },
     );
     const rec = res.records?.[0] as any;
     return rec ? (rec.get("deleted") as number) : 0;
@@ -97,7 +93,7 @@ WITH toDrop, collect(m) AS toDelete
 FOREACH (x IN toDelete | DETACH DELETE x)
 RETURN size(toDrop) AS projectsDropped, size(toDelete) AS messagesDeleted
       `.trim(),
-      { keepProjects, scope: "global", prefix: "message:" }
+      { keepProjects, scope: "global", prefix: "message:" },
     );
     const rec = res.records?.[0] as any;
     return {

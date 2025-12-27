@@ -2,40 +2,90 @@
  * SessionList - Session sidebar with real data, actions, and status
  */
 
-import { type Component, For, Show, createMemo, createSignal } from "solid-js";
-import { useOpenCode, type Session, type WorkerRuntime } from "@/context/opencode";
+import { type Component, createMemo, createSignal, For, Show } from "solid-js";
 import { useLayout } from "@/context/layout";
+import { type Session, useOpenCode, type WorkerRuntime } from "@/context/opencode";
 
 // Icons
 const PlusIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <path d="M5 12h14" />
     <path d="M12 5v14" />
   </svg>
 );
 
 const XIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <path d="M18 6 6 18" />
     <path d="m6 6 12 12" />
   </svg>
 );
 
 const StopIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <rect width="14" height="14" x="5" y="5" rx="2" />
   </svg>
 );
 
 const SendIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <path d="M22 2L11 13" />
     <path d="M22 2l-7 20-4-9-9-4 20-7z" />
   </svg>
 );
 
 const ServerIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
     <rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
     <line x1="6" x2="6.01" y1="6" y2="6" />
@@ -44,7 +94,17 @@ const ServerIcon = () => (
 );
 
 const ClockIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <circle cx="12" cy="12" r="10" />
     <polyline points="12,6 12,12 16,14" />
   </svg>
@@ -71,7 +131,10 @@ const formatDuration = (startTime: number): string => {
 // 1. Worker status (if we have worker data from orchestra events)
 // 2. Recent activity (time.updated within last 30 seconds = likely active)
 // 3. Compacting state (time.compacting exists = processing)
-const getSessionStatus = (session: Session, worker?: WorkerRuntime): "ready" | "busy" | "error" | "stopped" | "starting" => {
+const getSessionStatus = (
+  session: Session,
+  worker?: WorkerRuntime,
+): "ready" | "busy" | "error" | "stopped" | "starting" => {
   // If we have worker data, use it
   if (worker) {
     if (worker.status === "busy") return "busy";
@@ -101,11 +164,16 @@ const getSessionStatus = (session: Session, worker?: WorkerRuntime): "ready" | "
 
 const getStatusLabel = (status: string): string => {
   switch (status) {
-    case "ready": return "Idle";
-    case "busy": return "Running";
-    case "error": return "Error";
-    case "starting": return "Starting";
-    default: return "Stopped";
+    case "ready":
+      return "Idle";
+    case "busy":
+      return "Running";
+    case "error":
+      return "Error";
+    case "starting":
+      return "Starting";
+    default:
+      return "Stopped";
   }
 };
 
@@ -143,9 +211,7 @@ const SessionItem: Component<SessionItemProps> = (props) => {
       <div class="session-item-header">
         <div class="flex items-center gap-2 min-w-0 flex-1">
           <span class={`status-dot ${status()}`} />
-          <span class="session-item-title">
-            {props.session.title || "Untitled Session"}
-          </span>
+          <span class="session-item-title">{props.session.title || "Untitled Session"}</span>
         </div>
 
         {/* Actions */}
@@ -153,7 +219,10 @@ const SessionItem: Component<SessionItemProps> = (props) => {
           <Show when={status() === "busy"}>
             <button
               class="btn btn-ghost btn-icon p-1"
-              onClick={(e) => { e.stopPropagation(); props.onAbort(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onAbort();
+              }}
               title="Stop session"
             >
               <StopIcon />
@@ -161,7 +230,10 @@ const SessionItem: Component<SessionItemProps> = (props) => {
           </Show>
           <button
             class="btn btn-ghost btn-icon p-1 text-destructive hover:text-destructive"
-            onClick={(e) => { e.stopPropagation(); props.onDelete(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              props.onDelete();
+            }}
             title="Delete session"
           >
             <XIcon />
@@ -178,8 +250,7 @@ const SessionItem: Component<SessionItemProps> = (props) => {
 
         <Show when={port()}>
           <span class="flex items-center gap-1 font-mono">
-            <ServerIcon />
-            :{port()}
+            <ServerIcon />:{port()}
           </span>
         </Show>
 
@@ -222,7 +293,7 @@ export const SessionList: Component = () => {
 
     if (f === "all") return all;
 
-    return all.filter(session => {
+    return all.filter((session) => {
       const worker = workersBySession().get(session.id);
       const status = getSessionStatus(session, worker);
 
@@ -256,7 +327,7 @@ export const SessionList: Component = () => {
   const handleDelete = async (id: string) => {
     await deleteSession(id);
     if (selectedWorkerId() === id) {
-      const remaining = sessions().filter(s => s.id !== id);
+      const remaining = sessions().filter((s) => s.id !== id);
       if (remaining.length > 0) {
         selectWorker(remaining[0].id);
       } else {
@@ -296,22 +367,13 @@ export const SessionList: Component = () => {
 
         {/* Filter tabs */}
         <div class="flex items-center gap-1 mt-3">
-          <button
-            class={`btn btn-xs ${filter() === "all" ? "" : "btn-ghost"}`}
-            onClick={() => setFilter("all")}
-          >
+          <button class={`btn btn-xs ${filter() === "all" ? "" : "btn-ghost"}`} onClick={() => setFilter("all")}>
             All
           </button>
-          <button
-            class={`btn btn-xs ${filter() === "active" ? "" : "btn-ghost"}`}
-            onClick={() => setFilter("active")}
-          >
+          <button class={`btn btn-xs ${filter() === "active" ? "" : "btn-ghost"}`} onClick={() => setFilter("active")}>
             Active
           </button>
-          <button
-            class={`btn btn-xs ${filter() === "idle" ? "" : "btn-ghost"}`}
-            onClick={() => setFilter("idle")}
-          >
+          <button class={`btn btn-xs ${filter() === "idle" ? "" : "btn-ghost"}`} onClick={() => setFilter("idle")}>
             Idle
           </button>
         </div>
@@ -328,9 +390,7 @@ export const SessionList: Component = () => {
               </div>
               <p class="empty-state-title">No sessions</p>
               <p class="empty-state-description">
-                {filter() === "all"
-                  ? "Start a new chat to begin"
-                  : `No ${filter()} sessions`}
+                {filter() === "all" ? "Start a new chat to begin" : `No ${filter()} sessions`}
               </p>
               <Show when={filter() === "all"}>
                 <button class="btn btn-sm" onClick={handleNew}>

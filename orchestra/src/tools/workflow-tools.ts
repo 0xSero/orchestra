@@ -1,7 +1,7 @@
 import { tool } from "@opencode-ai/plugin";
 import type { OrchestratorService } from "../orchestrator";
-import type { WorkflowEngine } from "../workflows/factory";
 import type { WorkerAttachment } from "../workers/prompt";
+import type { WorkflowEngine } from "../workflows/factory";
 
 export type WorkflowToolsDeps = {
   orchestrator: OrchestratorService;

@@ -11,13 +11,7 @@ export const Card: Component<CardProps> = (props) => {
   const [local, others] = splitProps(props, ["class", "children"]);
 
   return (
-    <div
-      class={cn(
-        "rounded-lg border border-border bg-card text-card-foreground shadow-sm",
-        local.class
-      )}
-      {...others}
-    >
+    <div class={cn("rounded-lg border border-border bg-card text-card-foreground shadow-sm", local.class)} {...others}>
       {local.children}
     </div>
   );
@@ -41,10 +35,7 @@ export const CardTitle: Component<CardTitleProps> = (props) => {
   const [local, others] = splitProps(props, ["class", "children"]);
 
   return (
-    <h3
-      class={cn("text-lg font-semibold leading-none tracking-tight", local.class)}
-      {...others}
-    >
+    <h3 class={cn("text-lg font-semibold leading-none tracking-tight", local.class)} {...others}>
       {local.children}
     </h3>
   );

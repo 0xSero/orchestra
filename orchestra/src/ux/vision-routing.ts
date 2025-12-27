@@ -1,8 +1,8 @@
+import { execFile } from "node:child_process";
 import { readFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { CommunicationService } from "../communication";
 import type { WorkerAttachment } from "../workers/prompt";
@@ -21,7 +21,7 @@ export type VisionRoutingDeps = {
     send: (
       workerId: string,
       message: string,
-      options?: { attachments?: WorkerAttachment[]; timeout?: number; jobId?: string; from?: string }
+      options?: { attachments?: WorkerAttachment[]; timeout?: number; jobId?: string; from?: string },
     ) => Promise<{ success: boolean; response?: string; error?: string }>;
     jobs: {
       create: (input: { workerId: string; message: string; sessionId?: string; requestedBy?: string }) => {
@@ -135,11 +135,8 @@ async function readClipboardImage(): Promise<{ mimeType: string; base64: string 
 async function extractSingleImage(part: any): Promise<WorkerAttachment | null> {
   try {
     const partUrl = typeof part.url === "string" ? part.url : undefined;
-    const mimeType = typeof part.mime === "string"
-      ? part.mime
-      : typeof part.mimeType === "string"
-        ? part.mimeType
-        : undefined;
+    const mimeType =
+      typeof part.mime === "string" ? part.mime : typeof part.mimeType === "string" ? part.mimeType : undefined;
 
     if (partUrl?.startsWith("file://")) {
       const path = fileURLToPath(partUrl);
@@ -199,7 +196,7 @@ export function formatVisionAnalysis(input: { response?: string; error?: string 
 export function replaceImagesWithText(
   parts: any[],
   text: string,
-  meta?: { sessionID?: string; messageID?: string }
+  meta?: { sessionID?: string; messageID?: string },
 ): any[] {
   if (!Array.isArray(parts)) return parts;
   const withoutImages = parts.filter((part) => !isImagePart(part));
@@ -233,7 +230,7 @@ export async function routeVisionMessage(
   input: VisionChatInput,
   output: VisionChatOutput,
   deps: VisionRoutingDeps,
-  state: VisionRoutingState
+  state: VisionRoutingState,
 ): Promise<string | undefined> {
   const role =
     typeof output.message?.role === "string"
@@ -255,29 +252,7 @@ export async function routeVisionMessage(
   if (agentSupportsVision) return undefined;
 
   const visionProfile = deps.profiles.vision;
-  const visionWorkerName = visionProfile?.name ?? "Vision Worker";
   const visionModel = visionProfile?.model ?? "vision";
-
-  const job = deps.workers.jobs.create({
-    workerId: "vision",
-    message: "auto: vision analysis",
-    sessionId: input.sessionID,
-    requestedBy: agentId,
-  });
-
-  const placeholder = [
-    "[VISION ANALYSIS PENDING]",
-    `Worker: ${visionWorkerName} (${visionModel})`,
-    `Job: ${job.id}`,
-    "",
-    "Analyzing image content.",
-    `Call await_worker_job({ jobId: \"${job.id}\" }) to get the result.`,
-  ].join("\n");
-
-  output.parts = replaceImagesWithText(originalParts, placeholder, {
-    sessionID: input.sessionID,
-    messageID: input.messageID,
-  });
 
   if (messageId) state.processedMessageIds.add(messageId);
 
@@ -285,99 +260,22 @@ export async function routeVisionMessage(
   const prompt = deps.prompt ?? DEFAULT_PROMPT;
   const startedAt = Date.now();
 
-  void (async () => {
-    try {
-      if (deps.ensureWorker) {
-        await deps.ensureWorker({ workerId: "vision", reason: "on-demand" });
-      } else if (!deps.workers.getWorker("vision")) {
-        await deps.workers.spawnById("vision");
-      }
+  try {
+    if (deps.ensureWorker) {
+      await deps.ensureWorker({ workerId: "vision", reason: "on-demand" });
+    } else if (!deps.workers.getWorker("vision")) {
+      await deps.workers.spawnById("vision");
+    }
 
-      const attachments = await extractVisionAttachments(originalParts);
-      if (attachments.length === 0) {
-        const error = "No valid image attachments found";
-        deps.workers.jobs.setResult(job.id, { error });
-        deps.communication?.emit(
-          "orchestra.worker.wakeup",
-          { workerId: "vision", jobId: job.id, reason: "error", summary: error },
-          { source: "orchestrator", workerId: "vision", jobId: job.id, sessionId: input.sessionID }
-        );
-        try {
-          await deps.logSink?.({
-            jobId: job.id,
-            status: "failed",
-            error,
-            sessionId: input.sessionID,
-            messageId,
-            workerId: "vision",
-            model: visionModel,
-            startedAt,
-            finishedAt: Date.now(),
-          });
-        } catch {
-          // ignore log sink failures
-        }
-        return;
-      }
-
-      const res = await deps.workers.send("vision", prompt, {
-        attachments,
-        timeout: timeoutMs,
-        jobId: job.id,
-        from: agentId ?? "orchestrator",
+    const attachments = await extractVisionAttachments(originalParts);
+    if (attachments.length === 0) {
+      const error = "No valid image attachments found";
+      output.parts = replaceImagesWithText(originalParts, formatVisionAnalysis({ error }), {
+        sessionID: input.sessionID,
+        messageID: input.messageID,
       });
-
-      const trimmedResponse = typeof res.response === "string" ? res.response.trim() : "";
-      const analysisText = formatVisionAnalysis({ response: trimmedResponse, error: res.error });
-      const succeeded = res.success && trimmedResponse.length > 0;
-      if (succeeded) {
-        deps.workers.jobs.setResult(job.id, { responseText: analysisText });
-      } else {
-        deps.workers.jobs.setResult(job.id, { error: res.error ?? "Vision analysis failed" });
-      }
-
-      deps.communication?.emit(
-        "orchestra.worker.wakeup",
-        {
-          workerId: "vision",
-          jobId: job.id,
-          reason: succeeded ? "result_ready" : "error",
-          summary: succeeded ? "vision analysis complete" : (res.error ?? "vision analysis failed"),
-        },
-        { source: "orchestrator", workerId: "vision", jobId: job.id, sessionId: input.sessionID }
-      );
-
       try {
         await deps.logSink?.({
-          jobId: job.id,
-          status: succeeded ? "succeeded" : "failed",
-          analysis: succeeded ? analysisText : undefined,
-          error: succeeded ? undefined : res.error,
-          sessionId: input.sessionID,
-          messageId,
-          workerId: "vision",
-          model: visionModel,
-          attachments: attachments.length,
-          requestedBy: agentId,
-          startedAt,
-          finishedAt: Date.now(),
-          durationMs: Date.now() - startedAt,
-        });
-      } catch {
-        // ignore log sink failures
-      }
-    } catch (err) {
-      const error = err instanceof Error ? err.message : String(err);
-      console.error(`[Vision] Failed to process job ${job.id}:`, error);
-      deps.workers.jobs.setResult(job.id, { error });
-      deps.communication?.emit(
-        "orchestra.worker.wakeup",
-        { workerId: "vision", jobId: job.id, reason: "error", summary: error },
-        { source: "orchestrator", workerId: "vision", jobId: job.id, sessionId: input.sessionID }
-      );
-      try {
-        await deps.logSink?.({
-          jobId: job.id,
           status: "failed",
           error,
           sessionId: input.sessionID,
@@ -386,20 +284,75 @@ export async function routeVisionMessage(
           model: visionModel,
           startedAt,
           finishedAt: Date.now(),
-          durationMs: Date.now() - startedAt,
         });
       } catch {
         // ignore log sink failures
       }
+      return undefined;
     }
-  })();
 
-  return job.id;
+    const res = await deps.workers.send("vision", prompt, {
+      attachments,
+      timeout: timeoutMs,
+      from: agentId ?? "orchestrator",
+    });
+
+    const trimmedResponse = typeof res.response === "string" ? res.response.trim() : "";
+    const analysisText = formatVisionAnalysis({ response: trimmedResponse, error: res.error });
+    output.parts = replaceImagesWithText(originalParts, analysisText, {
+      sessionID: input.sessionID,
+      messageID: input.messageID,
+    });
+
+    const succeeded = res.success && trimmedResponse.length > 0;
+    try {
+      await deps.logSink?.({
+        status: succeeded ? "succeeded" : "failed",
+        analysis: succeeded ? analysisText : undefined,
+        error: succeeded ? undefined : (res.error ?? "Vision analysis failed"),
+        sessionId: input.sessionID,
+        messageId,
+        workerId: "vision",
+        model: visionModel,
+        attachments: attachments.length,
+        requestedBy: agentId,
+        startedAt,
+        finishedAt: Date.now(),
+        durationMs: Date.now() - startedAt,
+      });
+    } catch {
+      // ignore log sink failures
+    }
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    console.error("[Vision] Failed to process image:", error);
+    output.parts = replaceImagesWithText(originalParts, formatVisionAnalysis({ error }), {
+      sessionID: input.sessionID,
+      messageID: input.messageID,
+    });
+    try {
+      await deps.logSink?.({
+        status: "failed",
+        error,
+        sessionId: input.sessionID,
+        messageId,
+        workerId: "vision",
+        model: visionModel,
+        startedAt,
+        finishedAt: Date.now(),
+        durationMs: Date.now() - startedAt,
+      });
+    } catch {
+      // ignore log sink failures
+    }
+  }
+
+  return undefined;
 }
 
 export function syncVisionProcessedMessages(
   output: { messages: Array<{ info?: { id?: string; role?: string }; parts?: any[] }> },
-  state: VisionRoutingState
+  state: VisionRoutingState,
 ) {
   const messages = output.messages ?? [];
   for (const msg of messages) {
@@ -409,7 +362,7 @@ export function syncVisionProcessedMessages(
     if (!messageId || state.processedMessageIds.has(messageId)) continue;
     const parts = Array.isArray(msg.parts) ? msg.parts : [];
     const hasMarker = parts.some(
-      (part: any) => part?.type === "text" && typeof part.text === "string" && part.text.includes("[VISION ANALYSIS")
+      (part: any) => part?.type === "text" && typeof part.text === "string" && part.text.includes("[VISION ANALYSIS"),
     );
     if (hasMarker) state.processedMessageIds.add(messageId);
   }

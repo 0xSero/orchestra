@@ -1,9 +1,4 @@
-import type {
-  WorkflowDefinition,
-  WorkflowRunInput,
-  WorkflowRunResult,
-  WorkflowStepDefinition,
-} from "./types";
+import type { WorkflowDefinition, WorkflowRunInput, WorkflowRunResult, WorkflowStepDefinition } from "./types";
 
 const workflows = new Map<string, WorkflowDefinition>();
 
@@ -12,7 +7,7 @@ export type WorkflowRunDependencies = {
   sendToWorker: (
     workerId: string,
     message: string,
-    options: { attachments?: WorkflowRunInput["attachments"]; timeoutMs: number }
+    options: { attachments?: WorkflowRunInput["attachments"]; timeoutMs: number },
   ) => Promise<{ success: boolean; response?: string; error?: string }>;
 };
 
@@ -48,10 +43,7 @@ function buildStepPrompt(step: WorkflowStepDefinition, task: string, carry: stri
   return base;
 }
 
-export async function runWorkflow(
-  input: WorkflowRunInput,
-  deps: WorkflowRunDependencies
-): Promise<WorkflowRunResult> {
+export async function runWorkflow(input: WorkflowRunInput, deps: WorkflowRunDependencies): Promise<WorkflowRunResult> {
   const workflow = getWorkflow(input.workflowId);
   if (!workflow) {
     throw new Error(`Unknown workflow "${input.workflowId}".`);

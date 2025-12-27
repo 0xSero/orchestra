@@ -1,7 +1,6 @@
-import type { Factory, ServiceLifecycle } from "../types";
-import type { WorkflowDefinition, WorkflowRunInput, WorkflowRunResult, WorkflowStepDefinition } from "./types";
+import type { Factory, ServiceLifecycle, WorkflowsConfig } from "../types";
 import { buildBuiltinWorkflows } from "./builtins";
-import type { WorkflowsConfig } from "../types";
+import type { WorkflowDefinition, WorkflowRunInput, WorkflowRunResult, WorkflowStepDefinition } from "./types";
 
 export type WorkflowEngineConfig = WorkflowsConfig | undefined;
 
@@ -10,7 +9,7 @@ export type WorkflowRunDependencies = {
   sendToWorker: (
     workerId: string,
     message: string,
-    options: { attachments?: WorkflowRunInput["attachments"]; timeoutMs: number }
+    options: { attachments?: WorkflowRunInput["attachments"]; timeoutMs: number },
   ) => Promise<{ success: boolean; response?: string; error?: string }>;
 };
 
@@ -41,7 +40,9 @@ function buildStepPrompt(step: WorkflowStepDefinition, task: string, carry: stri
   return base;
 }
 
-export const createWorkflowEngine: Factory<WorkflowEngineConfig, {}, WorkflowEngine> = ({ config }) => {
+export const createWorkflowEngine: Factory<WorkflowEngineConfig, Record<string, never>, WorkflowEngine> = ({
+  config,
+}) => {
   const workflows = new Map<string, WorkflowDefinition>();
 
   const register = (def: WorkflowDefinition) => {

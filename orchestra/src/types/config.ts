@@ -1,7 +1,7 @@
-import type { WorkerProfile } from "./worker";
-import type { WorkflowsConfig, SecurityConfig } from "./workflow";
-import type { MemoryConfig } from "./memory";
 import type { IntegrationsConfig, TelemetryConfig } from "./integrations";
+import type { MemoryConfig } from "./memory";
+import type { WorkerProfile } from "./worker";
+import type { SecurityConfig, WorkflowsConfig } from "./workflow";
 
 export type SpawnPolicy = {
   /** Allow auto-spawn at orchestrator startup */

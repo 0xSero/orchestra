@@ -3,20 +3,30 @@
  */
 
 import { type Component, createSignal, Show } from "solid-js";
-import { useOpenCode } from "@/context/opencode";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { useOpenCode } from "@/context/opencode";
 
 // Icons
 const BotIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <path d="M12 8V4H8" />
     <rect width="16" height="12" x="4" y="8" rx="2" />
     <path d="M2 14h2" />
@@ -27,7 +37,18 @@ const BotIcon = () => (
 );
 
 const LoaderIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    class="animate-spin"
+  >
     <path d="M21 12a9 9 0 1 1-6.219-8.56" />
   </svg>
 );
@@ -68,9 +89,7 @@ export const SpawnDialog: Component<SpawnDialogProps> = (props) => {
             <BotIcon />
             New Session
           </DialogTitle>
-          <DialogDescription>
-            Create a new OpenCode session.
-          </DialogDescription>
+          <DialogDescription>Create a new OpenCode session.</DialogDescription>
         </DialogHeader>
 
         <div class="py-4">
@@ -90,11 +109,7 @@ export const SpawnDialog: Component<SpawnDialogProps> = (props) => {
           <Button variant="ghost" onClick={props.onClose}>
             Cancel
           </Button>
-          <Button
-            disabled={creating()}
-            onClick={handleCreate}
-            class="gap-2"
-          >
+          <Button disabled={creating()} onClick={handleCreate} class="gap-2">
             <Show when={creating()}>
               <LoaderIcon />
             </Show>

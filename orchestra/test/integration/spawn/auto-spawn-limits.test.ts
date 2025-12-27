@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { createTestCoreRuntime } from "../../helpers/core-runtime";
 import type { WorkerProfile } from "../../../src/types";
+import { createTestCoreRuntime } from "../../helpers/core-runtime";
 import { setupE2eEnv } from "../../helpers/e2e-env";
 
 const MODEL = "opencode/gpt-5-nano";
@@ -34,20 +34,16 @@ describe("delegateTask integration", () => {
     restoreEnv?.();
   }, 120_000);
 
-  test(
-    "auto-spawns a worker and returns a real response",
-    async () => {
-      expect(core?.workers.getWorker("coder")).toBeUndefined();
+  test("auto-spawns a worker and returns a real response", async () => {
+    expect(core?.workers.getWorker("coder")).toBeUndefined();
 
-      const ctx = { agent: "test", sessionID: "test-session", messageID: "msg" };
-      const result = await core!.tools.tool.delegate_task.execute(
-        { task: "Reply with exactly: DELEGATE_OK", autoSpawn: true },
-        ctx as any
-      );
+    const ctx = { agent: "test", sessionID: "test-session", messageID: "msg" };
+    const result = await core!.tools.tool.delegate_task.execute(
+      { task: "Reply with exactly: DELEGATE_OK", autoSpawn: true },
+      ctx as any,
+    );
 
-      expect(core?.workers.getWorker("coder")).toBeTruthy();
-      expect(String(result)).toContain("DELEGATE_OK");
-    },
-    180_000
-  );
+    expect(core?.workers.getWorker("coder")).toBeTruthy();
+    expect(String(result)).toContain("DELEGATE_OK");
+  }, 180_000);
 });

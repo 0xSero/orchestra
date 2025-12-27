@@ -1,14 +1,14 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { OrchestratorConfig, OrchestratorConfigFile } from "../types";
-import { deepMerge } from "../helpers/format";
 import { canAutoSpawn, canSpawnOnDemand, canWarmPool } from "../core/spawn-policy";
+import { deepMerge } from "../helpers/format";
+import type { OrchestratorConfig, OrchestratorConfigFile } from "../types";
 import { buildDefaultOrchestratorConfigFile } from "./orchestrator/defaults";
 import { collectProfilesAndSpawn, parseOrchestratorConfigFile } from "./orchestrator/parse";
 import {
-  getDefaultGlobalOrchestratorConfigPath,
   getDefaultGlobalOpenCodeConfigPath,
+  getDefaultGlobalOrchestratorConfigPath,
   getDefaultProjectOrchestratorConfigPath,
 } from "./orchestrator/paths";
 
@@ -17,7 +17,11 @@ export type LoadedOrchestratorConfig = {
   sources: { global?: string; project?: string };
 };
 
-export { getDefaultGlobalOrchestratorConfigPath, getDefaultGlobalOpenCodeConfigPath, getDefaultProjectOrchestratorConfigPath };
+export {
+  getDefaultGlobalOrchestratorConfigPath,
+  getDefaultGlobalOpenCodeConfigPath,
+  getDefaultProjectOrchestratorConfigPath,
+};
 
 export async function loadOrchestratorConfig(input: {
   directory: string;
@@ -60,14 +64,14 @@ export async function loadOrchestratorConfig(input: {
 
   const mergedFile = deepMerge(
     deepMerge(defaultsFile as unknown as Record<string, unknown>, globalPartial as unknown as Record<string, unknown>),
-    projectPartial as unknown as Record<string, unknown>
+    projectPartial as unknown as Record<string, unknown>,
   ) as unknown as OrchestratorConfigFile;
 
   const { profiles, spawn } = collectProfilesAndSpawn(mergedFile);
   const spawnPolicy = (mergedFile.spawnPolicy ?? defaultsFile.spawnPolicy) as OrchestratorConfig["spawnPolicy"];
   const spawnList = spawn.filter((id) => canAutoSpawn(spawnPolicy, id));
   const spawnOnDemand = (mergedFile.spawnOnDemand ?? defaultsFile.spawnOnDemand ?? []).filter((id) =>
-    canSpawnOnDemand(spawnPolicy, id)
+    canSpawnOnDemand(spawnPolicy, id),
   );
 
   const warmPool = (() => {

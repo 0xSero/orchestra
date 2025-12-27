@@ -25,7 +25,7 @@ function normalizePlugins(value: unknown, dropOrchestrator: boolean): string[] {
 function mergePlugins(
   base: unknown,
   override: unknown,
-  options?: { dropOrchestrator?: boolean; append?: string[] }
+  options?: { dropOrchestrator?: boolean; append?: string[] },
 ): string[] {
   const dropOrchestrator = options?.dropOrchestrator ?? false;
   const baseList = normalizePlugins(base, dropOrchestrator);
@@ -49,7 +49,7 @@ export async function loadOpenCodeConfig(): Promise<Record<string, unknown>> {
 
 export async function mergeOpenCodeConfig(
   override?: Record<string, unknown>,
-  options?: { dropOrchestratorPlugin?: boolean; appendPlugins?: string[] }
+  options?: { dropOrchestratorPlugin?: boolean; appendPlugins?: string[] },
 ): Promise<Record<string, unknown>> {
   const base = await loadOpenCodeConfig();
   if (!override || Object.keys(override).length === 0) {

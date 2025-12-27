@@ -1,11 +1,10 @@
-import type { Factory, ServiceLifecycle } from "../types";
-import type { OrchestratorConfig } from "../types";
 import type { OrchestratorService } from "../orchestrator";
+import type { Factory, OrchestratorConfig, ServiceLifecycle } from "../types";
 import type { WorkerManager } from "../workers";
 import type { WorkflowEngine } from "../workflows/factory";
+import { createSystemTransform, createToolGuard } from "./hooks";
 import { createWorkerTools } from "./worker-tools";
 import { createWorkflowTools } from "./workflow-tools";
-import { createToolGuard, createSystemTransform } from "./hooks";
 
 export type ToolsConfig = OrchestratorConfig;
 

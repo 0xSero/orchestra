@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { writeJsonAtomic } from "../helpers/fs";
 import { getUserConfigDir } from "../helpers/format";
+import { writeJsonAtomic } from "../helpers/fs";
 import type { MemoryNode, MemoryScope } from "./graph";
 
 type MemoryLink = {
@@ -28,7 +28,10 @@ function requireProjectId(scope: MemoryScope, projectId: string | undefined): st
 
 function normalizeTags(tags: unknown): string[] {
   if (!Array.isArray(tags)) return [];
-  return tags.filter((t) => typeof t === "string").map((t) => t.trim()).filter(Boolean);
+  return tags
+    .filter((t) => typeof t === "string")
+    .map((t) => t.trim())
+    .filter(Boolean);
 }
 
 function safeProjectId(projectId: string): string {

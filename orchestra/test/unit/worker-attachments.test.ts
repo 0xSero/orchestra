@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { prepareWorkerAttachments } from "../../src/workers/attachments";
 
-
 describe("worker attachments", () => {
   test("materializes base64 attachments and cleans up", async () => {
     const baseDir = await mkdtemp(join(tmpdir(), "orch-attachments-"));

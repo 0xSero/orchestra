@@ -1,9 +1,11 @@
 import { createServer, type Server } from "node:http";
-import type { Factory, ServiceLifecycle } from "../types";
+import type { DatabaseService } from "../db";
 import type { SkillsService } from "../skills/service";
+import type { Factory, ServiceLifecycle } from "../types";
 import type { WorkerManager } from "../workers";
-import { createSkillsRouter } from "./skills-router";
+import { createDbRouter } from "./db-router";
 import { createSessionsRouter } from "./sessions-router";
+import { createSkillsRouter } from "./skills-router";
 
 export type SkillsApiConfig = {
   enabled?: boolean;
@@ -14,30 +16,35 @@ export type SkillsApiConfig = {
 export type SkillsApiDeps = {
   skills: SkillsService;
   workers?: WorkerManager;
+  db?: DatabaseService;
+  onWorkerConfigChanged?: (workerId?: string) => void;
+  onPreferencesChanged?: (key?: string) => void;
 };
 
 export type SkillsApiServer = ServiceLifecycle & {
   url?: string;
 };
 
-export const createSkillsApiServer: Factory<SkillsApiConfig, SkillsApiDeps, SkillsApiServer> = ({
-  config,
-  deps,
-}) => {
+export const createSkillsApiServer: Factory<SkillsApiConfig, SkillsApiDeps, SkillsApiServer> = ({ config, deps }) => {
   let server: Server | undefined;
   let url: string | undefined;
 
   const enabled = config.enabled !== false;
   const host = config.host ?? "127.0.0.1";
-  const port =
-    config.port ??
-    Number(process.env.OPENCODE_SKILLS_PORT ?? process.env.OPENCODE_SKILLS_API_PORT ?? 4097);
+  const port = config.port ?? Number(process.env.OPENCODE_SKILLS_PORT ?? process.env.OPENCODE_SKILLS_API_PORT ?? 4097);
 
   const start = async () => {
     if (!enabled || server) return;
 
     // Create routers
     const skillsHandler = createSkillsRouter({ skills: deps.skills, workers: deps.workers });
+    const dbHandler = deps.db
+      ? createDbRouter({
+          db: deps.db,
+          onWorkerConfigChanged: deps.onWorkerConfigChanged,
+          onPreferencesChanged: deps.onPreferencesChanged,
+        })
+      : null;
 
     // Sessions router needs workers with session manager
     const sessionsHandler = deps.workers
@@ -49,6 +56,18 @@ export const createSkillsApiServer: Factory<SkillsApiConfig, SkillsApiDeps, Skil
 
     server = createServer((req, res) => {
       const url = req.url ?? "";
+
+      // Route to DB API
+      if (url.startsWith("/api/db")) {
+        if (dbHandler) {
+          void dbHandler(req, res);
+        } else {
+          res.statusCode = 501;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ error: "DB API not available" }));
+        }
+        return;
+      }
 
       // Route to sessions API
       if (url.startsWith("/api/sessions")) {

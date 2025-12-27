@@ -48,6 +48,8 @@ OpenCode Boomerang is a multi-agent orchestration system built as an OpenCode pl
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+The plugin also runs a local Skills API server (default `http://127.0.0.1:4097`) that serves skills CRUD, session telemetry, and SQLite preference endpoints for the control panel UI.
+
 ## Monorepo Structure
 
 ```
@@ -55,10 +57,12 @@ opencode-boomerang/
 ├── orchestra/                    # Backend plugin (Node.js/Bun)
 │   ├── src/
 │   │   ├── index.ts             # Plugin entry point
-│   │   ├── api/                 # OpenCode SDK wrapper
+│   │   ├── api/                 # Skills, sessions, DB routers
+│   │   ├── commands/            # Slash command handlers
 │   │   ├── communication/       # Event system (EventEmitter + SSE)
 │   │   ├── config/              # Config loading and parsing
 │   │   ├── core/                # Service container and lifecycle
+│   │   ├── db/                  # SQLite persistence
 │   │   ├── helpers/             # Utilities
 │   │   ├── integrations/        # External integrations (Linear, Neo4j)
 │   │   ├── memory/              # Knowledge graph and persistence
@@ -66,13 +70,14 @@ opencode-boomerang/
 │   │   ├── orchestrator/        # Task delegation and routing
 │   │   ├── permissions/         # Tool permission system
 │   │   ├── profiles/            # Worker profile discovery
+│   │   ├── skills/              # SKILL.md parsing + CRUD
 │   │   ├── tools/               # OpenCode tool definitions
 │   │   ├── types/               # TypeScript interfaces
 │   │   ├── ux/                  # UX helpers
 │   │   ├── workers/             # Worker management system
 │   │   └── workflows/           # Workflow engine
-│   ├── prompts/                 # Orchestrator prompts
 │   ├── schema/                  # JSON schemas
+│   ├── .opencode/               # Sample skills + agent prompt
 │   └── test/                    # E2E and integration tests
 │
 └── app/                         # Frontend control panel (Solid.js)
@@ -127,17 +132,26 @@ opencode-boomerang/
     └─────────────┘      └─────────────┘     └─────────────┘
 ```
 
+Additional services created in `createCore`:
+- `createDatabase` (SQLite user prefs + overrides)
+- `createSkillsService` + `createSkillsApiServer` (skills CRUD + sessions/db APIs)
+- `createCommandRouter` (slash command execution)
+
 ### Service Dependencies
 
 | Service | Depends On | Purpose |
 |---------|------------|---------|
 | `api` | OpenCode SDK | SDK client wrapper for sessions, files, events |
 | `communication` | api | Event emission and SSE streaming |
+| `database` | (none) | SQLite persistence for preferences and worker overrides |
 | `memory` | api | Knowledge graph storage and injection |
 | `workers` | api, communication, memory | Worker spawn, send, lifecycle |
 | `workflows` | (none) | Multi-step workflow execution |
 | `orchestrator` | api, workers, workflows, communication | Task delegation and routing |
 | `tools` | orchestrator, workers, workflows | Plugin tool definitions |
+| `skills` | projectDir | Skill parsing, CRUD, and events |
+| `skillsApi` | skills, workers, db | HTTP API for skills, sessions, and DB |
+| `commands` | api, orchestrator, workers, memory | Slash command handling |
 
 ### Factory Pattern
 
@@ -208,27 +222,26 @@ interface WorkerProfile {
   tools?: Record<string, boolean>;
   permissions?: ToolPermissions;
   temperature?: number;
+  maxTokens?: number;
+  injectRepoContext?: boolean;
+  enabled?: boolean;
   tags?: string[];
   extends?: string;        // Inherit from another profile
   compose?: string[];      // Combine multiple profiles
+  sessionMode?: "child" | "isolated" | "linked";
+  forwardEvents?: Array<"tool" | "message" | "error" | "complete" | "progress">;
+  mcp?: { servers?: string[]; inheritAll?: boolean };
+  env?: Record<string, string>;
+  envPrefixes?: string[];
 }
 ```
 
-### Built-in Worker Profiles
+### Skill-defined Profiles
 
-| Profile ID | Purpose | Capabilities |
-|------------|---------|--------------|
-| `coder` | Write and refactor code | Full tool access |
-| `architect` | System design and planning | Analysis tools |
-| `explorer` | Codebase navigation | Read-only tools |
-| `docs` | Documentation writing | Read/write |
-| `vision` | Image analysis | Vision-enabled |
-| `reviewer` | Code review | Read-only |
-| `qa` | Quality assurance | Test tools |
-| `security` | Security analysis | Security scan |
-| `product` | Product decisions | Analysis |
-| `analyst` | Data analysis | Read-only |
-| `memory` | Memory management | Memory tools |
+Profiles are loaded from SKILL.md files (project or global); there are no hardcoded profiles.
+The repo ships sample skills under `orchestra/.opencode/skill` for tests and local dev.
+
+Built-in workflows assume specific profile IDs exist (e.g., `reviewer`, `security`, `qa`, `product`, `analyst`).
 
 ### Worker Spawn Flow
 
@@ -313,15 +326,12 @@ interface WorkerProfile {
 │   ┌─────────────────────────────────────────────────────────────────┐   │
 │   │                   Event Types (OrchestraEventName)               │   │
 │   ├──────────────────────────┬──────────────────────────────────────┤   │
-│   │  orchestra.server.event  │  OpenCode SDK events                 │   │
-│   │  orchestra.worker.spawned│  Worker started spawning             │   │
-│   │  orchestra.worker.ready  │  Worker ready for tasks              │   │
-│   │  orchestra.worker.busy   │  Worker processing task              │   │
-│   │  orchestra.worker.error  │  Worker encountered error            │   │
-│   │  orchestra.worker.stopped│  Worker shut down                    │   │
-│   │  orchestra.worker.stream │  Streaming response chunk            │   │
-│   │  orchestra.worker.response│ Complete response received          │   │
-│   │  orchestra.worker.wakeup │  Async job notification              │   │
+│   │  orchestra.started       │  Orchestrator lifecycle               │   │
+│   │  orchestra.model.*       │  Model resolution events              │   │
+│   │  orchestra.worker.*      │  Worker lifecycle/job/stream/response │   │
+│   │  orchestra.session.*     │  Session telemetry events             │   │
+│   │  skill.*                 │  Skill CRUD events                    │   │
+│   │  orchestra.server.event  │  OpenCode SDK events                  │   │
 │   └──────────────────────────┴──────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -397,16 +407,12 @@ interface WorkerProfile {
 │   ┌─────────────────────────────────────────────────────────────────┐   │
 │   │                        Hooks                                     │   │
 │   ├──────────────────┬──────────────────────────────────────────────┤   │
-│   │  tool.execute    │  Guard/validate tool execution               │   │
-│   │  .before         │                                              │   │
-│   │                  │                                              │   │
-│   │  experimental    │  Inject system context                       │   │
-│   │  .chat.system    │  (worker list, etc.)                         │   │
-│   │  .transform      │                                              │   │
-│   │                  │                                              │   │
-│   │  experimental    │  Session context compaction                  │   │
-│   │  .session        │                                              │   │
-│   │  .compacting     │                                              │   │
+│   │  tool.execute.before               │  Guard/validate tools       │   │
+│   │  tui.command.execute               │  Handle slash commands      │   │
+│   │  chat.message                      │  Vision routing hook        │   │
+│   │  experimental.chat.system.transform│  Inject system context      │   │
+│   │  experimental.chat.messages.transform│ Sync vision markers       │   │
+│   │  experimental.session.compacting   │  Session compaction         │   │
 │   └──────────────────┴──────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
@@ -535,47 +541,29 @@ interface WorkflowStepDefinition {
 App (app.tsx)
 │
 └── OpenCodeProvider (context/opencode.tsx)
-    │   - SDK client connection
-    │   - Session/message state
-    │   - Agent list
     │
-    └── LayoutProvider (context/layout.tsx)
-        │   - Sidebar visibility
-        │   - Panel visibility
-        │   - Selected worker ID
-        │   - Keyboard shortcuts
+    └── SkillsProvider (context/skills.tsx)
         │
-        └── Dashboard (pages/dashboard.tsx)
+        └── DbProvider (context/db.tsx)
             │
-            ├── Header (components/header.tsx)
-            │   - Connection status
-            │   - Session count
-            │   - Worker count
-            │
-            ├── WorkerList (components/sidebar/worker-list.tsx)
-            │   - Session list grouped by recency
-            │   - Session selection
-            │
-            ├── WorkerDetail (components/worker-detail.tsx)
-            │   - Message thread display
-            │   - Session info
-            │
-            ├── PromptInput (components/prompt-input.tsx)
-            │   - Message composition
-            │   - File attachments
-            │
-            ├── JobQueue (components/job-queue.tsx)
-            │   - Recent activity list
-            │
-            ├── LogStream (components/log-stream.tsx)
-            │   - Event logs
-            │   - Shell command runner
-            │
-            ├── CommandPalette (components/command-palette.tsx)
-            │   - Cmd+K search/actions
-            │
-            └── SpawnDialog (components/spawn-dialog.tsx)
-                - Worker spawn form
+            └── LayoutProvider (context/layout.tsx)
+                │
+                └── AppLayout (components/layout/app-layout.tsx)
+                    │
+                    ├── ChatPage (pages/chat.tsx)
+                    │   ├── SessionList (components/sidebar/worker-list.tsx)
+                    │   └── ChatView (components/worker-detail.tsx)
+                    │
+                    ├── AgentsPage (pages/agents.tsx)
+                    │
+                    ├── ProfilesPage (pages/profiles.tsx)
+                    │   ├── SkillList (components/skills/skill-list.tsx)
+                    │   └── SkillsWorkspace (components/skills/skills-workspace.tsx)
+                    │
+                    ├── LogsPage (pages/logs.tsx)
+                    │   └── LogsPanel (components/log-stream.tsx)
+                    │
+                    └── SettingsPage (pages/settings.tsx)
 ```
 
 ### State Management
@@ -624,6 +612,41 @@ App (app.tsx)
 │   ├── Cmd+K   -> toggle command palette                                   │
 │   ├── Cmd+B   -> toggle sidebar                                           │
 │   └── Escape  -> close modals                                             │
+│                                                                           │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│                         Skills Context                                    │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                           │
+│   State                                                                   │
+│   ├── skills: Skill[]                                                     │
+│   ├── selectedSkillId: string | null                                      │
+│   └── createDialogOpen: boolean                                           │
+│                                                                           │
+│   Actions                                                                 │
+│   ├── refresh()                                                           │
+│   ├── createSkill()                                                       │
+│   ├── updateSkill()                                                       │
+│   ├── deleteSkill()                                                       │
+│   └── duplicateSkill()                                                    │
+│                                                                           │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│                           DB Context                                      │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                           │
+│   State                                                                   │
+│   ├── dbPath: string                                                      │
+│   ├── user: DbUser | null                                                 │
+│   ├── preferences: Record<string, string | null>                          │
+│   └── workerConfigs: WorkerConfig[]                                       │
+│                                                                           │
+│   Actions                                                                 │
+│   ├── setPreference() / deletePreference()                                │
+│   ├── setWorkerConfig() / clearWorkerConfig()                             │
+│   └── markOnboarded()                                                     │
 │                                                                           │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
@@ -744,10 +767,10 @@ ask_worker_async(workerId, message)
 │   2. Global Config (~/.opencode/orchestrator.json)                       │
 │          │                                                               │
 │          ▼ (merged with)                                                 │
-│   3. Project Config (.opencode/orchestrator.json)                        │
+│   3. Project Config (.opencode/orchestrator.json or orchestrator.json)   │
 │          │                                                               │
-│          ▼ (final)                                                       │
-│   4. Runtime Overrides (environment variables)                           │
+│          ▼                                                               │
+│   4. Runtime Env Overrides (integrations, skills API, vision prompt)     │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -756,10 +779,10 @@ ask_worker_async(workerId, message)
 
 | Operation | Default Timeout | Max Timeout |
 |-----------|-----------------|-------------|
-| Worker spawn | 30s | 60s |
-| Worker send | 600s (10min) | 10min |
-| Ready wait | 5min | 5min |
-| Workflow step | 300s (5min) | configurable |
+| Worker spawn | 30s | configurable |
+| Worker send | 600s (10min) | configurable |
+| Ready wait | 5min | capped by send timeout |
+| Workflow step | 120s (2min) | configurable (security limit) |
 
 ### Resilience Patterns
 
@@ -768,14 +791,13 @@ ask_worker_async(workerId, message)
 - **Memory Injection**: Non-blocking, catches errors
 - **Config Parse**: Falls back to defaults if files missing
 
-## Skills System (Future)
+## Skills System
 
-The skills system transforms worker profiles into file-based configurations following the Agent Skills Standard:
+Worker profiles are defined as skills following the Agent Skills Standard with OpenCode extensions:
 
 ```
 .opencode/skill/<id>/SKILL.md     # Project-specific
-~/.opencode/skill/<id>/SKILL.md   # User's global
-orchestra/src/workers/profiles/    # Built-in fallbacks
+~/.opencode/skill/<id>/SKILL.md   # User's global (or OPENCODE_SKILLS_HOME)
 ```
 
-See [TASK.md](../TASK.md) for the full skills implementation plan.
+The skills API (`/api/skills`) exposes CRUD + SSE for the control panel, and profiles are reloaded on skill changes.

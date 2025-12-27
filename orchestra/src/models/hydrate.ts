@@ -1,8 +1,7 @@
-import type { WorkerProfile } from "../types";
-import { fetchOpencodeConfig, fetchProviders } from "./catalog";
+import type { OrchestratorConfig, WorkerProfile } from "../types";
 import { normalizeAliases } from "./aliases";
+import { fetchOpencodeConfig, fetchProviders } from "./catalog";
 import { resolveModel } from "./resolver";
-import type { OrchestratorConfig } from "../types";
 
 export type ProfileModelHydrationChange = {
   profileId: string;
@@ -74,7 +73,7 @@ export async function hydrateProfileModelsFromOpencode(input: {
       if (profile.supportsVision && !resolved.capabilities.supportsVision) {
         throw new Error(
           `Profile "${profile.id}" requires vision, but selected model "${desired}" does not appear vision-capable. ` +
-            `Choose a model with image input support.`
+            `Choose a model with image input support.`,
         );
       }
     }

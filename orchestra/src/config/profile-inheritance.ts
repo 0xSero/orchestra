@@ -1,5 +1,5 @@
-import type { ToolPermissions, WorkerProfile } from "../types";
 import { mergeToolPermissions } from "../permissions/validator";
+import type { ToolPermissions, WorkerProfile } from "../types";
 
 export type WorkerProfileDefinition = Partial<WorkerProfile> & {
   id: string;
@@ -15,7 +15,7 @@ function mergeTags(base?: string[], override?: string[]): string[] | undefined {
 
 function mergeTools(
   base?: Record<string, boolean>,
-  override?: Record<string, boolean>
+  override?: Record<string, boolean>,
 ): Record<string, boolean> | undefined {
   if (!base && !override) return undefined;
   return { ...(base ?? {}), ...(override ?? {}) };

@@ -1,7 +1,7 @@
 import type { Skill, SkillInput, SkillScope } from "../types";
-import { loadAllSkills, loadSkill } from "./loader";
-import { createSkill, updateSkill, deleteSkill, duplicateSkill } from "./crud";
+import { createSkill, deleteSkill, duplicateSkill, updateSkill } from "./crud";
 import { createSkillsEvents, type SkillsEvents } from "./events";
+import { loadAllSkills, loadSkill } from "./loader";
 
 export interface SkillsService {
   events: SkillsEvents;

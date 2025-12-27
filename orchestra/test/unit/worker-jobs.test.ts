@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { WorkerJobRegistry } from "../../src/workers/jobs";
 
-
 describe("worker job registry", () => {
   test("creates jobs and records success", () => {
     const registry = new WorkerJobRegistry();

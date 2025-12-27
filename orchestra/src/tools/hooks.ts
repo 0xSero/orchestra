@@ -1,6 +1,6 @@
+import { canSpawnManually, canSpawnOnDemand } from "../core/spawn-policy";
 import type { OrchestratorConfig } from "../types";
 import type { WorkerManager } from "../workers";
-import { canSpawnManually, canSpawnOnDemand } from "../core/spawn-policy";
 
 export function createToolGuard(config: OrchestratorConfig) {
   return async (input: { tool: string }, output: { args: any }) => {
@@ -28,22 +28,22 @@ export function createToolGuard(config: OrchestratorConfig) {
 }
 
 export function createSystemTransform(config: OrchestratorConfig, workers: WorkerManager) {
-  return async (_input: {}, output: { system: string[] }) => {
+  return async (_input: Record<string, never>, output: { system: string[] }) => {
     if (config.ui?.injectSystemContext === false) return;
     output.system.push(workers.getSummary({ maxWorkers: config.ui?.systemContextMaxWorkers }));
 
     // Inject pending vision jobs so orchestrator knows to await them
-    const pendingJobs = workers.jobs.list().filter(
-      (j) => j.status === "running" && j.workerId === "vision"
-    );
+    const pendingJobs = workers.jobs.list().filter((j) => j.status === "running" && j.workerId === "vision");
     if (pendingJobs.length > 0) {
-      output.system.push(`
+      output.system.push(
+        `
 <pending-vision-analysis>
 IMPORTANT: Vision analysis is in progress for ${pendingJobs.length} image(s).
 You MUST call await_worker_job to get the results before responding about the image content:
 ${pendingJobs.map((j) => `- await_worker_job({ jobId: "${j.id}" })`).join("\n")}
 </pending-vision-analysis>
-      `.trim());
+      `.trim(),
+      );
     }
   };
 }

@@ -50,6 +50,10 @@ export interface WorkerProfile {
   tools?: Record<string, boolean>;
   /** Temperature setting */
   temperature?: number;
+  /** Max output tokens for this worker (if supported by provider) */
+  maxTokens?: number;
+  /** Whether this worker profile is enabled */
+  enabled?: boolean;
   /** Optional keywords/tags to improve matching */
   tags?: string[];
   /** Whether to inject repo context on auto-launch (for docs worker) */

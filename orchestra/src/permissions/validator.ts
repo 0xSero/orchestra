@@ -6,7 +6,9 @@ const EXECUTION_TOOLS = ["bash", "exec", "command", "shell", "run", "process"];
 const NETWORK_TOOLS = ["fetch", "curl", "wget", "http", "browser", "web_search", "web"];
 
 function mergeArrays(base?: string[], override?: string[]): string[] | undefined {
-  const merged = [...(base ?? []), ...(override ?? [])].filter((value) => typeof value === "string" && value.length > 0);
+  const merged = [...(base ?? []), ...(override ?? [])].filter(
+    (value) => typeof value === "string" && value.length > 0,
+  );
   if (merged.length === 0) return undefined;
   return Array.from(new Set(merged));
 }

@@ -2,8 +2,8 @@
  * Dialog Component - Kobalte-based modal dialog
  */
 
-import { type Component, type JSX, splitProps } from "solid-js";
 import { Dialog as KobalteDialog } from "@kobalte/core/dialog";
+import { type Component, type JSX, splitProps } from "solid-js";
 import { cn } from "@/lib/utils";
 
 // Dialog Root
@@ -30,7 +30,7 @@ export const DialogOverlay: Component<DialogOverlayProps> = (props) => {
         "fixed inset-0 z-50 bg-black/60 backdrop-blur-sm",
         "data-[expanded]:animate-in data-[closed]:animate-out",
         "data-[closed]:fade-out-0 data-[expanded]:fade-in-0",
-        local.class
+        local.class,
       )}
       {...others}
     />
@@ -55,7 +55,7 @@ export const DialogContent: Component<DialogContentProps> = (props) => {
           "data-[closed]:slide-out-to-left-1/2 data-[closed]:slide-out-to-top-[48%]",
           "data-[expanded]:slide-in-from-left-1/2 data-[expanded]:slide-in-from-top-[48%]",
           "rounded-lg",
-          local.class
+          local.class,
         )}
         {...others}
       >
@@ -71,12 +71,7 @@ interface DialogHeaderProps extends JSX.HTMLAttributes<HTMLDivElement> {}
 export const DialogHeader: Component<DialogHeaderProps> = (props) => {
   const [local, others] = splitProps(props, ["class"]);
 
-  return (
-    <div
-      class={cn("flex flex-col space-y-1.5 text-center sm:text-left", local.class)}
-      {...others}
-    />
-  );
+  return <div class={cn("flex flex-col space-y-1.5 text-center sm:text-left", local.class)} {...others} />;
 };
 
 // Dialog Footer
@@ -85,12 +80,7 @@ interface DialogFooterProps extends JSX.HTMLAttributes<HTMLDivElement> {}
 export const DialogFooter: Component<DialogFooterProps> = (props) => {
   const [local, others] = splitProps(props, ["class"]);
 
-  return (
-    <div
-      class={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", local.class)}
-      {...others}
-    />
-  );
+  return <div class={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", local.class)} {...others} />;
 };
 
 // Dialog Title
@@ -100,10 +90,7 @@ export const DialogTitle: Component<DialogTitleProps> = (props) => {
   const [local, others] = splitProps(props, ["class"]);
 
   return (
-    <KobalteDialog.Title
-      class={cn("text-lg font-semibold leading-none tracking-tight", local.class)}
-      {...others}
-    />
+    <KobalteDialog.Title class={cn("text-lg font-semibold leading-none tracking-tight", local.class)} {...others} />
   );
 };
 
@@ -113,10 +100,5 @@ interface DialogDescriptionProps extends JSX.HTMLAttributes<HTMLParagraphElement
 export const DialogDescription: Component<DialogDescriptionProps> = (props) => {
   const [local, others] = splitProps(props, ["class"]);
 
-  return (
-    <KobalteDialog.Description
-      class={cn("text-sm text-muted-foreground", local.class)}
-      {...others}
-    />
-  );
+  return <KobalteDialog.Description class={cn("text-sm text-muted-foreground", local.class)} {...others} />;
 };

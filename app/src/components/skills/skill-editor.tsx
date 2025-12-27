@@ -1,15 +1,15 @@
-import { Show, createEffect, createMemo, createSignal } from "solid-js";
-import { useSkills } from "@/context/skills";
-import type { ToolPermissions } from "@/types/skill";
+import { createEffect, createMemo, createSignal, Show } from "solid-js";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
-import { SkillDeleteDialog } from "./skill-delete-dialog";
+import { useSkills } from "@/context/skills";
+import type { ToolPermissions } from "@/types/skill";
 import { ModelSelector } from "./fields/model-selector";
-import { PromptEditor } from "./fields/prompt-editor";
-import { ToolsConfig } from "./fields/tools-config";
 import { PermissionsConfig } from "./fields/permissions-config";
-import { TemperatureSlider } from "./fields/temperature-slider";
+import { PromptEditor } from "./fields/prompt-editor";
 import { TagsInput } from "./fields/tags-input";
+import { TemperatureSlider } from "./fields/temperature-slider";
+import { ToolsConfig } from "./fields/tools-config";
+import { SkillDeleteDialog } from "./skill-delete-dialog";
 
 export function SkillEditor(props: { skillId: string; onClose: () => void }) {
   const { skills, updateSkill, deleteSkill } = useSkills();
@@ -74,7 +74,7 @@ export function SkillEditor(props: { skillId: string; onClose: () => void }) {
           },
           systemPrompt: prompt(),
         },
-        scope
+        scope,
       );
       props.onClose();
     } finally {
@@ -97,10 +97,7 @@ export function SkillEditor(props: { skillId: string; onClose: () => void }) {
   };
 
   return (
-    <Show
-      when={skill()}
-      fallback={<div class="p-6 text-sm text-muted-foreground">Select a recipe to edit.</div>}
-    >
+    <Show when={skill()} fallback={<div class="p-6 text-sm text-muted-foreground">Select a recipe to edit.</div>}>
       {(current) => (
         <div class="flex flex-col h-full">
           <div class="flex items-center justify-between border-b border-border p-4">
@@ -161,11 +158,7 @@ export function SkillEditor(props: { skillId: string; onClose: () => void }) {
                 </div>
                 <div class="space-y-2">
                   <label class="text-xs font-medium text-muted-foreground">Description</label>
-                  <Textarea
-                    rows={3}
-                    value={description()}
-                    onInput={(e) => setDescription(e.currentTarget.value)}
-                  />
+                  <Textarea rows={3} value={description()} onInput={(e) => setDescription(e.currentTarget.value)} />
                 </div>
                 <div class="grid gap-4 md:grid-cols-2">
                   <ModelSelector value={model()} onChange={setModel} />
@@ -187,11 +180,7 @@ export function SkillEditor(props: { skillId: string; onClose: () => void }) {
                     Supports Vision
                   </label>
                   <label class="flex items-center gap-2 text-xs text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      checked={supportsWeb()}
-                      onChange={() => setSupportsWeb(!supportsWeb())}
-                    />
+                    <input type="checkbox" checked={supportsWeb()} onChange={() => setSupportsWeb(!supportsWeb())} />
                     Supports Web
                   </label>
                   <label class="flex items-center gap-2 text-xs text-muted-foreground">

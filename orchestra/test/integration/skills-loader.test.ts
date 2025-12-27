@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadAllSkills, loadSkill, loadSkillOverrides } from "../../src/skills/loader";
@@ -20,27 +20,21 @@ describe("skills loader", () => {
   });
 
   test("project overrides global", async () => {
-    // Use new path: .opencode/agent/subagents/{id}/SKILL.md
-    const projectSkillDir = join(tempDir, ".opencode", "agent", "subagents", "coder");
-    const globalSkillDir = join(homeDir, ".opencode", "agent", "subagents", "coder");
+    // Use new path: .opencode/skill/{id}/SKILL.md
+    const projectSkillDir = join(tempDir, ".opencode", "skill", "coder");
+    const globalSkillDir = join(homeDir, ".opencode", "skill", "coder");
 
     await mkdir(projectSkillDir, { recursive: true });
     await mkdir(globalSkillDir, { recursive: true });
 
     await writeFile(
       join(globalSkillDir, "SKILL.md"),
-      serializeSkillFile(
-        { name: "coder", description: "global coder", model: "auto" },
-        "Global prompt"
-      )
+      serializeSkillFile({ name: "coder", description: "global coder", model: "auto" }, "Global prompt"),
     );
 
     await writeFile(
       join(projectSkillDir, "SKILL.md"),
-      serializeSkillFile(
-        { name: "coder", description: "project coder", model: "auto" },
-        "Project prompt"
-      )
+      serializeSkillFile({ name: "coder", description: "project coder", model: "auto" }, "Project prompt"),
     );
 
     const all = await loadAllSkills(tempDir);

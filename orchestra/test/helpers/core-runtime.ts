@@ -1,11 +1,11 @@
 import { createApi } from "../../src/api";
 import { createCommunication } from "../../src/communication";
 import { createMemoryStore } from "../../src/memory";
-import { createWorkerManager } from "../../src/workers";
-import { createWorkflowEngine } from "../../src/workflows/factory";
 import { createOrchestrator } from "../../src/orchestrator";
 import { createTools } from "../../src/tools";
 import type { OrchestratorConfig, WorkerProfile } from "../../src/types";
+import { createWorkerManager } from "../../src/workers";
+import { createWorkflowEngine } from "../../src/workflows/factory";
 import { DEFAULT_TEST_CONFIG } from "./fixtures";
 
 export async function createTestCoreRuntime(input: {

@@ -2,8 +2,8 @@
  * Separator Component - Visual divider
  */
 
-import { type Component, type JSX, splitProps } from "solid-js";
 import { Separator as KobalteSeparator } from "@kobalte/core/separator";
+import { type Component, type JSX, splitProps } from "solid-js";
 import { cn } from "@/lib/utils";
 
 export interface SeparatorProps extends JSX.HTMLAttributes<HTMLDivElement> {
@@ -20,7 +20,7 @@ export const Separator: Component<SeparatorProps> = (props) => {
       class={cn(
         "shrink-0 bg-border",
         local.orientation === "vertical" ? "h-full w-[1px]" : "h-[1px] w-full",
-        local.class
+        local.class,
       )}
       {...others}
     />

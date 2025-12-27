@@ -1,8 +1,8 @@
 import { createApi } from "../../src/api";
 import { createCommunication } from "../../src/communication";
 import { createMemoryStore } from "../../src/memory";
-import { createWorkerManager } from "../../src/workers";
 import type { WorkerProfile } from "../../src/types";
+import { createWorkerManager } from "../../src/workers";
 
 export async function createTestWorkerRuntime(input: {
   profiles: Record<string, WorkerProfile>;

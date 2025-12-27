@@ -2,8 +2,8 @@
  * Button Component - Kobalte-based button with variants
  */
 
-import { type Component, type JSX, splitProps } from "solid-js";
 import { Button as KobalteButton } from "@kobalte/core/button";
+import { type Component, type JSX, splitProps } from "solid-js";
 import { cn } from "@/lib/utils";
 
 export interface ButtonProps extends JSX.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -37,7 +37,7 @@ export const Button: Component<ButtonProps> = (props) => {
         buttonVariants.base,
         buttonVariants.variant[local.variant ?? "default"],
         buttonVariants.size[local.size ?? "default"],
-        local.class
+        local.class,
       )}
       {...others}
     >

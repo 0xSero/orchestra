@@ -1,5 +1,5 @@
-import { getMemoryByKey, recentMemory, type MemoryNode, type MemoryScope } from "./store";
 import { loadNeo4jConfig, type Neo4jConfig } from "./neo4j";
+import { getMemoryByKey, type MemoryNode, type MemoryScope, recentMemory } from "./store";
 import { shortenWithMarker } from "./text";
 
 function clamp(n: number, min: number, max: number): number {
@@ -62,15 +62,16 @@ export async function buildMemoryInjection(input: {
   const lines: string[] = ["## Memory (auto)", ""];
 
   const projectSummaryKey =
-    scope === "project"
-      ? "summary:project"
-      : projectId
-        ? `summary:project:${projectId}`
-        : undefined;
+    scope === "project" ? "summary:project" : projectId ? `summary:project:${projectId}` : undefined;
   const sessionSummaryKey = sessionId ? `summary:session:${sessionId}` : undefined;
 
   if (includeProjectSummary && projectSummaryKey) {
-    const node = await getMemoryByKey({ cfg, scope, projectId: scope === "project" ? projectId : undefined, key: projectSummaryKey }).catch(() => undefined);
+    const node = await getMemoryByKey({
+      cfg,
+      scope,
+      projectId: scope === "project" ? projectId : undefined,
+      key: projectSummaryKey,
+    }).catch(() => undefined);
     if (node?.value?.trim()) {
       lines.push("### Project");
       lines.push(shorten(node.value.trim(), clamp(Math.floor(maxChars * 0.5), 200, 6000)));
@@ -79,7 +80,9 @@ export async function buildMemoryInjection(input: {
   }
 
   if (includeSessionSummary && scope === "project" && projectId && sessionSummaryKey) {
-    const node = await getMemoryByKey({ cfg, scope: "project", projectId, key: sessionSummaryKey }).catch(() => undefined);
+    const node = await getMemoryByKey({ cfg, scope: "project", projectId, key: sessionSummaryKey }).catch(
+      () => undefined,
+    );
     if (node?.value?.trim()) {
       lines.push("### Session");
       lines.push(shorten(node.value.trim(), clamp(Math.floor(maxChars * 0.35), 200, 4000)));
@@ -87,7 +90,11 @@ export async function buildMemoryInjection(input: {
     }
   }
 
-  const gather = async (scopeToRead: MemoryScope, projectIdToRead: string | undefined, limit: number): Promise<MemoryNode[]> => {
+  const gather = async (
+    scopeToRead: MemoryScope,
+    projectIdToRead: string | undefined,
+    limit: number,
+  ): Promise<MemoryNode[]> => {
     const nodes = await recentMemory({ cfg, scope: scopeToRead, projectId: projectIdToRead, limit }).catch(() => []);
     const filtered = nodes.filter((n) => {
       if (!includeMessages && isMessageLike(n)) return false;

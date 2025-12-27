@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { buildPromptParts, extractTextFromPromptResponse } from "../../src/workers/prompt";
 
-
 describe("worker prompt", () => {
   test("builds prompt parts with base64 attachments", async () => {
     const base64 = Buffer.from("hello", "utf8").toString("base64");

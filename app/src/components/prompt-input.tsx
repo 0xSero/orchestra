@@ -1,13 +1,13 @@
 /**
  * PromptInput - Clean, minimal input
  *
- * No attachment buttons cluttering the view. Simple textarea.
- * Attachments via drag-drop or paste only.
+ * Simple textarea with optional file picker.
+ * Attachments via picker, drag-drop, or paste.
  */
 
-import { type Component, createSignal, Show, For } from "solid-js";
+import { type Component, createSignal, For, onCleanup, Show } from "solid-js";
 
-interface Attachment {
+export interface Attachment {
   id: string;
   type: "file" | "image";
   name: string;
@@ -22,12 +22,20 @@ interface PromptInputProps {
   isLoading?: boolean;
   placeholder?: string;
   disabled?: boolean;
+  allowFilePicker?: boolean;
 }
 
 export const PromptInput: Component<PromptInputProps> = (props) => {
   const [message, setMessage] = createSignal("");
   const [attachments, setAttachments] = createSignal<Attachment[]>([]);
   let textareaRef: HTMLTextAreaElement | undefined;
+  let fileInputRef: HTMLInputElement | undefined;
+
+  const releaseAttachments = (items: Attachment[]) => {
+    for (const item of items) {
+      if (item.url) URL.revokeObjectURL(item.url);
+    }
+  };
 
   const handleSubmit = async () => {
     const text = message().trim();
@@ -37,6 +45,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     try {
       await props.onSubmit(text, attachments());
       setMessage("");
+      releaseAttachments(attachments());
       setAttachments([]);
       if (textareaRef) {
         textareaRef.style.height = "auto";
@@ -61,6 +70,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   };
 
   const handlePaste = (e: ClipboardEvent) => {
+    if (props.disabled || props.isLoading) return;
     const items = e.clipboardData?.items;
     if (!items) return;
 
@@ -76,6 +86,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   const handleDrop = (e: DragEvent) => {
     e.preventDefault();
+    if (props.disabled || props.isLoading) return;
     const files = e.dataTransfer?.files;
     if (!files) return;
 
@@ -104,18 +115,33 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     });
   };
 
+  const handleFilePick = (e: Event) => {
+    const input = e.currentTarget as HTMLInputElement;
+    const files = input.files;
+    if (!files) return;
+    for (const file of Array.from(files)) {
+      addFile(file);
+    }
+    input.value = "";
+  };
+
+  const openFilePicker = () => {
+    if (props.disabled || props.isLoading) return;
+    fileInputRef?.click();
+  };
+
   const formatSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes}B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
   };
 
+  onCleanup(() => {
+    releaseAttachments(attachments());
+  });
+
   return (
-    <div
-      class="border-t border-border bg-card p-3"
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={handleDrop}
-    >
+    <div class="border-t border-border bg-card p-3" onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
       {/* Attachments */}
       <Show when={attachments().length > 0}>
         <div class="flex flex-wrap gap-2 mb-2">
@@ -124,10 +150,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
               <div class="flex items-center gap-2 px-2 py-1 bg-secondary rounded text-xs">
                 <span class="truncate max-w-[120px]">{a.name}</span>
                 <span class="text-muted-foreground">{formatSize(a.size)}</span>
-                <button
-                  class="text-muted-foreground hover:text-foreground"
-                  onClick={() => removeAttachment(a.id)}
-                >
+                <button class="text-muted-foreground hover:text-foreground" onClick={() => removeAttachment(a.id)}>
                   x
                 </button>
               </div>
@@ -138,6 +161,12 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
       {/* Input row */}
       <div class="flex items-end gap-2">
+        <Show when={props.allowFilePicker}>
+          <button class="btn btn-ghost btn-icon" onClick={openFilePicker} title="Attach file">
+            <AttachmentIcon />
+          </button>
+          <input ref={fileInputRef} type="file" multiple class="hidden" onChange={handleFilePick} />
+        </Show>
         <textarea
           ref={textareaRef}
           value={message()}
@@ -169,9 +198,23 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       </div>
 
       {/* Hint */}
-      <p class="text-xs text-muted-foreground mt-2">
-        Enter to send · Shift+Enter for newline · Paste or drop files
-      </p>
+      <p class="text-xs text-muted-foreground mt-2">Enter to send · Shift+Enter for newline · Paste or drop files</p>
     </div>
   );
 };
+
+const AttachmentIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d="M21.44 11.05l-8.49 8.49a5 5 0 0 1-7.07-7.07l8.49-8.49a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.49a2 2 0 0 1-2.83-2.83l7.78-7.78" />
+  </svg>
+);

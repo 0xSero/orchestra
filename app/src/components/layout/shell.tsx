@@ -8,7 +8,17 @@ import { cn } from "@/lib/utils";
 
 // Icons
 const MenuIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <line x1="4" x2="20" y1="12" y2="12" />
     <line x1="4" x2="20" y1="6" y2="6" />
     <line x1="4" x2="20" y1="18" y2="18" />
@@ -16,18 +26,24 @@ const MenuIcon = () => (
 );
 
 const XIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <path d="M18 6 6 18" />
     <path d="m6 6 12 12" />
   </svg>
 );
 
 export const Shell: ParentComponent = (props) => {
-  return (
-    <div class="flex h-screen flex-col bg-background text-foreground overflow-hidden">
-      {props.children}
-    </div>
-  );
+  return <div class="flex h-screen flex-col bg-background text-foreground overflow-hidden">{props.children}</div>;
 };
 
 // Sidebar component with mobile drawer
@@ -42,17 +58,14 @@ export const Sidebar: Component<SidebarProps> = (props) => {
     <>
       {/* Mobile overlay */}
       <Show when={isMobile() && state.sidebarOpen}>
-        <div
-          class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+        <div class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />
       </Show>
 
       {/* Sidebar */}
       <aside
         class={cn(
           "fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-card border-r border-border transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0",
-          state.sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          state.sidebarOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
         {/* Mobile close button */}
@@ -79,7 +92,7 @@ export const MainContent: ParentComponent = (props) => {
     <main
       class={cn(
         "flex-1 flex flex-col overflow-hidden transition-all duration-300",
-        isDesktop() && state.sidebarOpen ? "lg:ml-0" : ""
+        isDesktop() && state.sidebarOpen ? "lg:ml-0" : "",
       )}
     >
       {props.children}
@@ -122,12 +135,7 @@ export const PanelContainer: Component<PanelContainerProps> = (props) => {
   const direction = props.direction ?? "horizontal";
 
   return (
-    <div
-      class={cn(
-        "flex-1 flex overflow-hidden",
-        direction === "horizontal" ? "flex-row" : "flex-col"
-      )}
-    >
+    <div class={cn("flex-1 flex overflow-hidden", direction === "horizontal" ? "flex-row" : "flex-col")}>
       {props.children}
     </div>
   );
@@ -150,13 +158,7 @@ export const Panel: Component<PanelProps> = (props) => {
   };
 
   return (
-    <div
-      class={cn(
-        "flex flex-col overflow-hidden border-border",
-        sizeClass[props.size ?? "auto"],
-        props.class
-      )}
-    >
+    <div class={cn("flex flex-col overflow-hidden border-border", sizeClass[props.size ?? "auto"], props.class)}>
       {props.children}
     </div>
   );
@@ -179,11 +181,7 @@ export const PanelHeader: Component<PanelHeaderProps> = (props) => {
 
 // Panel content
 export const PanelContent: ParentComponent<{ class?: string }> = (props) => {
-  return (
-    <div class={cn("flex-1 overflow-auto", props.class)}>
-      {props.children}
-    </div>
-  );
+  return <div class={cn("flex-1 overflow-auto", props.class)}>{props.children}</div>;
 };
 
 // Footer component for mobile bottom nav

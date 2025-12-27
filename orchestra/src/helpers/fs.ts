@@ -10,7 +10,7 @@ export async function writeJsonAtomic(path: string, data: unknown, options?: Wri
   await mkdir(dirname(path), { recursive: true }).catch(() => {});
   const tmp = join(
     tmpdir(),
-    `${options?.tmpPrefix ?? "opencode-orch"}-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.json`
+    `${options?.tmpPrefix ?? "opencode-orch"}-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.json`,
   );
   await writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
   await rename(tmp, path).catch(async () => {

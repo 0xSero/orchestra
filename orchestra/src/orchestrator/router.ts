@@ -1,6 +1,6 @@
+import { findProfile } from "../profiles/discovery";
 import type { WorkerProfile } from "../types";
 import type { WorkerAttachment } from "../workers/prompt";
-import { findProfile } from "../profiles/discovery";
 
 export function selectWorkerId(input: {
   task: string;

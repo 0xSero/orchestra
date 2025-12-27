@@ -1,7 +1,7 @@
-import type { Neo4jConfig } from "./neo4j";
-import { loadNeo4jConfig } from "./neo4j";
 import type { MemoryNode, MemoryScope } from "./graph";
 import * as graph from "./graph";
+import type { Neo4jConfig } from "./neo4j";
+import { loadNeo4jConfig } from "./neo4j";
 import * as fileStore from "./store-file";
 
 export type MemoryBackend = "neo4j" | "file";

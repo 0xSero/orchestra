@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { createWorkflowEngine } from "../src/workflows/factory";
 import type { WorkerProfile } from "../src/types";
-import { createTestWorkerRuntime } from "./helpers/worker-runtime";
+import { createWorkflowEngine } from "../src/workflows/factory";
 import { setupE2eEnv } from "./helpers/e2e-env";
+import { createTestWorkerRuntime } from "./helpers/worker-runtime";
 
 const MODEL = "opencode/gpt-5-nano";
 
@@ -74,24 +74,20 @@ describe("workflow engine integration", () => {
     restoreEnv?.();
   });
 
-  test(
-    "runs steps sequentially and carries output via real workers",
-    async () => {
-      const result = await workflowEngine.run(
-        { workflowId: "test-flow", task: "do the thing", limits },
-        {
-          resolveWorker: async (workerId) => workerId,
-          sendToWorker: async (workerId, message, options) =>
-            runtime!.workers.send(workerId, message, { attachments: options.attachments, timeout: options.timeoutMs }),
-        }
-      );
+  test("runs steps sequentially and carries output via real workers", async () => {
+    const result = await workflowEngine.run(
+      { workflowId: "test-flow", task: "do the thing", limits },
+      {
+        resolveWorker: async (workerId) => workerId,
+        sendToWorker: async (workerId, message, options) =>
+          runtime!.workers.send(workerId, message, { attachments: options.attachments, timeout: options.timeoutMs }),
+      },
+    );
 
-      expect(result.steps.length).toBe(2);
-      expect(result.steps[0]?.status).toBe("success");
-      expect(result.steps[1]?.status).toBe("success");
-      expect(result.steps[0]?.response ?? "").toContain("STEP_ONE_OK");
-      expect(result.steps[1]?.response ?? "").toContain("STEP_TWO_OK");
-    },
-    180_000
-  );
+    expect(result.steps.length).toBe(2);
+    expect(result.steps[0]?.status).toBe("success");
+    expect(result.steps[1]?.status).toBe("success");
+    expect(result.steps[0]?.response ?? "").toContain("STEP_ONE_OK");
+    expect(result.steps[1]?.response ?? "").toContain("STEP_TWO_OK");
+  }, 180_000);
 });

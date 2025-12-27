@@ -9,7 +9,4 @@ export type ServiceLifecycle = {
   health(): Promise<HealthResult>;
 };
 
-export type Factory<TConfig, TDeps, TService> = (input: {
-  config: TConfig;
-  deps: TDeps;
-}) => TService;
+export type Factory<TConfig, TDeps, TService> = (input: { config: TConfig; deps: TDeps }) => TService;

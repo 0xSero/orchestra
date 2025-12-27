@@ -98,8 +98,9 @@
         "defaultListFormat": { "type": "string", "enum": ["markdown", "json"], "default": "markdown" },
         "debug": { "type": "boolean", "default": false },
         "logToConsole": { "type": "boolean", "default": false },
-        "wakeupInjection": { 
-          "type": "boolean", 
+        "firstRunDemo": { "type": "boolean", "default": true },
+        "wakeupInjection": {
+          "type": "boolean",
           "default": true,
           "description": "When async worker jobs or vision analysis complete, inject a prompt into the orchestrator session to resume it."
         }
@@ -130,7 +131,8 @@
         "model": { "type": "string" },
         "prompt": { "type": "string" },
         "mode": { "type": "string", "enum": ["primary", "subagent"], "default": "primary" },
-        "color": { "type": "string" }
+        "color": { "type": "string" },
+        "applyToBuild": { "type": "boolean" }
       }
     },
     "commands": {
@@ -149,7 +151,11 @@
         "enabled": { "type": "boolean", "default": false },
         "maxToolOutputChars": { "type": "number", "default": 12000 },
         "maxToolInputChars": { "type": "number", "default": 4000 },
-        "protectedTools": { "type": "array", "items": { "type": "string" }, "default": ["task", "todowrite", "todoread"] }
+        "protectedTools": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["task", "todowrite", "todoread"]
+        }
       }
     },
     "workflows": {
@@ -265,11 +271,21 @@
           "additionalProperties": false,
           "description": "Neo4j connection for memory graph. Can also use env vars: OPENCODE_NEO4J_URI, OPENCODE_NEO4J_USERNAME, OPENCODE_NEO4J_PASSWORD, OPENCODE_NEO4J_DATABASE. Env vars take priority over config file settings.",
           "properties": {
-            "enabled": { "type": "boolean", "default": false, "description": "Enable Neo4j memory backend. When disabled or not configured, file-based memory is used." },
-            "uri": { "type": "string", "description": "Neo4j connection URI (e.g. 'bolt://localhost:7687' or 'neo4j+s://xxx.databases.neo4j.io')" },
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "description": "Enable Neo4j memory backend. When disabled or not configured, file-based memory is used."
+            },
+            "uri": {
+              "type": "string",
+              "description": "Neo4j connection URI (e.g. 'bolt://localhost:7687' or 'neo4j+s://xxx.databases.neo4j.io')"
+            },
             "username": { "type": "string", "description": "Neo4j username (typically 'neo4j')" },
             "password": { "type": "string", "description": "Neo4j password" },
-            "database": { "type": "string", "description": "Neo4j database name (optional, uses default if not specified)" }
+            "database": {
+              "type": "string",
+              "description": "Neo4j database name (optional, uses default if not specified)"
+            }
           }
         },
         "monitoring": {

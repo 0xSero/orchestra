@@ -1,5 +1,5 @@
-import type { ModelCapabilities } from "./capabilities";
 import type { OrchestratorConfig } from "../types";
+import type { ModelCapabilities } from "./capabilities";
 
 export function averageCostPer1kTokens(cap: ModelCapabilities): number | undefined {
   const input = cap.inputCostPer1kTokens;
@@ -9,7 +9,10 @@ export function averageCostPer1kTokens(cap: ModelCapabilities): number | undefin
   return typeof input === "number" ? input : output;
 }
 
-export function scoreCost(cap: ModelCapabilities, selection?: OrchestratorConfig["modelSelection"]): {
+export function scoreCost(
+  cap: ModelCapabilities,
+  selection?: OrchestratorConfig["modelSelection"],
+): {
   score: number;
   tooExpensive: boolean;
 } {

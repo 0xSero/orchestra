@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { WorkerSessionManager, TrackedSession } from "../workers/session-manager";
 import type { WorkerManager } from "../workers";
+import type { TrackedSession, WorkerSessionManager } from "../workers/session-manager";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
@@ -121,10 +121,12 @@ export function createSessionsRouter(deps: SessionsRouterDeps) {
 
       // Send initial state
       const summary = deps.sessionManager.getSummary();
-      res.write(`event: init\ndata: ${JSON.stringify({
-        total: summary.total,
-        sessions: summary.sessions,
-      })}\n\n`);
+      res.write(
+        `event: init\ndata: ${JSON.stringify({
+          total: summary.total,
+          sessions: summary.sessions,
+        })}\n\n`,
+      );
 
       eventSubscribers.add(res);
       req.on("close", () => {
@@ -218,7 +220,7 @@ export function createSessionsRouter(deps: SessionsRouterDeps) {
             type: a.type as string,
             timestamp: a.timestamp.toISOString(),
             summary: a.summary,
-            details: a.details as JsonValue ?? null,
+            details: (a.details as JsonValue) ?? null,
           })),
         } as unknown as JsonValue);
       } catch (err) {

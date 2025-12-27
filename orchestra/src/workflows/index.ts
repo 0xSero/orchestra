@@ -1,7 +1,7 @@
 import type { OrchestratorConfig } from "../types";
+import { buildBuiltinWorkflows } from "./builtins";
 import { registerWorkflow } from "./engine";
 import { buildRooCodeBoomerangWorkflow } from "./roocode-boomerang";
-import { buildBuiltinWorkflows } from "./builtins";
 
 let loaded = false;
 

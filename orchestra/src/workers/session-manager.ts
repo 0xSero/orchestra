@@ -1,6 +1,6 @@
-import type { WorkerSessionMode, WorkerForwardEvent } from "../types/worker";
-import type { CommunicationService } from "../communication";
 import type { ApiService } from "../api";
+import type { CommunicationService } from "../communication";
+import type { WorkerForwardEvent, WorkerSessionMode } from "../types/worker";
 
 /**
  * Represents a tracked worker session with activity data.
@@ -52,12 +52,7 @@ export interface SessionActivity {
  * Event emitted when session state changes.
  */
 export interface SessionManagerEvent {
-  type:
-    | "session.created"
-    | "session.activity"
-    | "session.status"
-    | "session.closed"
-    | "session.error";
+  type: "session.created" | "session.activity" | "session.status" | "session.closed" | "session.error";
   session: TrackedSession;
   activity?: SessionActivity;
 }
@@ -98,7 +93,7 @@ export class WorkerSessionManager {
     private deps: {
       api: ApiService;
       communication: CommunicationService;
-    }
+    },
   ) {}
 
   /**
@@ -132,7 +127,7 @@ export class WorkerSessionManager {
     this.deps.communication.emit(
       "orchestra.session.created",
       { session: this.serializeSession(session) },
-      { source: "session-manager" }
+      { source: "session-manager" },
     );
 
     return session;
@@ -141,10 +136,7 @@ export class WorkerSessionManager {
   /**
    * Record activity on a session.
    */
-  recordActivity(
-    sessionId: string,
-    activity: Omit<SessionActivity, "id" | "timestamp">
-  ): void {
+  recordActivity(sessionId: string, activity: Omit<SessionActivity, "id" | "timestamp">): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
@@ -179,18 +171,14 @@ export class WorkerSessionManager {
           summary: fullActivity.summary,
         },
       },
-      { source: "session-manager" }
+      { source: "session-manager" },
     );
   }
 
   /**
    * Update session status.
    */
-  updateStatus(
-    sessionId: string,
-    status: TrackedSession["status"],
-    error?: string
-  ): void {
+  updateStatus(sessionId: string, status: TrackedSession["status"], error?: string): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
@@ -207,7 +195,7 @@ export class WorkerSessionManager {
         status,
         error,
       },
-      { source: "session-manager" }
+      { source: "session-manager" },
     );
   }
 
@@ -223,7 +211,7 @@ export class WorkerSessionManager {
     this.deps.communication.emit(
       "orchestra.session.closed",
       { sessionId, workerId: session.workerId },
-      { source: "session-manager" }
+      { source: "session-manager" },
     );
 
     this.sessions.delete(sessionId);
@@ -263,9 +251,7 @@ export class WorkerSessionManager {
    * Get active sessions (not closed/error).
    */
   getActiveSessions(): TrackedSession[] {
-    return this.getAllSessions().filter(
-      (s) => s.status !== "closed" && s.status !== "error"
-    );
+    return this.getAllSessions().filter((s) => s.status !== "closed" && s.status !== "error");
   }
 
   /**

@@ -1,12 +1,11 @@
-import type { Factory, ServiceLifecycle } from "../types";
-import type { OrchestratorConfig, WorkerInstance } from "../types";
-import type { WorkerAttachment } from "../workers/prompt";
-import type { WorkerManager } from "../workers";
-import type { WorkflowEngine } from "../workflows/factory";
 import type { ApiService } from "../api";
 import type { CommunicationService } from "../communication";
-import { selectWorkerId } from "./router";
 import { canAutoSpawn, canSpawnManually, canSpawnOnDemand } from "../core/spawn-policy";
+import type { Factory, OrchestratorConfig, ServiceLifecycle, WorkerInstance } from "../types";
+import type { WorkerManager } from "../workers";
+import type { WorkerAttachment } from "../workers/prompt";
+import type { WorkflowEngine } from "../workflows/factory";
+import { selectWorkerId } from "./router";
 
 export type OrchestratorDeps = {
   api: ApiService;
@@ -53,11 +52,7 @@ export const createOrchestrator: Factory<OrchestratorConfig, OrchestratorDeps, O
     return await deps.workers.spawnById(input.workerId);
   };
 
-  const delegateTask = async (input: {
-    task: string;
-    attachments?: WorkerAttachment[];
-    autoSpawn?: boolean;
-  }) => {
+  const delegateTask = async (input: { task: string; attachments?: WorkerAttachment[]; autoSpawn?: boolean }) => {
     const workerId = selectWorkerId({
       task: input.task,
       profiles: config.profiles,
@@ -65,9 +60,10 @@ export const createOrchestrator: Factory<OrchestratorConfig, OrchestratorDeps, O
     });
     if (!workerId) throw new Error("No worker available for this task.");
 
-    const instance = input.autoSpawn === false
-      ? deps.workers.getWorker(workerId)
-      : await ensureWorker({ workerId, reason: "on-demand" });
+    const instance =
+      input.autoSpawn === false
+        ? deps.workers.getWorker(workerId)
+        : await ensureWorker({ workerId, reason: "on-demand" });
 
     if (!instance) {
       throw new Error(`Worker "${workerId}" is not running.`);
@@ -114,7 +110,7 @@ export const createOrchestrator: Factory<OrchestratorConfig, OrchestratorDeps, O
             attachments: options.attachments,
             timeout: options.timeoutMs,
           }),
-      }
+      },
     );
   };
 

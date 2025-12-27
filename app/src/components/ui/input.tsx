@@ -19,7 +19,7 @@ export const Input: Component<InputProps> = (props) => {
         "placeholder:text-muted-foreground",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         "disabled:cursor-not-allowed disabled:opacity-50",
-        local.class
+        local.class,
       )}
       {...others}
     />
@@ -40,7 +40,7 @@ export const Textarea: Component<TextareaProps> = (props) => {
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         "disabled:cursor-not-allowed disabled:opacity-50",
         "resize-none",
-        local.class
+        local.class,
       )}
       {...others}
     />

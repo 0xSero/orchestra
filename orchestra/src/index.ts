@@ -11,7 +11,12 @@ type GlobalCoreState = {
   exitHandlersSet?: boolean;
 };
 
-const globalState = (globalThis as unknown as Record<string, GlobalCoreState>)[GLOBAL_KEY] ??= {};
+const globalStore = globalThis as unknown as Record<string, GlobalCoreState | undefined>;
+const existingState = globalStore[GLOBAL_KEY];
+const globalState = existingState ?? {};
+if (existingState === undefined || existingState === null) {
+  globalStore[GLOBAL_KEY] = globalState;
+}
 
 export const OrchestratorPlugin: Plugin = async (ctx) => {
   if (process.env.OPENCODE_ORCHESTRATOR_WORKER === "1") {
@@ -61,3 +66,4 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
 };
 
 export default OrchestratorPlugin;
+export { createCommandRouter } from "./commands";

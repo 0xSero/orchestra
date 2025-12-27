@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getAllProfiles } from "../../src/workers/profiles";
 import { serializeSkillFile } from "../../src/skills/parse";
+import { getAllProfiles } from "../../src/workers/profiles";
 
 describe("skills profiles", () => {
-  test("skill loads from subagents directory", async () => {
+  test("skill loads from skills directory", async () => {
     const projectDir = await mkdtemp(join(tmpdir(), "orch-skill-profiles-"));
-    const skillDir = join(projectDir, ".opencode", "agent", "subagents", "full-stack");
+    const skillDir = join(projectDir, ".opencode", "skill", "full-stack");
     await mkdir(skillDir, { recursive: true });
 
     await writeFile(
@@ -19,8 +19,8 @@ describe("skills profiles", () => {
           description: "Full stack helper",
           model: "auto",
         },
-        "Full stack prompt"
-      )
+        "Full stack prompt",
+      ),
     );
 
     const profiles = await getAllProfiles(projectDir);

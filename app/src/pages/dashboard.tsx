@@ -4,12 +4,12 @@
  * Top nav with tabs, collapsible sidebar, centered content area
  */
 
-import { type Component, createSignal, Show, createEffect, For } from "solid-js";
-import { SessionList } from "@/components/sidebar/worker-list";
-import { ChatView } from "@/components/worker-detail";
-import { LogsPanel } from "@/components/log-stream";
-import { SkillList, SkillsWorkspace } from "@/components/skills";
+import { type Component, createEffect, createSignal, For, Show } from "solid-js";
 import { CommandPalette } from "@/components/command-palette";
+import { LogsPanel } from "@/components/log-stream";
+import { SessionList } from "@/components/sidebar/worker-list";
+import { SkillList, SkillsWorkspace } from "@/components/skills";
+import { ChatView } from "@/components/worker-detail";
 import { useOpenCode } from "@/context/opencode";
 
 type Tab = "chat" | "skills" | "logs";
@@ -23,10 +23,22 @@ export const Dashboard: Component = () => {
   createEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey) {
-        if (e.key === "b") { e.preventDefault(); setSidebarOpen(v => !v); }
-        if (e.key === "1") { e.preventDefault(); setActiveTab("chat"); }
-        if (e.key === "2") { e.preventDefault(); setActiveTab("skills"); }
-        if (e.key === "3") { e.preventDefault(); setActiveTab("logs"); }
+        if (e.key === "b") {
+          e.preventDefault();
+          setSidebarOpen((v) => !v);
+        }
+        if (e.key === "1") {
+          e.preventDefault();
+          setActiveTab("chat");
+        }
+        if (e.key === "2") {
+          e.preventDefault();
+          setActiveTab("skills");
+        }
+        if (e.key === "3") {
+          e.preventDefault();
+          setActiveTab("logs");
+        }
       }
     };
     window.addEventListener("keydown", handleKey);
@@ -38,7 +50,17 @@ export const Dashboard: Component = () => {
       id: "chat",
       label: "Chat",
       icon: () => (
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
         </svg>
       ),
@@ -47,7 +69,17 @@ export const Dashboard: Component = () => {
       id: "skills",
       label: "Recipes",
       icon: () => (
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <path d="M8 6h13" />
           <path d="M8 12h13" />
           <path d="M8 18h13" />
@@ -61,7 +93,17 @@ export const Dashboard: Component = () => {
       id: "logs",
       label: "Logs",
       icon: () => (
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <path d="M4 6h16" />
           <path d="M4 12h16" />
           <path d="M4 18h16" />
@@ -84,10 +126,7 @@ export const Dashboard: Component = () => {
           {(tab) => {
             const Icon = tab.icon;
             return (
-              <button
-                class={`nav-tab ${activeTab() === tab.id ? "active" : ""}`}
-                onClick={() => setActiveTab(tab.id)}
-              >
+              <button class={`nav-tab ${activeTab() === tab.id ? "active" : ""}`} onClick={() => setActiveTab(tab.id)}>
                 <span class="nav-tab-icon">
                   <Icon />
                 </span>
@@ -119,7 +158,17 @@ export const Dashboard: Component = () => {
           <button class="btn btn-compact">Set Key</button>
 
           <div class="nav-pill">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <circle cx="11" cy="11" r="8" />
               <path d="m21 21-4.3-4.3" />
             </svg>
@@ -143,7 +192,7 @@ export const Dashboard: Component = () => {
             {/* Collapse button */}
             <button
               class="w-6 flex items-center justify-center border-r border-border hover:bg-accent text-muted-foreground hover:text-foreground"
-              onClick={() => setSidebarOpen(v => !v)}
+              onClick={() => setSidebarOpen((v) => !v)}
               title={sidebarOpen() ? "Collapse sidebar" : "Expand sidebar"}
             >
               <span class="text-xs">{sidebarOpen() ? "‹" : "›"}</span>

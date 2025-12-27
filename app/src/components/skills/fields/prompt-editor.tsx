@@ -4,11 +4,7 @@ export function PromptEditor(props: { value: string; onChange: (v: string) => vo
   return (
     <label class="flex flex-col gap-2 text-xs text-muted-foreground">
       <span class="font-medium text-foreground">System Prompt</span>
-      <Textarea
-        rows={12}
-        value={props.value}
-        onInput={(e) => props.onChange(e.currentTarget.value)}
-      />
+      <Textarea rows={12} value={props.value} onInput={(e) => props.onChange(e.currentTarget.value)} />
     </label>
   );
 }

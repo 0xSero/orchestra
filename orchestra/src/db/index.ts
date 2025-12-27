@@ -1,18 +1,18 @@
-import Database from "better-sqlite3";
-import { join } from "node:path";
-import { mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import Database from "better-sqlite3";
 import type { Factory, ServiceLifecycle } from "../types";
 import {
   CREATE_TABLES_SQL,
+  type Preference,
+  rowToUser,
+  rowToWorkerConfig,
   SCHEMA_VERSION,
   type User,
   type UserRow,
-  type Preference,
   type WorkerConfig,
   type WorkerConfigRow,
-  rowToUser,
-  rowToWorkerConfig,
 } from "./schema";
 
 export type DatabaseConfig = {
@@ -30,18 +30,23 @@ export type DatabaseService = ServiceLifecycle & {
   getPreference(key: string): string | null;
   setPreference(key: string, value: string | null): void;
   getAllPreferences(): Record<string, string | null>;
+  deletePreference(key: string): void;
 
   // Worker config operations
   getWorkerConfig(workerId: string): WorkerConfig | null;
-  setWorkerConfig(workerId: string, config: Partial<Omit<WorkerConfig, "id" | "userId" | "workerId" | "updatedAt">>): void;
+  setWorkerConfig(
+    workerId: string,
+    config: Partial<Omit<WorkerConfig, "id" | "userId" | "workerId" | "updatedAt">>,
+  ): void;
   getAllWorkerConfigs(): WorkerConfig[];
+  clearWorkerConfig(workerId: string): void;
 
   // Utility
   isOnboarded(): boolean;
   getDbPath(): string;
 };
 
-export const createDatabase: Factory<DatabaseConfig, {}, DatabaseService> = ({ config }) => {
+export const createDatabase: Factory<DatabaseConfig, Record<string, never>, DatabaseService> = ({ config }) => {
   const dbPath = join(config.directory, ".opencode", config.filename ?? "user.db");
   let db: Database.Database | null = null;
 
@@ -91,7 +96,9 @@ export const createDatabase: Factory<DatabaseConfig, {}, DatabaseService> = ({ c
   const getPreference = (key: string): string | null => {
     if (!db) return null;
     const userId = getUserId();
-    const row = db.prepare("SELECT value FROM preferences WHERE user_id = ? AND key = ?").get(userId, key) as { value: string | null } | undefined;
+    const row = db.prepare("SELECT value FROM preferences WHERE user_id = ? AND key = ?").get(userId, key) as
+      | { value: string | null }
+      | undefined;
     return row?.value ?? null;
   };
 
@@ -108,34 +115,59 @@ export const createDatabase: Factory<DatabaseConfig, {}, DatabaseService> = ({ c
   const getAllPreferences = (): Record<string, string | null> => {
     if (!db) return {};
     const userId = getUserId();
-    const rows = db.prepare("SELECT key, value FROM preferences WHERE user_id = ?").all(userId) as Array<{ key: string; value: string | null }>;
+    const rows = db.prepare("SELECT key, value FROM preferences WHERE user_id = ?").all(userId) as Array<{
+      key: string;
+      value: string | null;
+    }>;
     return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  };
+
+  const deletePreference = (key: string): void => {
+    if (!db) throw new Error("Database not initialized");
+    const userId = getUserId();
+    db.prepare("DELETE FROM preferences WHERE user_id = ? AND key = ?").run(userId, key);
   };
 
   const getWorkerConfig = (workerId: string): WorkerConfig | null => {
     if (!db) return null;
     const userId = getUserId();
-    const row = db.prepare("SELECT * FROM worker_config WHERE user_id = ? AND worker_id = ?").get(userId, workerId) as WorkerConfigRow | undefined;
+    const row = db.prepare("SELECT * FROM worker_config WHERE user_id = ? AND worker_id = ?").get(userId, workerId) as
+      | WorkerConfigRow
+      | undefined;
     return row ? rowToWorkerConfig(row) : null;
   };
 
   const setWorkerConfig = (
     workerId: string,
-    cfg: Partial<Omit<WorkerConfig, "id" | "userId" | "workerId" | "updatedAt">>
+    cfg: Partial<Omit<WorkerConfig, "id" | "userId" | "workerId" | "updatedAt">>,
   ): void => {
     if (!db) throw new Error("Database not initialized");
     const userId = getUserId();
 
-    const existing = db.prepare("SELECT id FROM worker_config WHERE user_id = ? AND worker_id = ?").get(userId, workerId) as { id: string } | undefined;
+    const existing = db
+      .prepare("SELECT id FROM worker_config WHERE user_id = ? AND worker_id = ?")
+      .get(userId, workerId) as { id: string } | undefined;
 
     if (existing) {
       const updates: string[] = [];
       const values: unknown[] = [];
 
-      if (cfg.model !== undefined) { updates.push("model = ?"); values.push(cfg.model); }
-      if (cfg.temperature !== undefined) { updates.push("temperature = ?"); values.push(cfg.temperature); }
-      if (cfg.maxTokens !== undefined) { updates.push("max_tokens = ?"); values.push(cfg.maxTokens); }
-      if (cfg.enabled !== undefined) { updates.push("enabled = ?"); values.push(cfg.enabled ? 1 : 0); }
+      if (cfg.model !== undefined) {
+        updates.push("model = ?");
+        values.push(cfg.model);
+      }
+      if (cfg.temperature !== undefined) {
+        updates.push("temperature = ?");
+        values.push(cfg.temperature);
+      }
+      if (cfg.maxTokens !== undefined) {
+        updates.push("max_tokens = ?");
+        values.push(cfg.maxTokens);
+      }
+      if (cfg.enabled !== undefined) {
+        updates.push("enabled = ?");
+        values.push(cfg.enabled ? 1 : 0);
+      }
 
       if (updates.length > 0) {
         updates.push("updated_at = datetime('now')");
@@ -152,7 +184,7 @@ export const createDatabase: Factory<DatabaseConfig, {}, DatabaseService> = ({ c
         cfg.model ?? null,
         cfg.temperature ?? null,
         cfg.maxTokens ?? null,
-        cfg.enabled !== false ? 1 : 0
+        cfg.enabled !== false ? 1 : 0,
       );
     }
   };
@@ -162,6 +194,12 @@ export const createDatabase: Factory<DatabaseConfig, {}, DatabaseService> = ({ c
     const userId = getUserId();
     const rows = db.prepare("SELECT * FROM worker_config WHERE user_id = ?").all(userId) as WorkerConfigRow[];
     return rows.map(rowToWorkerConfig);
+  };
+
+  const clearWorkerConfig = (workerId: string): void => {
+    if (!db) throw new Error("Database not initialized");
+    const userId = getUserId();
+    db.prepare("DELETE FROM worker_config WHERE user_id = ? AND worker_id = ?").run(userId, workerId);
   };
 
   const isOnboarded = (): boolean => {
@@ -183,7 +221,9 @@ export const createDatabase: Factory<DatabaseConfig, {}, DatabaseService> = ({ c
     db.exec(CREATE_TABLES_SQL);
 
     // Check/update schema version
-    const versionRow = db.prepare("SELECT version FROM schema_version ORDER BY version DESC LIMIT 1").get() as { version: number } | undefined;
+    const versionRow = db.prepare("SELECT version FROM schema_version ORDER BY version DESC LIMIT 1").get() as
+      | { version: number }
+      | undefined;
     const currentVersion = versionRow?.version ?? 0;
 
     if (currentVersion < SCHEMA_VERSION) {
@@ -214,9 +254,11 @@ export const createDatabase: Factory<DatabaseConfig, {}, DatabaseService> = ({ c
     getPreference,
     setPreference,
     getAllPreferences,
+    deletePreference,
     getWorkerConfig,
     setWorkerConfig,
     getAllWorkerConfigs,
+    clearWorkerConfig,
     isOnboarded,
     getDbPath: () => dbPath,
   };

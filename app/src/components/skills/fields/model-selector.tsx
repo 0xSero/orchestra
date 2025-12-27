@@ -1,4 +1,5 @@
-import { For } from "solid-js";
+import { createMemo, For } from "solid-js";
+import { useOpenCode } from "@/context/opencode";
 import { cn } from "@/lib/utils";
 
 const MODEL_OPTIONS = [
@@ -12,20 +13,27 @@ const MODEL_OPTIONS = [
 ];
 
 export function ModelSelector(props: { value: string; onChange: (v: string) => void }) {
+  const { modelOptions } = useOpenCode();
+
+  const options = createMemo(() => {
+    const dynamic = modelOptions();
+    const base = dynamic.length > 0 ? dynamic : MODEL_OPTIONS;
+    if (!props.value || base.some((option) => option.value === props.value)) return base;
+    return [...base, { value: props.value, label: props.value }];
+  });
+
   return (
     <label class="flex flex-col gap-2 text-xs text-muted-foreground">
       <span class="font-medium text-foreground">Model</span>
       <select
         class={cn(
           "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm",
-          "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
         )}
         value={props.value}
         onChange={(e) => props.onChange(e.currentTarget.value)}
       >
-        <For each={MODEL_OPTIONS}>
-          {(option) => <option value={option.value}>{option.label}</option>}
-        </For>
+        <For each={options()}>{(option) => <option value={option.value}>{option.label}</option>}</For>
       </select>
     </label>
   );

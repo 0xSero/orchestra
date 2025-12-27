@@ -21,7 +21,7 @@ You are a careful coder.`;
   test("serializes frontmatter and body", () => {
     const serialized = serializeSkillFile(
       { name: "docs", description: "Docs helper", model: "auto" },
-      "Read documentation."
+      "Read documentation.",
     );
     expect(serialized).toContain("name: docs");
     expect(serialized).toContain("description: Docs helper");

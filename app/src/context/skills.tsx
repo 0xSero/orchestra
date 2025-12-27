@@ -1,11 +1,11 @@
 import {
   createContext,
-  useContext,
   createEffect,
   createResource,
   createSignal,
   onCleanup,
   type ParentComponent,
+  useContext,
 } from "solid-js";
 import type { Skill, SkillEvent, SkillInput, SkillScope } from "@/types/skill";
 
@@ -31,10 +31,7 @@ interface SkillsContextValue {
 const SkillsContext = createContext<SkillsContextValue>();
 
 export const SkillsProvider: ParentComponent<{ baseUrl?: string }> = (props) => {
-  const apiBase = (props.baseUrl ?? import.meta.env.VITE_SKILLS_API_BASE ?? "http://localhost:4097").replace(
-    /\/$/,
-    ""
-  );
+  const apiBase = (props.baseUrl ?? import.meta.env.VITE_SKILLS_API_BASE ?? "http://localhost:4097").replace(/\/$/, "");
 
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const [createOpen, setCreateOpen] = createSignal(false);

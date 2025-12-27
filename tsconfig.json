@@ -18,8 +18,6 @@
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "types": ["bun-types"]
-  },
-  "include": ["src/**/*", "test/**/*"],
-  "exclude": ["node_modules", "dist", "src/skills"]
+    "types": ["bun"]
+  }
 }

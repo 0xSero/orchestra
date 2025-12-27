@@ -55,14 +55,16 @@ export function createWorkerTools(deps: WorkerToolsDeps): Record<string, ToolDef
     description: "List running workers",
     args: {},
     async execute() {
-      return serialize(deps.workers.listWorkers().map((w) => ({
-        id: w.profile.id,
-        name: w.profile.name,
-        model: w.profile.model,
-        status: w.status,
-        port: w.port,
-        serverUrl: w.serverUrl,
-      })));
+      return serialize(
+        deps.workers.listWorkers().map((w) => ({
+          id: w.profile.id,
+          name: w.profile.name,
+          model: w.profile.model,
+          status: w.status,
+          port: w.port,
+          serverUrl: w.serverUrl,
+        })),
+      );
     },
   });
 
@@ -70,15 +72,17 @@ export function createWorkerTools(deps: WorkerToolsDeps): Record<string, ToolDef
     description: "List available worker profiles",
     args: {},
     async execute() {
-      return serialize(deps.workers.listProfiles().map((p) => ({
-        id: p.id,
-        name: p.name,
-        model: p.model,
-        purpose: p.purpose,
-        whenToUse: p.whenToUse,
-        supportsVision: Boolean(p.supportsVision),
-        supportsWeb: Boolean(p.supportsWeb),
-      })));
+      return serialize(
+        deps.workers.listProfiles().map((p) => ({
+          id: p.id,
+          name: p.name,
+          model: p.model,
+          purpose: p.purpose,
+          whenToUse: p.whenToUse,
+          supportsVision: Boolean(p.supportsVision),
+          supportsWeb: Boolean(p.supportsWeb),
+        })),
+      );
     },
   });
 

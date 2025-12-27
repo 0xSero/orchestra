@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createOpencode } from "@opencode-ai/sdk";
-import { extractTextFromPromptResponse } from "../src/workers/prompt";
 import { mergeOpenCodeConfig } from "../src/config/opencode";
+import { extractTextFromPromptResponse } from "../src/workers/prompt";
 import { setupE2eEnv } from "./helpers/e2e-env";
 
 describe("e2e", () => {

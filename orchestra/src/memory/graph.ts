@@ -1,7 +1,7 @@
+import type { MemoryNode, MemoryScope } from "./graph/shared";
+import { requireProjectId, toNode } from "./graph/shared";
 import type { Neo4jConfig } from "./neo4j";
 import { withNeo4jSession } from "./neo4j";
-import { requireProjectId, toNode } from "./graph/shared";
-import type { MemoryNode, MemoryScope } from "./graph/shared";
 
 export async function upsertMemory(input: {
   cfg: Neo4jConfig;
@@ -15,9 +15,8 @@ export async function upsertMemory(input: {
   const projectId = requireProjectId(scope, input.projectId);
 
   return await withNeo4jSession(input.cfg, async (session) => {
-    const mergePattern = scope === "project"
-      ? `{ scope: $scope, projectId: $projectId, key: $key }`
-      : `{ scope: $scope, key: $key }`;
+    const mergePattern =
+      scope === "project" ? `{ scope: $scope, projectId: $projectId, key: $key }` : `{ scope: $scope, key: $key }`;
     const res = await session.run(
       `
 MERGE (n:Memory ${mergePattern})
@@ -33,7 +32,7 @@ RETURN n
         key: input.key,
         value: input.value,
         tags: input.tags ?? [],
-      }
+      },
     );
     const rec = res.records?.[0];
     if (!rec) throw new Error("No record returned from Neo4j");
@@ -68,7 +67,7 @@ RETURN r
         fromKey: input.fromKey,
         toKey: input.toKey,
         type,
-      }
+      },
     );
   });
 
@@ -85,9 +84,8 @@ export async function getMemoryByKey(input: {
   const projectId = requireProjectId(scope, input.projectId);
 
   return await withNeo4jSession(input.cfg, async (session) => {
-    const matchPattern = scope === "project"
-      ? `{ scope: $scope, projectId: $projectId, key: $key }`
-      : `{ scope: $scope, key: $key }`;
+    const matchPattern =
+      scope === "project" ? `{ scope: $scope, projectId: $projectId, key: $key }` : `{ scope: $scope, key: $key }`;
     const res = await session.run(
       `
 MATCH (n:Memory ${matchPattern})
@@ -98,7 +96,7 @@ LIMIT 1
         scope,
         ...(scope === "project" ? { projectId } : {}),
         key: input.key,
-      }
+      },
     );
     const rec = res.records?.[0];
     if (!rec) return undefined;
@@ -118,9 +116,7 @@ export async function searchMemory(input: {
   const limit = Math.floor(Math.max(1, Math.min(50, input.limit ?? 10)));
 
   return await withNeo4jSession(input.cfg, async (session) => {
-    const matchPattern = scope === "project"
-      ? `{ scope: $scope, projectId: $projectId }`
-      : `{ scope: $scope }`;
+    const matchPattern = scope === "project" ? `{ scope: $scope, projectId: $projectId }` : `{ scope: $scope }`;
     const res = await session.run(
       `
 MATCH (n:Memory ${matchPattern})
@@ -136,7 +132,7 @@ LIMIT toInteger($limit)
         ...(scope === "project" ? { projectId } : {}),
         q: input.query,
         limit,
-      }
+      },
     );
     return res.records.map((r) => toNode(r as any));
   });
@@ -153,9 +149,7 @@ export async function recentMemory(input: {
   const limit = Math.floor(Math.max(1, Math.min(50, input.limit ?? 10)));
 
   return await withNeo4jSession(input.cfg, async (session) => {
-    const matchPattern = scope === "project"
-      ? `{ scope: $scope, projectId: $projectId }`
-      : `{ scope: $scope }`;
+    const matchPattern = scope === "project" ? `{ scope: $scope, projectId: $projectId }` : `{ scope: $scope }`;
     const res = await session.run(
       `
 MATCH (n:Memory ${matchPattern})
@@ -167,7 +161,7 @@ LIMIT toInteger($limit)
         scope,
         ...(scope === "project" ? { projectId } : {}),
         limit,
-      }
+      },
     );
     return res.records.map((r) => toNode(r as any));
   });

@@ -1,4 +1,4 @@
-import { extname, basename, resolve as resolvePath } from "node:path";
+import { basename, extname, resolve as resolvePath } from "node:path";
 import { pathToFileURL } from "node:url";
 
 export type WorkerAttachment = {
@@ -48,7 +48,12 @@ export async function buildPromptParts(input: {
 
     const base64 = attachment.base64 ? normalizeBase64Image(attachment.base64) : undefined;
     if (!base64) continue;
-    parts.push({ type: "file", mime: mimeType, url: `data:${mimeType};base64,${base64}`, ...(filename ? { filename } : {}) });
+    parts.push({
+      type: "file",
+      mime: mimeType,
+      url: `data:${mimeType};base64,${base64}`,
+      ...(filename ? { filename } : {}),
+    });
   }
 
   return parts;

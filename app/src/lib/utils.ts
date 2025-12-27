@@ -2,7 +2,7 @@
  * Utility functions for the control panel
  */
 
-import { clsx, type ClassValue } from "clsx";
+import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 /**
@@ -64,7 +64,7 @@ export function formatTime(timestamp: number): string {
  */
 export function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
-  return text.slice(0, maxLength - 3) + "...";
+  return `${text.slice(0, maxLength - 3)}...`;
 }
 
 /**
@@ -81,7 +81,7 @@ export function generateId(prefix = ""): string {
  */
 export function debounce<T extends (...args: unknown[]) => unknown>(
   fn: T,
-  delay: number
+  delay: number,
 ): (...args: Parameters<T>) => void {
   let timeoutId: ReturnType<typeof setTimeout>;
   return (...args: Parameters<T>) => {
@@ -93,11 +93,9 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
 /**
  * Platform detection
  */
-export const isMac =
-  typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+export const isMac = typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
 
-export const isTouch =
-  typeof window !== "undefined" && "ontouchstart" in window;
+export const isTouch = typeof window !== "undefined" && "ontouchstart" in window;
 
 /**
  * Keyboard shortcut helper

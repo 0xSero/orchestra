@@ -81,9 +81,7 @@ export function buildBuiltinWorkflows(): WorkflowDefinition[] {
           id: "qa-plan",
           title: "Test Plan",
           workerId: "qa",
-          prompt:
-            "Draft a focused regression test plan for: {task}.\n" +
-            "Include repro steps and expected outcomes.",
+          prompt: "Draft a focused regression test plan for: {task}.\n" + "Include repro steps and expected outcomes.",
           carry: true,
         },
         {
@@ -161,9 +159,7 @@ export function buildBuiltinWorkflows(): WorkflowDefinition[] {
           id: "insights",
           title: "Insights",
           workerId: "analyst",
-          prompt:
-            "Summarize the key insights for: {task}.\n" +
-            "Call out trends, anomalies, and likely drivers.",
+          prompt: "Summarize the key insights for: {task}.\n" + "Call out trends, anomalies, and likely drivers.",
           carry: true,
         },
         {

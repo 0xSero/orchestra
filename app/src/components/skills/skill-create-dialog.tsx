@@ -1,8 +1,15 @@
-import { Show, createSignal } from "solid-js";
-import { useSkills } from "@/context/skills";
+import { createSignal, Show } from "solid-js";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input, Textarea } from "@/components/ui/input";
+import { useSkills } from "@/context/skills";
 import { ModelSelector } from "./fields/model-selector";
 
 export function SkillCreateDialog(props: { open: boolean; onClose: () => void }) {
@@ -41,7 +48,7 @@ export function SkillCreateDialog(props: { open: boolean; onClose: () => void })
           },
           systemPrompt: prompt(),
         },
-        scope()
+        scope(),
       );
       selectSkill(created.id);
       reset();
@@ -73,11 +80,7 @@ export function SkillCreateDialog(props: { open: boolean; onClose: () => void })
 
           <div class="space-y-2">
             <label class="text-xs font-medium text-muted-foreground">Description</label>
-            <Textarea
-              rows={3}
-              value={description()}
-              onInput={(e) => setDescription(e.currentTarget.value)}
-            />
+            <Textarea rows={3} value={description()} onInput={(e) => setDescription(e.currentTarget.value)} />
           </div>
 
           <div class="space-y-2">
@@ -86,11 +89,7 @@ export function SkillCreateDialog(props: { open: boolean; onClose: () => void })
 
           <div class="space-y-2">
             <label class="text-xs font-medium text-muted-foreground">System Prompt</label>
-            <Textarea
-              rows={6}
-              value={prompt()}
-              onInput={(e) => setPrompt(e.currentTarget.value)}
-            />
+            <Textarea rows={6} value={prompt()} onInput={(e) => setPrompt(e.currentTarget.value)} />
           </div>
 
           <div class="space-y-2">
@@ -121,7 +120,14 @@ export function SkillCreateDialog(props: { open: boolean; onClose: () => void })
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => { reset(); props.onClose(); }} disabled={saving()}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              reset();
+              props.onClose();
+            }}
+            disabled={saving()}
+          >
             Cancel
           </Button>
           <Button onClick={handleCreate} disabled={saving()}>

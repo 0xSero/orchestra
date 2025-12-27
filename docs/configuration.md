@@ -1,6 +1,6 @@
 # Configuration Reference
 
-Complete configuration guide for Open Orchestra with diagrams and detailed explanations.
+Complete configuration guide for the Open Orchestra plugin with diagrams and detailed explanations.
 
 ## Configuration Resolution
 
@@ -9,15 +9,11 @@ Complete configuration guide for Open Orchestra with diagrams and detailed expla
 │                    Configuration Priority Chain                     │
 └─────────────────────────────────────────────────────────────────────┘
 
-  ┌─────────────────────┐
-  │   Environment Vars   │  ← Highest priority (secrets, overrides)
-  └──────────┬──────────┘
-             │
-             ▼
-  ┌─────────────────────┐
-  │  Project Config     │  ← .opencode/orchestrator.json
-  │  (local to repo)    │
-  └──────────┬──────────┘
+  ┌────────────────────────────────────────┐
+  │  Project Config                        │
+  │  .opencode/orchestrator.json or         │
+  │  orchestrator.json (repo root)          │
+  └──────────┬─────────────────────────────┘
              │ merges with
              ▼
   ┌─────────────────────┐
@@ -27,33 +23,38 @@ Complete configuration guide for Open Orchestra with diagrams and detailed expla
              │ fallback to
              ▼
   ┌─────────────────────┐
-  │  Built-in Defaults  │  ← Lowest priority
+  │  Built-in Defaults  │
   └─────────────────────┘
 ```
+
+Environment variables override specific integrations (Neo4j/Linear/PostHog) and runtime knobs
+like skills API port and vision prompt/timeout.
 
 ## Config File Locations
 
 | Location | Purpose | Priority |
 |----------|---------|----------|
 | `.opencode/orchestrator.json` | Project-specific config | High |
+| `orchestrator.json` | Project-specific config (repo root) | High |
 | `~/.opencode/orchestrator.json` | User-wide defaults | Medium |
 | Built-in defaults | Fallback values | Low |
 
 ## Full Configuration Schema
 
 ```typescript
-interface OrchestratorConfig {
+interface OrchestratorConfigFile {
   // Core Settings
-  basePort: number;                    // Default: 4097
-  autoSpawn: boolean;                  // Auto-spawn workers on startup
-  startupTimeout: number;              // Worker startup timeout (ms)
-  healthCheckInterval: number;         // Health check interval (ms)
+  $schema?: string;
+  basePort?: number;                   // Default: 14096
+  autoSpawn?: boolean;                 // Auto-spawn workers on startup
+  startupTimeout?: number;             // Worker startup timeout (ms)
+  healthCheckInterval?: number;        // Health check interval (ms)
 
   // Worker Management
-  spawn: string[];                     // Workers to auto-spawn
   spawnOnDemand?: string[];            // Workers allowed for on-demand spawn
-  profiles: Record<string, WorkerProfile>;
   spawnPolicy?: SpawnPolicyConfig;
+  profiles?: Array<string | WorkerProfile>; // Profile overrides
+  workers?: Array<string | WorkerProfile>;  // Auto-spawn list
 
   // Health Checks
   healthCheck?: HealthCheckConfig;
@@ -81,6 +82,8 @@ interface OrchestratorConfig {
 }
 ```
 
+Note: the runtime config derives the `spawn` list from `workers` + `spawnPolicy`.
+
 ---
 
 ## Worker Profiles
@@ -99,34 +102,41 @@ interface OrchestratorConfig {
 ├─────────────────────────────────────────────────────────────────────┤
 │  Optional Fields                                                     │
 ├─────────────────────────────────────────────────────────────────────┤
-│  systemPrompt?: string   │ Custom system prompt                     │
-│  supportsVision?: bool   │ Can process images                       │
-│  supportsWeb?: bool      │ Has web access                           │
-│  temperature?: number    │ Model temperature setting                │
-│  tags?: string[]         │ Keywords for routing                     │
-│  tools?: Record<...>     │ Tool enable/disable map                  │
-│  permissions?: {...}     │ Security constraints                     │
-│  extends?: string        │ Inherit from another profile             │
-│  compose?: string[]      │ Merge multiple profiles                  │
+│  providerID?: string     │ Provider override                         │
+│  systemPrompt?: string   │ Custom system prompt                      │
+│  supportsVision?: bool   │ Can process images                        │
+│  supportsWeb?: bool      │ Has web access                            │
+│  temperature?: number    │ Model temperature setting                 │
+│  injectRepoContext?: bool│ Inject repo context on launch             │
+│  sessionMode?: string    │ child | isolated | linked                 │
+│  forwardEvents?: string[]│ Linked-mode forwarded events              │
+│  mcp?: {...}             │ MCP server forwarding                     │
+│  env?: Record<...>       │ Env vars for worker                        │
+│  envPrefixes?: string[]  │ Env var prefix passthrough                │
+│  tags?: string[]         │ Keywords for routing                      │
+│  tools?: Record<...>     │ Tool enable/disable map                   │
+│  permissions?: {...}     │ Security constraints                      │
+│  extends?: string        │ Inherit from another profile              │
+│  compose?: string[]      │ Merge multiple profiles                   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Subagent Profiles (SKILL.md)
+### Skill Profiles (SKILL.md)
 
-Profiles are defined as subagents in `.opencode/agent/subagents/{id}/SKILL.md` files:
+Profiles are defined as skills in `.opencode/skill/{id}/SKILL.md` files (project) or
+`~/.opencode/skill/{id}/SKILL.md` (global, or `OPENCODE_SKILLS_HOME`):
 
 ```
 .opencode/
-└── agent/
-    └── subagents/
-        ├── memory/
-        │   └── SKILL.md
-        ├── research/
-        │   └── SKILL.md
-        ├── builder/
-        │   └── SKILL.md
-        └── reviewer/
-            └── SKILL.md
+└── skill/
+    ├── memory/
+    │   └── SKILL.md
+    ├── research/
+    │   └── SKILL.md
+    ├── builder/
+    │   └── SKILL.md
+    └── reviewer/
+        └── SKILL.md
 ```
 
 Each SKILL.md file has YAML frontmatter defining the profile:
@@ -152,6 +162,9 @@ You are a code implementation specialist...
 - Direct: `model: anthropic/claude-sonnet-4-20250514`
 - Node tags: `model: node:code` (resolved via `modelSelection` in orchestrator.json)
 
+Common optional fields: `supportsVision`, `supportsWeb`, `injectRepoContext`, `sessionMode`, `forwardEvents`,
+`mcp`, `env`, `envPrefixes`, `tools`, `permissions`, `tags`, `extends`, `compose`.
+
 ### Profile Inheritance
 
 ```
@@ -159,8 +172,8 @@ You are a code implementation specialist...
 │                     Profile Inheritance Flow                         │
 └─────────────────────────────────────────────────────────────────────┘
 
-  Subagent Profile                    Custom Profile
-  .opencode/agent/subagents/         .opencode/agent/subagents/
+  Skill Profile                      Custom Profile
+  .opencode/skill/                   .opencode/skill/
   ┌───────────────┐                  ┌───────────────┐
   │ builder/      │                  │ my-builder/   │
   │ SKILL.md      │  ────extends──▶  │ SKILL.md      │
@@ -187,6 +200,9 @@ You are a code implementation specialist...
 }
 ```
 
+Note: The default config includes a `glm47-vision-demo` profile used by `/orchestrator.onboard`.
+Override its model or disable it via `profiles` overrides if needed.
+
 ---
 
 ## Spawn Policy
@@ -204,6 +220,7 @@ Controls when and how workers can be spawned.
 │    onDemand: true       │ Allow spawn via delegate_task/routing     │
 │    allowManual: true    │ Allow spawn via spawn_worker tool         │
 │    warmPool: false      │ Pre-spawn for fast availability           │
+│    reuseExisting: true  │ Deprecated (ignored)                      │
 │  }                                                                   │
 ├─────────────────────────────────────────────────────────────────────┤
 │  profiles: {                                                         │
@@ -252,6 +269,8 @@ Controls when and how workers can be spawned.
          │ Spawn  │      │ Error  │
          └────────┘      └────────┘
 ```
+
+Note: `reuseExisting` is accepted for backward compatibility but currently ignored.
 
 ---
 
@@ -331,7 +350,7 @@ Controls when and how workers can be spawned.
   "healthCheck": {
     "enabled": true,
     "intervalMs": 30000,
-    "timeoutMs": 5000,
+    "timeoutMs": 3000,
     "maxRetries": 3
   }
 }
@@ -348,7 +367,7 @@ Controls when and how workers can be spawned.
   "ui": {
     "toasts": true,                    // Show OpenCode toasts
     "injectSystemContext": true,       // Inject workers into prompt
-    "systemContextMaxWorkers": 5,      // Max workers in context
+    "systemContextMaxWorkers": 12,     // Max workers in context
     "defaultListFormat": "markdown",   // "markdown" | "json"
     "debug": false,                    // Debug logging
     "logToConsole": false,             // Console output
@@ -426,6 +445,7 @@ Controls when and how workers can be spawned.
 {
   "memory": {
     "enabled": true,
+    "autoSpawn": true,              // Auto-spawn memory worker
     "autoRecord": true,              // Record messages automatically
     "autoInject": true,              // Inject into prompts
     "scope": "project",              // "project" | "global"
@@ -434,25 +454,25 @@ Controls when and how workers can be spawned.
 
     "summaries": {
       "enabled": true,
-      "sessionMaxChars": 4000,
-      "projectMaxChars": 8000
+      "sessionMaxChars": 2000,
+      "projectMaxChars": 2000
     },
 
     "trim": {
-      "maxMessagesPerSession": 100,
-      "maxMessagesPerProject": 500,
+      "maxMessagesPerSession": 60,
+      "maxMessagesPerProject": 400,
       "maxMessagesGlobal": 2000,
-      "maxProjectsGlobal": 20
+      "maxProjectsGlobal": 25
     },
 
     "inject": {
-      "maxChars": 4000,
-      "maxEntries": 10,
-      "includeMessages": true,
+      "maxChars": 2000,
+      "maxEntries": 8,
+      "includeMessages": false,
       "includeSessionSummary": true,
       "includeProjectSummary": true,
-      "includeGlobal": false,
-      "maxGlobalEntries": 5
+      "includeGlobal": true,
+      "maxGlobalEntries": 3
     }
   }
 }
@@ -490,10 +510,10 @@ Controls when and how workers can be spawned.
     "enabled": true,
     "roocodeBoomerang": {
       "enabled": true,
-      "maxSteps": 6,
-      "maxTaskChars": 4000,
-      "maxCarryChars": 8000,
-      "perStepTimeoutMs": 300000,
+      "maxSteps": 4,
+      "maxTaskChars": 12000,
+      "maxCarryChars": 24000,
+      "perStepTimeoutMs": 120000,
       "steps": [
         {
           "id": "plan",
@@ -532,10 +552,10 @@ Controls when and how workers can be spawned.
 {
   "security": {
     "workflows": {
-      "maxSteps": 10,              // Prevent infinite loops
-      "maxTaskChars": 10000,       // Limit input size
-      "maxCarryChars": 20000,      // Limit context growth
-      "perStepTimeoutMs": 600000   // 10 min per step
+      "maxSteps": 4,               // Prevent infinite loops
+      "maxTaskChars": 12000,       // Limit input size
+      "maxCarryChars": 24000,      // Limit context growth
+      "perStepTimeoutMs": 120000   // 2 min per step
     }
   }
 }
@@ -590,9 +610,9 @@ Reduces context size by trimming completed tool outputs.
     "maxToolOutputChars": 1000,    // Truncate tool outputs
     "maxToolInputChars": 500,      // Truncate tool inputs
     "protectedTools": [            // Never prune these
-      "Read",
-      "Glob",
-      "Grep"
+      "task",
+      "todowrite",
+      "todoread"
     ]
   }
 }
@@ -710,9 +730,13 @@ Inject a custom agent into OpenCode's agent system.
 ```
 
 Generated commands:
+- `orchestrator.status` - Show workers and profiles
 - `orchestrator.spawn` - Spawn a worker
-- `orchestrator.list` - List workers
 - `orchestrator.demo` - Run demo workflow
+- `orchestrator.onboard` - Run the 5-minute onboarding flow
+- `vision.analyze` - Analyze clipboard or file image
+- `memory.record` - Record a memory entry
+- `memory.query` - Query memory entries
 
 ---
 
@@ -725,7 +749,7 @@ Generated commands:
       "enabled": true,
       "title": "Workers Idle",
       "message": "All workers are idle and ready",
-      "delayMs": 5000
+      "delayMs": 1500
     }
   }
 }
@@ -763,10 +787,10 @@ Pre-spawn workers for fast availability.
 {
   "$schema": "./schema/orchestrator.schema.json",
 
-  "basePort": 4097,
+  "basePort": 14096,
   "autoSpawn": true,
 
-  // Profiles are loaded from .opencode/agent/subagents/{id}/SKILL.md
+  // Profiles are loaded from .opencode/skill/{id}/SKILL.md
   // Config overrides can be specified here:
   "profiles": [
     {
@@ -780,7 +804,7 @@ Pre-spawn workers for fast availability.
     }
   ],
 
-  // Workers to auto-spawn (must exist as subagents)
+  // Workers to auto-spawn (must exist as skills)
   "workers": ["memory", "builder", "custom-reviewer"],
 
   "spawnOnDemand": ["vision", "research"],
@@ -838,19 +862,29 @@ Pre-spawn workers for fast availability.
 | `OPENCODE_NEO4J_PASSWORD` | Neo4j password |
 | `OPENCODE_NEO4J_DATABASE` | Neo4j database name |
 | `LINEAR_API_KEY` | Linear API key |
+| `LINEAR_TEAM_ID` | Linear team ID |
+| `LINEAR_API_URL` | Linear API URL override |
+| `LINEAR_PROJECT_PREFIX` | Linear project prefix |
 | `POSTHOG_API_KEY` | PostHog telemetry key |
-| `VITE_OPENCODE_BASE_URL` | Frontend API base URL |
+| `OPENCODE_SKILLS_PORT` | Skills/DB/Sessions API port (default 4097) |
+| `OPENCODE_SKILLS_API_PORT` | Alias for `OPENCODE_SKILLS_PORT` |
+| `OPENCODE_SKILLS_HOME` | Alternate home for global skills directory |
+| `OPENCODE_VISION_PROMPT` | Override vision analysis prompt |
+| `OPENCODE_VISION_TIMEOUT_MS` | Override vision timeout (ms) |
 | `OPENCODE_ORCHESTRATOR_WORKER` | Set to "1" in worker processes |
+| `VITE_SKILLS_API_BASE` | Control panel base URL for skills/DB API |
 
 ---
 
 ## Frontend App Configuration
 
-The control panel app connects to OpenCode via the SDK.
+The control panel connects to OpenCode at `http://localhost:4096` and to the Skills/DB API at
+`http://localhost:4097` by default. Override the skills API base with `VITE_SKILLS_API_BASE`. To change
+the OpenCode base URL, pass a custom `baseUrl` into `OpenCodeProvider` or update `app/src/context/opencode.tsx`.
 
 ```bash
-# Set when OpenCode isn't at /api
-VITE_OPENCODE_BASE_URL=http://localhost:4096
+# Override the Skills/DB API base
+VITE_SKILLS_API_BASE=http://localhost:4097
 ```
 
 Run the app:

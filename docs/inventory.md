@@ -1,6 +1,6 @@
 # File Inventory
 
-Complete file inventory for Open Orchestra with structure diagrams and module descriptions.
+Snapshot map of Open Orchestra. For deeper behavioral flow, see `docs/primitives.md`.
 
 ## Repository Structure
 
@@ -14,6 +14,9 @@ opencode-boomerang/
 │   └── src/                   # TypeScript source
 ├── app/                       # Frontend (Solid.js control panel)
 │   └── src/                   # TypeScript + JSX source
+├── desktop/                   # Desktop shell (Tauri wrapper)
+│   ├── src/                   # Desktop frontend entry
+│   └── src-tauri/             # Tauri backend
 ├── docs/                      # Documentation
 └── test/                      # Test suites
 ```
@@ -28,9 +31,11 @@ opencode-boomerang/
 orchestra/src/
 ├── index.ts                   # Plugin entrypoint
 ├── api/                       # OpenCode SDK wrapper
+├── commands/                  # Slash command handlers
 ├── communication/             # Event system
 ├── config/                    # Configuration parsing
 ├── core/                      # Service container
+├── db/                        # SQLite persistence + overrides
 ├── helpers/                   # Utility functions
 ├── integrations/              # External services
 ├── memory/                    # Memory store
@@ -44,6 +49,32 @@ orchestra/src/
 ├── workers/                   # Worker management
 └── workflows/                 # Workflow engine
 ```
+
+---
+
+### Main Module Map
+
+| Module | Purpose | Key files |
+| --- | --- | --- |
+| `api/` | OpenCode SDK wrapper + HTTP routers (skills/sessions/db). | `orchestra/src/api/index.ts`, `orchestra/src/api/skills-server.ts`, `orchestra/src/api/db-router.ts`, `orchestra/src/api/sessions-router.ts` |
+| `commands/` | Slash command router and handlers. | `orchestra/src/commands/index.ts`, `orchestra/src/commands/orchestrator.ts`, `orchestra/src/commands/vision.ts`, `orchestra/src/commands/memory.ts` |
+| `communication/` | Internal event bus and payload typing. | `orchestra/src/communication/index.ts`, `orchestra/src/communication/events.ts` |
+| `config/` | Orchestrator config loading, defaults, inheritance. | `orchestra/src/config/orchestrator.ts`, `orchestra/src/config/orchestrator/defaults.ts`, `orchestra/src/config/profile-inheritance.ts` |
+| `core/` | Service container and lifecycle wiring. | `orchestra/src/core/container.ts`, `orchestra/src/core/index.ts` |
+| `db/` | SQLite persistence + per-worker overrides. | `orchestra/src/db/index.ts`, `orchestra/src/db/schema.ts`, `orchestra/src/db/overrides.ts` |
+| `helpers/` | Shared utility helpers. | `orchestra/src/helpers/format.ts`, `orchestra/src/helpers/fs.ts`, `orchestra/src/helpers/advanced-util.ts` |
+| `integrations/` | External integration adapters. | `orchestra/src/integrations/linear.ts` |
+| `memory/` | Memory store, inject, and graph backends. | `orchestra/src/memory/index.ts`, `orchestra/src/memory/store.ts`, `orchestra/src/memory/inject.ts` |
+| `models/` | Model selection, resolution, and capabilities. | `orchestra/src/models/resolver.ts`, `orchestra/src/models/catalog.ts`, `orchestra/src/models/hydrate.ts` |
+| `orchestrator/` | Task routing and workflow dispatch. | `orchestra/src/orchestrator/index.ts`, `orchestra/src/orchestrator/router.ts` |
+| `permissions/` | Tool permission schema + validation. | `orchestra/src/permissions/schema.ts`, `orchestra/src/permissions/validator.ts` |
+| `profiles/` | Profile discovery helpers. | `orchestra/src/profiles/discovery.ts` |
+| `skills/` | SKILL.md parsing, loading, CRUD, validation. | `orchestra/src/skills/loader.ts`, `orchestra/src/skills/parse.ts`, `orchestra/src/skills/service.ts` |
+| `tools/` | Tool hooks + guards for OpenCode. | `orchestra/src/tools/index.ts`, `orchestra/src/tools/hooks.ts` |
+| `types/` | Shared config + runtime types. | `orchestra/src/types/config.ts`, `orchestra/src/types/worker.ts`, `orchestra/src/types/skill.ts` |
+| `ux/` | Repo context + vision routing helpers. | `orchestra/src/ux/repo-context.ts`, `orchestra/src/ux/vision-routing.ts` |
+| `workers/` | Worker lifecycle (spawn/send/jobs/registry). | `orchestra/src/workers/manager.ts`, `orchestra/src/workers/spawn.ts`, `orchestra/src/workers/send.ts` |
+| `workflows/` | Workflow engine and built-in definitions. | `orchestra/src/workflows/factory.ts`, `orchestra/src/workflows/builtins.ts` |
 
 ---
 
@@ -184,7 +215,7 @@ orchestra/src/
 │                                                                      │
 │  ┌─────────────────────────────────────────────────────────────┐    │
 │  │  config/profiles.ts                                          │    │
-│  │  Re-exports built-in profiles                                │    │
+│  │  Compatibility re-export (built-ins now empty)               │    │
 │  │  LOC: ~5                                                     │    │
 │  └─────────────────────────────────────────────────────────────┘    │
 │                                                                      │
@@ -192,6 +223,72 @@ orchestra/src/
 │  │  config/profile-inheritance.ts                               │    │
 │  │  Profile extends/compose resolution                          │    │
 │  │  LOC: ~150                                                   │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Commands Module
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                          commands/                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  commands/index.ts                                           │    │
+│  │  Command router + parsing utilities                          │    │
+│  │  LOC: ~150                                                   │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  commands/orchestrator.ts                                    │    │
+│  │  /orchestrator.* commands (status/spawn/demo/onboard)        │    │
+│  │  LOC: ~450                                                   │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  commands/vision.ts                                          │    │
+│  │  /vision.analyze command                                     │    │
+│  │  LOC: ~100                                                   │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  commands/memory.ts                                          │    │
+│  │  /memory.record + /memory.query                              │    │
+│  │  LOC: ~200                                                   │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Database Module
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                              db/                                    │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  db/index.ts                                                 │    │
+│  │  SQLite lifecycle + preferences + worker overrides           │    │
+│  │  LOC: ~250                                                   │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  db/schema.ts                                                │    │
+│  │  SQLite schema + row adapters                                │    │
+│  │  LOC: ~150                                                   │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  db/overrides.ts                                             │    │
+│  │  Apply SQLite worker overrides to profiles                   │    │
+│  │  LOC: ~50                                                    │    │
 │  └─────────────────────────────────────────────────────────────┘    │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
@@ -657,8 +754,21 @@ app/src/
 ├── context/                   # State providers
 ├── pages/                     # Page components
 ├── components/                # UI components
+├── types/                     # UI data types
 └── lib/                       # Utilities
 ```
+
+### Main Module Map
+
+| Module | Purpose | Key files |
+| --- | --- | --- |
+| `entry.tsx` | App bootstrap + mounting. | `app/src/entry.tsx` |
+| `app.tsx` | Router, providers, onboarding gate. | `app/src/app.tsx` |
+| `context/` | UI state providers (OpenCode, Skills, DB, Layout). | `app/src/context/opencode.tsx`, `app/src/context/skills.tsx`, `app/src/context/db.tsx`, `app/src/context/layout.tsx` |
+| `pages/` | Top-level routes (chat, agents, logs, settings, onboarding). | `app/src/pages/chat.tsx`, `app/src/pages/agents.tsx`, `app/src/pages/onboarding.tsx` |
+| `components/` | UI composition blocks + SDK console. | `app/src/components/layout/app-layout.tsx`, `app/src/components/command-palette.tsx`, `app/src/components/sdk/sdk-workspace.tsx` |
+| `types/` | Shared UI data shapes. | `app/src/types/skill.ts`, `app/src/types/db.ts` |
+| `lib/` | Utility helpers. | `app/src/lib/utils.ts` |
 
 ### Module Map
 
@@ -677,11 +787,19 @@ app/src/
 │  ┌─────────────────────────────────────────────────────────────┐    │
 │  │  context/opencode.tsx   SDK state (sessions, messages, etc) │    │
 │  │  context/layout.tsx     UI state (selected worker, panel)   │    │
+│  │  context/skills.tsx     Skills CRUD + SSE                   │    │
+│  │  context/db.tsx         SQLite snapshot + preferences       │    │
 │  └─────────────────────────────────────────────────────────────┘    │
 │                                                                      │
 │  Pages                                                               │
 │  ┌─────────────────────────────────────────────────────────────┐    │
-│  │  pages/dashboard.tsx    Main dashboard with worker grid     │    │
+│  │  pages/chat.tsx         Chat + session timeline             │    │
+│  │  pages/agents.tsx       Worker runtime view                 │    │
+│  │  pages/profiles.tsx     Skills workspace                    │    │
+│  │  pages/logs.tsx         Event log viewer                    │    │
+│  │  pages/settings.tsx     Preferences + overrides             │    │
+│  │  pages/onboarding.tsx   5-minute onboarding flow            │    │
+│  │  pages/dashboard.tsx    Legacy dashboard view               │    │
 │  └─────────────────────────────────────────────────────────────┘    │
 │                                                                      │
 │  Components                                                          │

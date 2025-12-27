@@ -1,20 +1,20 @@
 /**
  * Worker Profile Factory
  *
- * Profiles (subagents) are loaded from:
- * 1. .opencode/agent/subagents/{id}/SKILL.md (primary source)
+ * Profiles (skills) are loaded from:
+ * 1. .opencode/skill/{id}/SKILL.md (primary source)
  * 2. orchestrator.json profiles[] (optional overrides)
  *
  * No hardcoded profiles - everything is defined in SKILL.md files.
  */
 
-import type { WorkerProfile } from "../../types";
-import { loadAllSkills } from "../../skills/loader";
-import { skillToProfile } from "../../skills/convert";
 import { resolveProfileInheritance, type WorkerProfileDefinition } from "../../config/profile-inheritance";
+import { skillToProfile } from "../../skills/convert";
+import { loadAllSkills } from "../../skills/loader";
+import type { WorkerProfile } from "../../types";
 
 /**
- * Get all profiles from subagents directory.
+ * Get all profiles from skills directory.
  * This is the primary source of truth for worker profiles.
  */
 export async function loadSubagentProfiles(projectDir?: string): Promise<Record<string, WorkerProfile>> {
@@ -34,7 +34,7 @@ export async function loadSubagentProfiles(projectDir?: string): Promise<Record<
  */
 export function applyProfileOverrides(
   baseProfiles: Record<string, WorkerProfile>,
-  overrides?: Array<Partial<WorkerProfile> & { id: string }>
+  overrides?: Array<Partial<WorkerProfile> & { id: string }>,
 ): Record<string, WorkerProfile> {
   if (!overrides || overrides.length === 0) return baseProfiles;
 
@@ -68,10 +68,7 @@ export function applyProfileOverrides(
 /**
  * Get a single profile by ID.
  */
-export function getProfile(
-  id: string,
-  profiles: Record<string, WorkerProfile>
-): WorkerProfile | undefined {
+export function getProfile(id: string, profiles: Record<string, WorkerProfile>): WorkerProfile | undefined {
   return profiles[id];
 }
 
@@ -93,14 +90,14 @@ export function validateProfile(profile: Partial<WorkerProfile>): string[] {
 /**
  * Main entry point: Load all profiles with inheritance resolution.
  *
- * @param projectDir - Project directory for project-scoped subagents
+ * @param projectDir - Project directory for project-scoped skills
  * @param configOverrides - Optional overrides from orchestrator.json profiles[]
  */
 export async function getAllProfiles(
   projectDir?: string,
-  configOverrides?: Array<Partial<WorkerProfile> & { id: string }>
+  configOverrides?: Array<Partial<WorkerProfile> & { id: string }>,
 ): Promise<Record<string, WorkerProfile>> {
-  // 1. Load base profiles from subagents
+  // 1. Load base profiles from skills
   const baseProfiles = await loadSubagentProfiles(projectDir);
 
   // 2. Apply config overrides
@@ -147,7 +144,7 @@ export const builtInProfiles: Record<string, WorkerProfile> = {};
 /** @deprecated Use getAllProfiles() instead */
 export async function getAllProfilesWithSkills(
   projectDir?: string,
-  _baseProfiles?: Record<string, WorkerProfile>
+  _baseProfiles?: Record<string, WorkerProfile>,
 ): Promise<Record<string, WorkerProfile>> {
   return getAllProfiles(projectDir);
 }
@@ -155,7 +152,7 @@ export async function getAllProfilesWithSkills(
 /** @deprecated Use applyProfileOverrides() instead */
 export function mergeProfile(baseId: string, _: Partial<WorkerProfile>): WorkerProfile {
   throw new Error(
-    `mergeProfile() is deprecated. Profiles are now loaded from .opencode/agent/subagents/. ` +
-    `Create a SKILL.md file for "${baseId}" or use orchestrator.json profiles[] for overrides.`
+    `mergeProfile() is deprecated. Profiles are now loaded from .opencode/skill/. ` +
+      `Create a SKILL.md file for "${baseId}" or use orchestrator.json profiles[] for overrides.`,
   );
 }

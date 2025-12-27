@@ -76,11 +76,7 @@ export function resolveLinearConfig(input?: LinearIntegrationConfig): LinearConf
   };
 }
 
-async function linearRequest<T>(
-  cfg: LinearConfig,
-  query: string,
-  variables?: Record<string, unknown>
-): Promise<T> {
+async function linearRequest<T>(cfg: LinearConfig, query: string, variables?: Record<string, unknown>): Promise<T> {
   const response = await fetch(cfg.apiUrl, {
     method: "POST",
     headers: {
@@ -122,7 +118,7 @@ function applyProjectPrefix(cfg: LinearConfig, name: string): string {
 export async function getViewer(cfg: LinearConfig): Promise<{ id: string; name?: string; email?: string }> {
   const data = await linearRequest<{ viewer: { id: string; name?: string; email?: string } }>(
     cfg,
-    `query Viewer { viewer { id name email } }`
+    `query Viewer { viewer { id name email } }`,
   );
   return data.viewer;
 }
@@ -150,7 +146,7 @@ export async function createProject(input: {
         description: input.description,
         teamId: input.teamId ?? input.cfg.teamId,
       },
-    }
+    },
   );
 
   const project = data.projectCreate.project;
@@ -183,7 +179,7 @@ export async function createIssue(input: {
         projectId: input.projectId,
         priority: input.priority,
       },
-    }
+    },
   );
 
   const issue = data.issueCreate.issue;
@@ -225,7 +221,7 @@ export async function updateIssue(input: {
         projectId: input.projectId,
         assigneeId: input.assigneeId,
       },
-    }
+    },
   );
 
   const issue = data.issueUpdate.issue;
@@ -253,7 +249,7 @@ export async function addComment(input: {
         issueId: input.issueId,
         body: input.body,
       },
-    }
+    },
   );
 
   const comment = data.commentCreate.comment;
@@ -261,10 +257,7 @@ export async function addComment(input: {
   return { commentId: comment.id, url: comment.url ?? undefined };
 }
 
-export async function getProjectStatus(input: {
-  cfg: LinearConfig;
-  projectId: string;
-}): Promise<LinearProjectStatus> {
+export async function getProjectStatus(input: { cfg: LinearConfig; projectId: string }): Promise<LinearProjectStatus> {
   const data = await linearRequest<{ project: LinearProject }>(
     input.cfg,
     `query ProjectStatus($id: ID!) {
@@ -278,17 +271,14 @@ export async function getProjectStatus(input: {
         completedIssueCount
       }
     }`,
-    { id: input.projectId }
+    { id: input.projectId },
   );
 
   if (!data.project?.id) throw new Error("Linear API error: Project not found.");
   return { project: data.project };
 }
 
-export async function getTeamStates(input: {
-  cfg: LinearConfig;
-  teamId?: string;
-}): Promise<LinearTeamState[]> {
+export async function getTeamStates(input: { cfg: LinearConfig; teamId?: string }): Promise<LinearTeamState[]> {
   const data = await linearRequest<{
     team: { states: { nodes: LinearTeamState[] } };
   }>(
@@ -300,7 +290,7 @@ export async function getTeamStates(input: {
         }
       }
     }`,
-    { id: input.teamId ?? input.cfg.teamId }
+    { id: input.teamId ?? input.cfg.teamId },
   );
 
   return data.team?.states?.nodes ?? [];
@@ -331,9 +321,7 @@ export async function syncTaskStatus(input: {
   };
 
   const desiredType = typeMap[desired];
-  const byType = desiredType
-    ? states.find((state) => state.type?.toLowerCase() === desiredType)
-    : undefined;
+  const byType = desiredType ? states.find((state) => state.type?.toLowerCase() === desiredType) : undefined;
   const byName = states.find((state) => normalizeStatus(state.name || "") === desired);
   const chosen = byType || byName;
   if (!chosen?.id) {
@@ -344,10 +332,7 @@ export async function syncTaskStatus(input: {
   return { issueId: input.issueId, stateId: chosen.id };
 }
 
-export async function getIssueLabelIds(input: {
-  cfg: LinearConfig;
-  issueId: string;
-}): Promise<string[]> {
+export async function getIssueLabelIds(input: { cfg: LinearConfig; issueId: string }): Promise<string[]> {
   const data = await linearRequest<{
     issue: { labels: { nodes: Array<{ id: string }> } };
   }>(
@@ -357,7 +342,7 @@ export async function getIssueLabelIds(input: {
         labels { nodes { id } }
       }
     }`,
-    { id: input.issueId }
+    { id: input.issueId },
   );
 
   return data.issue?.labels?.nodes?.map((label) => label.id) ?? [];

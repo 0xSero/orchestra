@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { WorkerRegistry } from "../../src/workers/registry";
 import type { WorkerInstance, WorkerProfile } from "../../src/types";
+import { WorkerRegistry } from "../../src/workers/registry";
 
 function buildProfile(id = "tester"): WorkerProfile {
   return {

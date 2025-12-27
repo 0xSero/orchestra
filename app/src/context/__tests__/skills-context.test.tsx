@@ -1,11 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, waitFor } from "@solidjs/testing-library";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { SkillsProvider, useSkills } from "@/context/skills";
 import type { Skill } from "@/types/skill";
 
 class MockEventSource {
   onmessage: ((event: MessageEvent) => void) | null = null;
-  constructor(_url: string) {}
   addEventListener() {}
   close() {}
 }
@@ -74,7 +73,7 @@ describe("SkillsProvider", () => {
                   name: id,
                 },
               }
-            : skill
+            : skill,
         );
         const updated = skillsStore.find((skill) => skill.id === id)!;
         return {
@@ -122,7 +121,7 @@ describe("SkillsProvider", () => {
 
     await ctx!.createSkill(
       { id: "new-skill", frontmatter: { description: "New skill", model: "auto" }, systemPrompt: "" },
-      "project"
+      "project",
     );
 
     await waitFor(() => {

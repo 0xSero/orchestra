@@ -1,13 +1,12 @@
-import type { Factory, ServiceLifecycle, WorkerInstance, WorkerProfile } from "../types";
-import type { OrchestratorConfig } from "../types";
 import type { ApiService } from "../api";
 import type { CommunicationService } from "../communication";
 import type { MemoryService } from "../memory";
+import type { Factory, OrchestratorConfig, ServiceLifecycle, WorkerInstance, WorkerProfile } from "../types";
+import { type WorkerJob, WorkerJobRegistry } from "./jobs";
 import { WorkerRegistry } from "./registry";
-import { WorkerJobRegistry, type WorkerJob } from "./jobs";
-import { spawnWorker, cleanupWorkerInstance, type SpawnWorkerCallbacks } from "./spawn";
 import { sendWorkerMessage, type WorkerSendOptions } from "./send";
 import { createSessionManager, type WorkerSessionManager } from "./session-manager";
+import { cleanupWorkerInstance, type SpawnWorkerCallbacks, spawnWorker } from "./spawn";
 
 export type WorkerManagerConfig = {
   basePort: number;
@@ -38,7 +37,7 @@ export type WorkerManager = ServiceLifecycle & {
       timeout?: number;
       jobId?: string;
       from?: string;
-    }
+    },
   ) => Promise<{ success: boolean; response?: string; error?: string }>;
   getWorker: (id: string) => WorkerInstance | undefined;
   listWorkers: () => WorkerInstance[];
@@ -76,14 +75,22 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
 
   const emitJobEvent = (job: WorkerJob | undefined, status: "created" | "succeeded" | "failed") => {
     if (!communication || !job) return;
-    communication.emit("orchestra.worker.job", { job, status }, { source: "orchestrator", workerId: job.workerId, jobId: job.id });
+    communication.emit(
+      "orchestra.worker.job",
+      { job, status },
+      { source: "orchestrator", workerId: job.workerId, jobId: job.id },
+    );
   };
 
   const spawn = async (profile: WorkerProfile) => {
     const existing = registry.get(profile.id);
     if (existing) {
       if (communication) {
-        communication.emit("orchestra.worker.reused", { worker: existing }, { source: "orchestrator", workerId: existing.profile.id });
+        communication.emit(
+          "orchestra.worker.reused",
+          { worker: existing },
+          { source: "orchestrator", workerId: existing.profile.id },
+        );
       }
       return existing;
     }
@@ -135,7 +142,7 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
       communication.emit(
         "orchestra.model.resolved",
         { resolution: change },
-        { source: "orchestrator", workerId: change.profileId }
+        { source: "orchestrator", workerId: change.profileId },
       );
     },
     onModelFallback: (profileId, model, reason) => {
@@ -143,7 +150,7 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
       communication.emit(
         "orchestra.model.fallback",
         { profileId, model, reason },
-        { source: "orchestrator", workerId: profileId }
+        { source: "orchestrator", workerId: profileId },
       );
     },
   };
@@ -155,6 +162,9 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
     spawnById: async (profileId) => {
       const profile = config.profiles[profileId];
       if (!profile) throw new Error(`Unknown worker profile: ${profileId}`);
+      if (profile.enabled === false) {
+        throw new Error(`Worker "${profileId}" is disabled by configuration.`);
+      }
       return await spawn(profile);
     },
     stopWorker: async (workerId) => {

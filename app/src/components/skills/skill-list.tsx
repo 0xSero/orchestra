@@ -1,8 +1,8 @@
-import { For, Show, createMemo, createSignal } from "solid-js";
-import { useSkills } from "@/context/skills";
+import { createMemo, createSignal, For, Show } from "solid-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useSkills } from "@/context/skills";
 import { SkillCard } from "./skill-card";
 import { SkillCreateDialog } from "./skill-create-dialog";
 
@@ -24,25 +24,16 @@ const PlusIcon = () => (
 );
 
 export function SkillList() {
-  const {
-    skills,
-    isLoading,
-    selectedSkillId,
-    selectSkill,
-    openCreateDialog,
-    closeCreateDialog,
-    createDialogOpen,
-  } = useSkills();
+  const { skills, isLoading, selectedSkillId, selectSkill, openCreateDialog, closeCreateDialog, createDialogOpen } =
+    useSkills();
   const [search, setSearch] = createSignal("");
 
   const filteredSkills = createMemo(() => {
-    let list = skills();
+    const list = skills();
     const query = search().trim().toLowerCase();
     if (!query) return list;
     return list.filter(
-      (skill) =>
-        skill.id.toLowerCase().includes(query) ||
-        skill.frontmatter.description.toLowerCase().includes(query)
+      (skill) => skill.id.toLowerCase().includes(query) || skill.frontmatter.description.toLowerCase().includes(query),
     );
   });
 
@@ -60,17 +51,16 @@ export function SkillList() {
       </div>
 
       <div class="p-3 border-b border-border">
-        <Input
-          placeholder="Search recipes..."
-          value={search()}
-          onInput={(e) => setSearch(e.currentTarget.value)}
-        />
+        <Input placeholder="Search recipes..." value={search()} onInput={(e) => setSearch(e.currentTarget.value)} />
       </div>
 
       <ScrollArea class="flex-1">
         <div class="p-3 space-y-2">
           <Show when={!isLoading()} fallback={<div class="text-xs text-muted-foreground">Loading...</div>}>
-            <Show when={filteredSkills().length > 0} fallback={<div class="text-xs text-muted-foreground">No recipes</div>}>
+            <Show
+              when={filteredSkills().length > 0}
+              fallback={<div class="text-xs text-muted-foreground">No recipes</div>}
+            >
               <For each={filteredSkills()}>
                 {(skill) => (
                   <SkillCard

@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { deflateSync } from "node:zlib";
-import { setupE2eEnv } from "./helpers/e2e-env";
 import type { WorkerProfile } from "../src/types";
+import { setupE2eEnv } from "./helpers/e2e-env";
 import { createTestWorkerRuntime } from "./helpers/worker-runtime";
 
 const VISION_MODEL = "opencode/gpt-5-nano";
@@ -85,30 +85,26 @@ describe("vision worker integration", () => {
     await Promise.allSettled(workers.map((w) => runtime!.workers.stopWorker(w.profile.id)));
   });
 
-  test(
-    "spawns a vision worker and handles a base64 image",
-    async () => {
-      const profile: WorkerProfile = {
-        id: "vision-b64",
-        name: "Vision Base64",
-        model: VISION_MODEL,
-        purpose: "Image analysis (base64)",
-        whenToUse: "Testing vision base64 flow",
-        supportsVision: true,
-      };
+  test("spawns a vision worker and handles a base64 image", async () => {
+    const profile: WorkerProfile = {
+      id: "vision-b64",
+      name: "Vision Base64",
+      model: VISION_MODEL,
+      purpose: "Image analysis (base64)",
+      whenToUse: "Testing vision base64 flow",
+      supportsVision: true,
+    };
 
-      const worker = await runtime!.workers.spawn(profile);
+    const worker = await runtime!.workers.spawn(profile);
 
-      const result = await runtime!.workers.send(worker.profile.id, "What color is this image?", {
-        attachments: [{ type: "image", base64: TEST_PNG_BASE64, mimeType: "image/png" }],
-        timeout: 60_000,
-      });
+    const result = await runtime!.workers.send(worker.profile.id, "What color is this image?", {
+      attachments: [{ type: "image", base64: TEST_PNG_BASE64, mimeType: "image/png" }],
+      timeout: 60_000,
+    });
 
-      if (!result.success) {
-        throw new Error(result.error ?? "vision worker returned error");
-      }
-      expect(result.response && result.response.length > 0).toBe(true);
-    },
-    120_000
-  );
+    if (!result.success) {
+      throw new Error(result.error ?? "vision worker returned error");
+    }
+    expect(result.response && result.response.length > 0).toBe(true);
+  }, 120_000);
 });

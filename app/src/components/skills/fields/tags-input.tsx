@@ -1,4 +1,4 @@
-import { For, createSignal } from "solid-js";
+import { createSignal, For } from "solid-js";
 import { cn } from "@/lib/utils";
 
 export function TagsInput(props: { value: string[]; onChange: (v: string[]) => void }) {
@@ -34,11 +34,7 @@ export function TagsInput(props: { value: string[]; onChange: (v: string[]) => v
           {(tag) => (
             <span class="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-foreground">
               {tag}
-              <button
-                type="button"
-                class="text-muted-foreground hover:text-foreground"
-                onClick={() => removeTag(tag)}
-              >
+              <button type="button" class="text-muted-foreground hover:text-foreground" onClick={() => removeTag(tag)}>
                 x
               </button>
             </span>

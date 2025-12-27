@@ -2,38 +2,62 @@
  * CommandPalette Component - Quick action command palette
  */
 
-import {
-  type Component,
-  createSignal,
-  createMemo,
-  For,
-  Show,
-  onMount,
-} from "solid-js";
+import { useNavigate } from "@solidjs/router";
+import { type Component, createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useLayout } from "@/context/layout";
 import { useOpenCode } from "@/context/opencode";
 import { useSkills } from "@/context/skills";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn, formatShortcut } from "@/lib/utils";
 
 // Icons
 const SearchIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <circle cx="11" cy="11" r="8" />
     <path d="m21 21-4.3-4.3" />
   </svg>
 );
 
 const PlusIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <path d="M5 12h14" />
     <path d="M12 5v14" />
   </svg>
 );
 
 const RefreshIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
     <path d="M3 3v5h5" />
     <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
@@ -42,14 +66,34 @@ const RefreshIcon = () => (
 );
 
 const TerminalIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <polyline points="4 17 10 11 4 5" />
     <line x1="12" x2="20" y1="19" y2="19" />
   </svg>
 );
 
 const ListIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <line x1="8" x2="21" y1="6" y2="6" />
     <line x1="8" x2="21" y1="12" y2="12" />
     <line x1="8" x2="21" y1="18" y2="18" />
@@ -60,14 +104,34 @@ const ListIcon = () => (
 );
 
 const SettingsIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
     <circle cx="12" cy="12" r="3" />
   </svg>
 );
 
 const SidebarIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <rect width="18" height="18" x="3" y="3" rx="2" />
     <path d="M9 3v18" />
   </svg>
@@ -84,12 +148,21 @@ interface Command {
 }
 
 export const CommandPalette: Component = () => {
-  const { state, closeCommandPalette, toggleSidebar, toggleJobQueue, toggleLogs, selectWorker, setActivePanel } =
-    useLayout();
+  const {
+    state,
+    closeCommandPalette,
+    openSpawnDialog,
+    toggleSidebar,
+    toggleJobQueue,
+    toggleLogs,
+    selectWorker,
+    setActivePanel,
+    setCommandPaletteQuery,
+  } = useLayout();
   const { sessions, refresh } = useOpenCode();
   const { refresh: refreshSkills, openCreateDialog } = useSkills();
+  const navigate = useNavigate();
 
-  const [query, setQuery] = createSignal("");
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   let inputRef: HTMLInputElement | undefined;
 
@@ -105,7 +178,7 @@ export const CommandPalette: Component = () => {
         category: "worker",
         action: () => {
           closeCommandPalette();
-          // TODO: Open spawn dialog
+          openSpawnDialog();
         },
       },
       {
@@ -198,6 +271,17 @@ export const CommandPalette: Component = () => {
           closeCommandPalette();
         },
       },
+      {
+        id: "onboarding",
+        title: "Open Onboarding",
+        description: "Run the 5-minute guided demos",
+        icon: SettingsIcon,
+        category: "settings",
+        action: () => {
+          navigate("/onboarding");
+          closeCommandPalette();
+        },
+      },
     ];
 
     // Add session-specific commands for each session
@@ -220,7 +304,7 @@ export const CommandPalette: Component = () => {
 
   // Filter commands based on query
   const filteredCommands = createMemo(() => {
-    const q = query().toLowerCase().trim();
+    const q = state.commandPaletteQuery.toLowerCase().trim();
     if (!q) return commands();
 
     return commands().filter((cmd) => {
@@ -273,12 +357,16 @@ export const CommandPalette: Component = () => {
 
   // Reset selection when query changes
   const handleInput = (value: string) => {
-    setQuery(value);
-    setSelectedIndex(0);
+    setCommandPaletteQuery(value);
   };
 
+  createEffect(() => {
+    state.commandPaletteQuery;
+    setSelectedIndex(0);
+  });
+
   // Focus input when opened
-  onMount(() => {
+  createEffect(() => {
     if (state.commandPaletteOpen) {
       setTimeout(() => inputRef?.focus(), 50);
     }
@@ -293,15 +381,13 @@ export const CommandPalette: Component = () => {
           <input
             ref={inputRef}
             type="text"
-            value={query()}
+            value={state.commandPaletteQuery}
             onInput={(e) => handleInput(e.currentTarget.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a command or search..."
             class="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
           />
-          <kbd class="hidden sm:inline-flex px-2 py-1 text-xs rounded bg-muted text-muted-foreground">
-            Esc
-          </kbd>
+          <kbd class="hidden sm:inline-flex px-2 py-1 text-xs rounded bg-muted text-muted-foreground">Esc</kbd>
         </div>
 
         {/* Command list */}
@@ -309,18 +395,12 @@ export const CommandPalette: Component = () => {
           <div class="p-2">
             <Show
               when={filteredCommands().length > 0}
-              fallback={
-                <div class="py-6 text-center text-sm text-muted-foreground">
-                  No commands found
-                </div>
-              }
+              fallback={<div class="py-6 text-center text-sm text-muted-foreground">No commands found</div>}
             >
               {/* Workers section */}
               <Show when={groupedCommands().worker.length > 0}>
                 <div class="mb-2">
-                  <p class="px-2 py-1 text-xs text-muted-foreground uppercase tracking-wider">
-                    Workers
-                  </p>
+                  <p class="px-2 py-1 text-xs text-muted-foreground uppercase tracking-wider">Workers</p>
                   <For each={groupedCommands().worker}>
                     {(cmd, _) => {
                       const globalIndex = () => {
@@ -348,9 +428,7 @@ export const CommandPalette: Component = () => {
               {/* View section */}
               <Show when={groupedCommands().skills.length > 0}>
                 <div class="mb-2">
-                  <p class="px-2 py-1 text-xs text-muted-foreground uppercase tracking-wider">
-                    Recipes
-                  </p>
+                  <p class="px-2 py-1 text-xs text-muted-foreground uppercase tracking-wider">Recipes</p>
                   <For each={groupedCommands().skills}>
                     {(cmd) => {
                       const globalIndex = () => {
@@ -378,9 +456,7 @@ export const CommandPalette: Component = () => {
               {/* View section */}
               <Show when={groupedCommands().view.length > 0}>
                 <div class="mb-2">
-                  <p class="px-2 py-1 text-xs text-muted-foreground uppercase tracking-wider">
-                    View
-                  </p>
+                  <p class="px-2 py-1 text-xs text-muted-foreground uppercase tracking-wider">View</p>
                   <For each={groupedCommands().view}>
                     {(cmd) => {
                       const globalIndex = () => {
@@ -408,9 +484,7 @@ export const CommandPalette: Component = () => {
               {/* Settings section */}
               <Show when={groupedCommands().settings.length > 0}>
                 <div class="mb-2">
-                  <p class="px-2 py-1 text-xs text-muted-foreground uppercase tracking-wider">
-                    Settings
-                  </p>
+                  <p class="px-2 py-1 text-xs text-muted-foreground uppercase tracking-wider">Settings</p>
                   <For each={groupedCommands().settings}>
                     {(cmd) => {
                       const globalIndex = () => {
@@ -470,7 +544,7 @@ const CommandItem: Component<CommandItemProps> = (props) => {
     <button
       class={cn(
         "w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors",
-        props.isSelected ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
+        props.isSelected ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
       )}
       onClick={props.onSelect}
       onMouseEnter={props.onHover}

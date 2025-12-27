@@ -4,8 +4,8 @@ import { dirname } from "node:path";
 import type { Skill, SkillInput, SkillScope } from "../types";
 import { loadSkill, loadSkillOverrides } from "./loader";
 import { serializeSkillFile } from "./parse";
-import { validateSkillInput } from "./validate";
 import { getSkillDir, getSkillFilePath } from "./paths";
+import { validateSkillInput } from "./validate";
 
 function toValidationMessage(result: ReturnType<typeof validateSkillInput>): string {
   return result.errors.map((err) => `${err.field}: ${err.message}`).join("; ");
@@ -40,7 +40,7 @@ export async function updateSkill(
   id: string,
   updates: Partial<SkillInput>,
   scope: SkillScope,
-  projectDir?: string
+  projectDir?: string,
 ): Promise<Skill> {
   const filePath = getSkillFilePath(id, scope, projectDir);
 
@@ -58,8 +58,7 @@ export async function updateSkill(
       ...(base?.frontmatter ?? {}),
       ...(updates.frontmatter ?? {}),
       name: updates.frontmatter?.name ?? base?.frontmatter.name ?? id,
-      description:
-        updates.frontmatter?.description ?? base?.frontmatter.description ?? "",
+      description: updates.frontmatter?.description ?? base?.frontmatter.description ?? "",
       model: updates.frontmatter?.model ?? base?.frontmatter.model ?? "",
     },
     systemPrompt: updates.systemPrompt ?? base?.systemPrompt ?? "",
@@ -85,7 +84,7 @@ export async function duplicateSkill(
   sourceId: string,
   newId: string,
   scope: SkillScope,
-  projectDir?: string
+  projectDir?: string,
 ): Promise<Skill> {
   const source = await loadSkill(sourceId, projectDir);
   if (!source) throw new Error(`Source skill "${sourceId}" not found.`);

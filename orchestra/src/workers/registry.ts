@@ -1,6 +1,15 @@
 import type { WorkerInstance, WorkerStatus } from "../types";
 
-export type WorkerRegistryEvent = "starting" | "spawn" | "ready" | "busy" | "error" | "stop" | "update" | "dead" | "stopped";
+export type WorkerRegistryEvent =
+  | "starting"
+  | "spawn"
+  | "ready"
+  | "busy"
+  | "error"
+  | "stop"
+  | "update"
+  | "dead"
+  | "stopped";
 export type WorkerRegistryCallback = (instance: WorkerInstance) => void;
 
 export class WorkerRegistry {
@@ -139,6 +148,8 @@ export class WorkerRegistry {
   private emit(event: WorkerRegistryEvent, instance: WorkerInstance): void {
     const set = this.listeners.get(event);
     if (!set) return;
-    set.forEach((cb) => cb(instance));
+    for (const cb of set) {
+      cb(instance);
+    }
   }
 }

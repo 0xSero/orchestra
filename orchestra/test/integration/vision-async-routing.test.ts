@@ -61,7 +61,7 @@ function createSolidPng(width: number, height: number, rgba: [number, number, nu
 const TEST_PNG_BUFFER = createSolidPng(64, 64, [255, 0, 0, 255]);
 const TEST_PNG_BASE64 = TEST_PNG_BUFFER.toString("base64");
 
-describe("vision async routing", () => {
+describe("vision routing", () => {
   let runtime: Awaited<ReturnType<typeof createTestWorkerRuntime>>;
 
   beforeAll(async () => {
@@ -85,50 +85,47 @@ describe("vision async routing", () => {
     await runtime.stop();
   });
 
-  test(
-    "creates an async vision job and replaces image parts",
-    async () => {
-      const output = {
-        message: { role: "user" },
-        parts: [
-          { type: "text", text: "What color is this image?" },
-          { type: "file", mime: "image/png", url: `data:image/png;base64,${TEST_PNG_BASE64}` },
-        ],
-      };
+  test("replaces image parts with inline vision analysis", async () => {
+    const output = {
+      message: { role: "user" },
+      parts: [
+        { type: "text", text: "What color is this image?" },
+        { type: "file", mime: "image/png", url: `data:image/png;base64,${TEST_PNG_BASE64}` },
+      ],
+    };
 
-      const state = createVisionRoutingState();
-      const jobId = await routeVisionMessage(
-        {
-          sessionID: "session-vision",
-          agent: "orchestrator",
-          messageID: "msg-vision",
-        },
-        output,
-        {
-          workers: runtime.workers,
-          profiles: {
-            vision: {
-              id: "vision",
-              name: "Vision Worker",
-              model: VISION_MODEL,
-              supportsVision: true,
-            },
+    const state = createVisionRoutingState();
+    const jobId = await routeVisionMessage(
+      {
+        sessionID: "session-vision",
+        agent: "orchestrator",
+        messageID: "msg-vision",
+      },
+      output,
+      {
+        workers: runtime.workers,
+        profiles: {
+          vision: {
+            id: "vision",
+            name: "Vision Worker",
+            model: VISION_MODEL,
+            supportsVision: true,
           },
-          timeoutMs: 120_000,
         },
-        state
-      );
+        timeoutMs: 120_000,
+      },
+      state,
+    );
 
-      expect(jobId).toBeTruthy();
-      const pendingPart = output.parts.find(
-        (part: any) => part?.type === "text" && typeof part.text === "string" && part.text.includes("[VISION ANALYSIS PENDING]")
-      );
-      expect(pendingPart).toBeTruthy();
-
-      const job = await runtime.workers.jobs.await(jobId as string, { timeoutMs: 120_000 });
-      expect(job.status).not.toBe("running");
-      expect(Boolean(job.responseText || job.error)).toBe(true);
-    },
-    180_000
-  );
+    expect(jobId).toBeUndefined();
+    const analysisPart = output.parts.find(
+      (part: any) =>
+        part?.type === "text" &&
+        typeof part.text === "string" &&
+        (part.text.includes("[VISION ANALYSIS]") || part.text.includes("[VISION ANALYSIS FAILED]")),
+    );
+    expect(analysisPart).toBeTruthy();
+    const hasImageParts = output.parts.some((part: any) => part?.type === "file" || part?.type === "image");
+    expect(hasImageParts).toBe(false);
+  }, 180_000);
 });

@@ -1,5 +1,10 @@
-import type { SkillFrontmatter, SkillInput, SkillValidationError, SkillValidationResult } from "../types";
-import type { ToolPermissions } from "../types";
+import type {
+  SkillFrontmatter,
+  SkillInput,
+  SkillValidationError,
+  SkillValidationResult,
+  ToolPermissions,
+} from "../types";
 
 const NAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 

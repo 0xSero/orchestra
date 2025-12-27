@@ -18,9 +18,9 @@ describe("spawn policy (tools)", () => {
       configOverrides: { spawnPolicy: { profiles: { qa: { allowManual: false } } } },
     });
 
-    await expect(
-      core.tools.tool.spawn_worker.execute({ profileId: "qa" } as any, {} as any)
-    ).rejects.toThrow("disabled by spawnPolicy");
+    await expect(core.tools.tool.spawn_worker.execute({ profileId: "qa" } as any, {} as any)).rejects.toThrow(
+      "disabled by spawnPolicy",
+    );
 
     await core.stop();
   });

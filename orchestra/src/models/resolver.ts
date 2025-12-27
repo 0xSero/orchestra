@@ -1,10 +1,10 @@
 import type { Provider } from "@opencode-ai/sdk";
 import type { OrchestratorConfig } from "../types";
-import { resolveAlias, type ModelAliasMap } from "./aliases";
+import { type ModelAliasMap, resolveAlias } from "./aliases";
 import { deriveModelCapabilities, type ModelCapabilities } from "./capabilities";
-import { resolveCapabilityOverride, type CapabilityOverrideMap } from "./capability-overrides";
-import { scoreCost } from "./cost";
+import { type CapabilityOverrideMap, resolveCapabilityOverride } from "./capability-overrides";
 import { filterProviders, fullModelID, isFullModelID, parseFullModelID } from "./catalog";
+import { scoreCost } from "./cost";
 
 export type ModelResolutionContext = {
   providers: Provider[];
@@ -95,7 +95,7 @@ function matchesRequirements(cap: ModelCapabilities, requirements: ReturnType<ty
 function pickDefaultModel(
   providers: Provider[],
   defaults?: Record<string, string>,
-  selection?: OrchestratorConfig["modelSelection"]
+  selection?: OrchestratorConfig["modelSelection"],
 ): ModelResolutionResult | undefined {
   if (!defaults) return undefined;
   const preferred = selection?.preferredProviders ?? [];
@@ -105,7 +105,7 @@ function pickDefaultModel(
     if (!modelId) continue;
     const provider = providers.find((p) => p.id === providerId);
     if (!provider || !(modelId in (provider.models ?? {}))) continue;
-    const model = (provider.models ?? {})[modelId] as any;
+    const model = provider.models?.[modelId] as any;
     const capabilities = deriveModelCapabilities({ model, modelId, modelName: model?.name });
     return {
       full: fullModelID(providerId, modelId),
@@ -139,10 +139,7 @@ function collectSuggestions(providers: Provider[], query: string): string[] {
   return out.slice(0, 20);
 }
 
-export function resolveModel(
-  input: string,
-  ctx: ModelResolutionContext
-): ModelResolutionResult | ModelResolutionError {
+export function resolveModel(input: string, ctx: ModelResolutionContext): ModelResolutionResult | ModelResolutionError {
   const raw = input.trim();
   if (!raw) return { error: "Model is required." };
 
@@ -168,7 +165,12 @@ export function resolveModel(
       for (const [modelId, model] of Object.entries(provider.models ?? {})) {
         const full = fullModelID(provider.id, modelId);
         const overrides = resolveCapabilityOverride(full, ctx.capabilityOverrides);
-        const caps = deriveModelCapabilities({ model: model as any, modelId, modelName: (model as any)?.name, overrides });
+        const caps = deriveModelCapabilities({
+          model: model as any,
+          modelId,
+          modelName: (model as any)?.name,
+          overrides,
+        });
         if (!matchesRequirements(caps, requirements)) continue;
 
         let score = 0;
@@ -222,7 +224,7 @@ export function resolveModel(
         suggestions: providersAll.map((p) => p.id).slice(0, 20),
       };
     }
-    const model = (provider.models ?? {})[parsed.modelID];
+    const model = provider.models?.[parsed.modelID];
     if (!model) {
       return {
         error: `Model "${parsed.modelID}" not found for provider "${provider.id}".`,
@@ -230,7 +232,12 @@ export function resolveModel(
       };
     }
     const overrides = resolveCapabilityOverride(normalizedInput, ctx.capabilityOverrides);
-    const caps = deriveModelCapabilities({ model: model as any, modelId: parsed.modelID, modelName: (model as any)?.name, overrides });
+    const caps = deriveModelCapabilities({
+      model: model as any,
+      modelId: parsed.modelID,
+      modelName: (model as any)?.name,
+      overrides,
+    });
     return {
       full: normalizedInput,
       providerID: parsed.providerID,
@@ -247,7 +254,12 @@ export function resolveModel(
       if (modelId !== normalizedInput) continue;
       const full = fullModelID(provider.id, modelId);
       const overrides = resolveCapabilityOverride(full, ctx.capabilityOverrides);
-      const caps = deriveModelCapabilities({ model: model as any, modelId, modelName: (model as any)?.name, overrides });
+      const caps = deriveModelCapabilities({
+        model: model as any,
+        modelId,
+        modelName: (model as any)?.name,
+        overrides,
+      });
       matches.push({
         full,
         providerID: provider.id,

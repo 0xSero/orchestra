@@ -2,7 +2,7 @@
  * Profiles Page - Skills/Recipes management (previously "Skills" tab)
  */
 
-import { type Component } from "solid-js";
+import type { Component } from "solid-js";
 import { SkillList, SkillsWorkspace } from "@/components/skills";
 
 export const ProfilesPage: Component = () => {

@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
-import type { Factory, ServiceLifecycle } from "../types";
 import type { ApiService } from "../api";
+import type { Factory, ServiceLifecycle } from "../types";
 import type { OrchestraEvent, OrchestraEventMap, OrchestraEventMeta, OrchestraEventName } from "./events";
 
 export type CommunicationConfig = {
@@ -30,7 +30,11 @@ export const createCommunication: Factory<CommunicationConfig, CommunicationDeps
   let streamTask: Promise<void> | undefined;
 
   // Forward orchestra events to the SSE stream for frontend visibility
-  const forwardToSse = <T extends OrchestraEventName>(type: T, data: OrchestraEventMap[T], meta: OrchestraEventMeta) => {
+  const forwardToSse = <T extends OrchestraEventName>(
+    type: T,
+    data: OrchestraEventMap[T],
+    meta: OrchestraEventMeta,
+  ) => {
     // Forward worker events, session events, orchestrator lifecycle, and model events
     if (
       type.startsWith("orchestra.worker.") ||
@@ -39,12 +43,14 @@ export const createCommunication: Factory<CommunicationConfig, CommunicationDeps
       type === "orchestra.started" ||
       type.startsWith("skill.")
     ) {
-      deps.api.tui.publish({
-        body: {
-          type: "orchestra.event",
-          payload: { type, data, meta },
-        },
-      }).catch(() => {});
+      deps.api.tui
+        .publish({
+          body: {
+            type: "orchestra.event",
+            payload: { type, data, meta },
+          },
+        })
+        .catch(() => {});
     }
   };
 

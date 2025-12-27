@@ -1,4 +1,5 @@
-import { For } from "solid-js";
+import { createMemo, For } from "solid-js";
+import { useOpenCode } from "@/context/opencode";
 import { cn } from "@/lib/utils";
 
 const TOOLS = [
@@ -11,22 +12,44 @@ const TOOLS = [
   { id: "web", label: "Web Access", description: "Fetch web content" },
 ];
 
-export function ToolsConfig(props: {
-  value: Record<string, boolean>;
-  onChange: (v: Record<string, boolean>) => void;
-}) {
+export function ToolsConfig(props: { value: Record<string, boolean>; onChange: (v: Record<string, boolean>) => void }) {
+  const { toolIds } = useOpenCode();
+
+  const formatLabel = (id: string) =>
+    id
+      .replace(/[-_]+/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase())
+      .trim();
+
+  const toolOptions = createMemo(() => {
+    const baseIds = toolIds().length > 0 ? toolIds() : TOOLS.map((tool) => tool.id);
+    const extraIds = Object.keys(props.value).filter((id) => !baseIds.includes(id));
+    const orderedIds = [...baseIds, ...extraIds];
+    const fallback = new Map(TOOLS.map((tool) => [tool.id, tool]));
+
+    return orderedIds.map((id) => {
+      const known = fallback.get(id);
+      const label = known?.label ?? formatLabel(id);
+      return {
+        id,
+        label,
+        description: known?.description ?? `Enable ${label}`,
+      };
+    });
+  });
+
   const toggle = (id: string) => {
     props.onChange({ ...props.value, [id]: !props.value[id] });
   };
 
   return (
     <div class="space-y-2">
-      <For each={TOOLS}>
+      <For each={toolOptions()}>
         {(tool) => (
           <label
             class={cn(
               "flex items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2",
-              "hover:bg-accent/30"
+              "hover:bg-accent/30",
             )}
           >
             <div>

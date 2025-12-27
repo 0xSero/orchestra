@@ -18,7 +18,7 @@
 1. Update `orchestrator.json` with new fields (see configuration reference).
 2. Replace `node:*` usages with `auto:*` if desired (both are supported).
 3. Confirm profiles using vision have compatible models.
-4. Run `autofill_profile_models` if you want pinned models.
+4. Use `profiles` overrides in `orchestrator.json` if you want pinned models.
 
 ## Deprecations
 

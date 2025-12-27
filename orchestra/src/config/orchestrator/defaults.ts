@@ -110,7 +110,17 @@ export function buildDefaultOrchestratorConfigFile(): OrchestratorConfigFile {
     telemetry: {
       enabled: false,
     },
-    profiles: [],
-    workers: ["docs", "memory"],  // Only spawn docs and memory on startup
+    profiles: [
+      {
+        id: "glm47-vision-demo",
+        name: "GLM-4.7 Vision Demo",
+        model: "zhipu/glm-4.7v",
+        purpose: "Multimodal onboarding demo (vision + workflow).",
+        whenToUse: "Use for the onboarding multimodal demo flow.",
+        supportsVision: true,
+        enabled: true,
+      },
+    ],
+    workers: ["docs", "memory"], // Only spawn docs and memory on startup
   };
 }

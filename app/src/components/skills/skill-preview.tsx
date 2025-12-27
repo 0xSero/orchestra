@@ -1,7 +1,7 @@
 import type { Component } from "solid-js";
-import type { Skill } from "@/types/skill";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { Skill } from "@/types/skill";
 
 export const SkillPreview: Component<{ skill: Skill }> = (props) => {
   return (
@@ -18,8 +18,7 @@ export const SkillPreview: Component<{ skill: Skill }> = (props) => {
             <span class="font-semibold text-foreground">Model:</span> {props.skill.frontmatter.model}
           </div>
           <div>
-            <span class="font-semibold text-foreground">Description:</span>{" "}
-            {props.skill.frontmatter.description}
+            <span class="font-semibold text-foreground">Description:</span> {props.skill.frontmatter.description}
           </div>
           <div class="flex flex-wrap gap-2">
             <Badge variant="secondary">{props.skill.source.type}</Badge>

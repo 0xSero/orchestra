@@ -2,7 +2,9 @@
  * Page exports
  */
 
-export { ChatPage } from "./chat";
 export { AgentsPage } from "./agents";
-export { ProfilesPage } from "./profiles";
+export { ChatPage } from "./chat";
 export { LogsPage } from "./logs";
+export { OnboardingPage } from "./onboarding";
+export { ProfilesPage } from "./profiles";
+export { SettingsPage } from "./settings";

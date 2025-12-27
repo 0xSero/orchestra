@@ -1,17 +1,18 @@
+import { appendFile, mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import type { PluginInput } from "@opencode-ai/plugin";
-import type { Factory, ServiceLifecycle } from "../types";
-import type { OrchestratorConfig } from "../types";
 import { createApi } from "../api";
 import { createSkillsApiServer } from "../api/skills-server";
+import { createCommandRouter } from "../commands";
 import { createCommunication } from "../communication";
+import { createDatabase } from "../db";
+import { applyWorkerConfigOverrides } from "../db/overrides";
 import { createMemoryStore } from "../memory";
-import { createWorkerManager } from "../workers";
-import { createWorkflowEngine } from "../workflows/factory";
-import { createOrchestrator } from "../orchestrator";
-import { createTools } from "../tools";
 import { setNeo4jIntegrationsConfig } from "../memory/neo4j";
-import { getAllProfiles } from "../workers/profiles";
+import { createOrchestrator } from "../orchestrator";
 import { createSkillsService } from "../skills/service";
+import { createTools } from "../tools";
+import type { Factory, OrchestratorConfig, ServiceLifecycle } from "../types";
 import {
   createVisionRoutingState,
   routeVisionMessage,
@@ -19,8 +20,9 @@ import {
   type VisionChatInput,
   type VisionChatOutput,
 } from "../ux/vision-routing";
-import { appendFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { createWorkerManager } from "../workers";
+import { getAllProfiles } from "../workers/profiles";
+import { createWorkflowEngine } from "../workflows/factory";
 
 export type CoreConfig = {
   ctx: PluginInput;
@@ -35,6 +37,7 @@ export type CoreHooks = {
   "experimental.chat.messages.transform": any;
   "experimental.chat.system.transform": any;
   "experimental.session.compacting": any;
+  "tui.command.execute": any;
 };
 
 export type CoreService = ServiceLifecycle & {
@@ -42,17 +45,19 @@ export type CoreService = ServiceLifecycle & {
   services: {
     api: ReturnType<typeof createApi>;
     communication: ReturnType<typeof createCommunication>;
+    database: ReturnType<typeof createDatabase>;
     memory: ReturnType<typeof createMemoryStore>;
     workers: ReturnType<typeof createWorkerManager>;
     workflows: ReturnType<typeof createWorkflowEngine>;
     orchestrator: ReturnType<typeof createOrchestrator>;
     tools: ReturnType<typeof createTools>;
+    commands: ReturnType<typeof createCommandRouter>;
     skills: ReturnType<typeof createSkillsService>;
     skillsApi: ReturnType<typeof createSkillsApiServer>;
   };
 };
 
-export const createCore: Factory<CoreConfig, {}, CoreService> = ({ config }) => {
+export const createCore: Factory<CoreConfig, Record<string, never>, CoreService> = ({ config }) => {
   setNeo4jIntegrationsConfig(config.config.integrations?.neo4j);
 
   const api = createApi({
@@ -65,6 +70,7 @@ export const createCore: Factory<CoreConfig, {}, CoreService> = ({ config }) => 
   const profiles = { ...baseProfiles };
   config.config.profiles = profiles;
   const projectDir = config.ctx.worktree || config.ctx.directory;
+  const database = createDatabase({ config: { directory: projectDir }, deps: {} });
   const skills = createSkillsService(projectDir);
   const workers = createWorkerManager({
     config: {
@@ -77,13 +83,17 @@ export const createCore: Factory<CoreConfig, {}, CoreService> = ({ config }) => 
     },
     deps: { api, communication, memory },
   });
-  const skillsApi = createSkillsApiServer({
-    config: { enabled: true },
-    deps: { skills, workers },
-  });
   const workflows = createWorkflowEngine({ config: config.config.workflows, deps: {} });
   const orchestrator = createOrchestrator({ config: config.config, deps: { api, workers, workflows, communication } });
   const tools = createTools({ config: config.config, deps: { orchestrator, workers, workflows } });
+  const commands = createCommandRouter({
+    api,
+    orchestrator,
+    workers,
+    memory,
+    config: config.config,
+    projectDir,
+  });
   const visionState = createVisionRoutingState();
   const visionTimeoutMs = (() => {
     const raw = process.env.OPENCODE_VISION_TIMEOUT_MS;
@@ -105,8 +115,7 @@ export const createCore: Factory<CoreConfig, {}, CoreService> = ({ config }) => 
 
   const visionDeps = {
     workers,
-    ensureWorker: (input: { workerId: string; reason: "manual" | "on-demand" }) =>
-      orchestrator.ensureWorker(input),
+    ensureWorker: (input: { workerId: string; reason: "manual" | "on-demand" }) => orchestrator.ensureWorker(input),
     profiles,
     communication,
     timeoutMs: visionTimeoutMs,
@@ -114,7 +123,7 @@ export const createCore: Factory<CoreConfig, {}, CoreService> = ({ config }) => 
     logSink: writeVisionLog,
   };
 
-  const syncProfiles = (next: Record<string, typeof profiles[string]>) => {
+  const syncProfiles = (next: Record<string, (typeof profiles)[string]>) => {
     for (const key of Object.keys(profiles)) {
       delete profiles[key];
     }
@@ -127,8 +136,22 @@ export const createCore: Factory<CoreConfig, {}, CoreService> = ({ config }) => 
     // Pass existing profiles from config as base, then merge with any SKILL.md overrides
     const configProfilesArray = Object.values(baseProfiles).map((p) => ({ ...p }));
     const merged = await getAllProfiles(projectDir, configProfilesArray);
-    syncProfiles(merged);
+    const workerConfigs = database.getAllWorkerConfigs();
+    syncProfiles(applyWorkerConfigOverrides(merged, workerConfigs));
   };
+
+  const skillsApi = createSkillsApiServer({
+    config: { enabled: true },
+    deps: {
+      skills,
+      workers,
+      db: database,
+      onWorkerConfigChanged: () => {
+        void refreshProfiles().catch(() => {});
+      },
+      onPreferencesChanged: () => {},
+    },
+  });
 
   skills.events.on((event) => {
     if (event.type === "skill.created") {
@@ -146,6 +169,7 @@ export const createCore: Factory<CoreConfig, {}, CoreService> = ({ config }) => 
   const start = async () => {
     await api.start();
     await communication.start();
+    await database.start();
     await memory.start();
     await refreshProfiles();
     await workers.start();
@@ -176,7 +200,7 @@ export const createCore: Factory<CoreConfig, {}, CoreService> = ({ config }) => 
     communication.emit(
       "orchestra.started",
       { profileCount, autoSpawn, fallbackModel: undefined },
-      { source: "orchestrator" }
+      { source: "orchestrator" },
     );
 
     // Listen for model resolution events and show toasts
@@ -271,6 +295,7 @@ export const createCore: Factory<CoreConfig, {}, CoreService> = ({ config }) => 
     await workers.stop();
     await skillsApi.stop();
     await memory.stop();
+    await database.stop();
     await communication.stop();
     await api.stop();
   };
@@ -291,6 +316,11 @@ export const createCore: Factory<CoreConfig, {}, CoreService> = ({ config }) => 
           ...(agentCfg?.color ? { color: agentCfg.color } : {}),
         };
       }
+
+      const commandConfig = commands.commandConfig();
+      if (Object.keys(commandConfig).length > 0) {
+        (input as any).command = { ...((input as any).command ?? {}), ...commandConfig };
+      }
     },
     "tool.execute.before": tools.guard,
     "chat.message": async (input: VisionChatInput, output: VisionChatOutput) => {
@@ -303,12 +333,13 @@ export const createCore: Factory<CoreConfig, {}, CoreService> = ({ config }) => 
         },
         output as any,
         visionDeps,
-        visionState
+        visionState,
       );
     },
+    "tui.command.execute": async (input: any) => commands.execute(input as any),
     "experimental.chat.messages.transform": async (
       _input: unknown,
-      output: { messages: Array<{ info?: { id?: string; role?: string }; parts?: any[] }> }
+      output: { messages: Array<{ info?: { id?: string; role?: string }; parts?: any[] }> },
     ) => {
       syncVisionProcessedMessages(output, visionState);
     },
@@ -318,7 +349,19 @@ export const createCore: Factory<CoreConfig, {}, CoreService> = ({ config }) => 
 
   return {
     hooks,
-    services: { api, communication, memory, workers, workflows, orchestrator, tools, skills, skillsApi },
+    services: {
+      api,
+      communication,
+      database,
+      memory,
+      workers,
+      workflows,
+      orchestrator,
+      tools,
+      commands,
+      skills,
+      skillsApi,
+    },
     start,
     stop,
     health: async () => ({ ok: true }),

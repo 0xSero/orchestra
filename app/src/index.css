@@ -13,11 +13,11 @@
     color-scheme: dark;
 
     /* Dark mode: Rich charcoal base */
-    --background: 30 5% 10.5%;        /* #1b1b1b */
-    --foreground: 40 20% 92%;         /* warm off-white */
+    --background: 30 5% 10.5%; /* #1b1b1b */
+    --foreground: 40 20% 92%; /* warm off-white */
 
     /* Elevated surfaces */
-    --card: 30 5% 12%;                /* #1e1e1e */
+    --card: 30 5% 12%; /* #1e1e1e */
     --card-foreground: 40 20% 92%;
 
     --popover: 30 5% 14%;
@@ -57,10 +57,10 @@
   .light {
     color-scheme: light;
 
-    --background: 40 30% 97%;         /* warm cream */
-    --foreground: 30 15% 15%;         /* deep brown-charcoal */
+    --background: 40 30% 97%; /* warm cream */
+    --foreground: 30 15% 15%; /* deep brown-charcoal */
 
-    --card: 40 25% 95%;               /* soft tan */
+    --card: 40 25% 95%; /* soft tan */
     --card-foreground: 30 15% 15%;
 
     --popover: 40 25% 98%;
@@ -92,7 +92,9 @@
     @apply border-border;
   }
 
-  html, body, #root {
+  html,
+  body,
+  #root {
     @apply h-full;
   }
 
@@ -241,11 +243,21 @@
     @apply w-2 h-2 rounded-full flex-shrink-0;
   }
 
-  .status-dot.ready { @apply bg-status-ready; }
-  .status-dot.busy { @apply bg-status-busy; }
-  .status-dot.error { @apply bg-status-error; }
-  .status-dot.stopped { @apply bg-status-stopped; }
-  .status-dot.starting { @apply bg-status-starting; }
+  .status-dot.ready {
+    @apply bg-status-ready;
+  }
+  .status-dot.busy {
+    @apply bg-status-busy;
+  }
+  .status-dot.error {
+    @apply bg-status-error;
+  }
+  .status-dot.stopped {
+    @apply bg-status-stopped;
+  }
+  .status-dot.starting {
+    @apply bg-status-starting;
+  }
 
   .status-badge {
     @apply inline-flex items-center gap-1.5 px-2 py-0.5 text-xs rounded-full;
@@ -386,8 +398,12 @@
 
 /* Animations */
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slide-up {
@@ -402,8 +418,13 @@
 }
 
 @keyframes pulse-soft {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 .animate-fade-in {

@@ -1,7 +1,7 @@
 import { createMemo } from "solid-js";
-import type { ToolPermissions } from "@/types/skill";
 import { Textarea } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import type { ToolPermissions } from "@/types/skill";
 
 const FILESYSTEM_OPTIONS = ["", "full", "read", "none"] as const;
 const EXECUTION_OPTIONS = ["", "full", "sandboxed", "none"] as const;
@@ -48,7 +48,7 @@ export function PermissionsConfig(props: { value: ToolPermissions; onChange: (v:
           <select
             class={cn(
               "flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm",
-              "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
             )}
             value={categories().filesystem ?? ""}
             onChange={(e) => updateCategory("filesystem", e.currentTarget.value)}
@@ -64,7 +64,7 @@ export function PermissionsConfig(props: { value: ToolPermissions; onChange: (v:
           <select
             class={cn(
               "flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm",
-              "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
             )}
             value={categories().execution ?? ""}
             onChange={(e) => updateCategory("execution", e.currentTarget.value)}
@@ -80,7 +80,7 @@ export function PermissionsConfig(props: { value: ToolPermissions; onChange: (v:
           <select
             class={cn(
               "flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm",
-              "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
             )}
             value={categories().network ?? ""}
             onChange={(e) => updateCategory("network", e.currentTarget.value)}

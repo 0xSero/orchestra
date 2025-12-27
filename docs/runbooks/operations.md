@@ -3,7 +3,8 @@
 ## Scaling workers
 
 - Increase `workers` auto-spawn list in `orchestrator.json`.
-- Use `ensure_workers` to spawn on demand.
+- Allow on-demand spawn via `spawnOnDemand` and `spawnPolicy`.
+- Use `/orchestrator.spawn` or `spawn_worker` to start workers manually.
 
 ## Managing warm pools
 
@@ -17,5 +18,5 @@
 
 ## Cleaning stale workers
 
-- Use `list_workers` or `orchestrator_diagnostics` (enable in `opencode.json` tools if disabled) to inspect entries.
+- Use `list_workers` or `/orchestrator.status` to inspect entries.
 - Stop workers with `stop_worker` if needed.

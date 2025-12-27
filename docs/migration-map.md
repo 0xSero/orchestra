@@ -298,7 +298,7 @@ Enforced limits to maintain code quality:
 │                     Future Migration Targets                         │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│  Skills-Based Worker Configuration                                   │
+│  Skills-Based Worker Configuration (delivered)                       │
 │  ├── SKILL.md file discovery                                        │
 │  ├── Agent Skills Standard implementation                            │
 │  └── Dynamic profile generation from skills                          │

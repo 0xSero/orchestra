@@ -20,7 +20,10 @@ export function requireProjectId(scope: MemoryScope, projectId: string | undefin
 
 function normalizeTags(tags: unknown): string[] {
   if (!Array.isArray(tags)) return [];
-  return tags.filter((t) => typeof t === "string").map((t) => t.trim()).filter(Boolean);
+  return tags
+    .filter((t) => typeof t === "string")
+    .map((t) => t.trim())
+    .filter(Boolean);
 }
 
 export function toNode(record: RecordShape): MemoryNode {

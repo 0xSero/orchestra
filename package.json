@@ -5,7 +5,8 @@
   "description": "OpenCode Orchestrator monorepo - plugin and dashboard",
   "workspaces": [
     "orchestra",
-    "app"
+    "app",
+    "desktop"
   ],
   "scripts": {
     "build": "cd orchestra && bun run build",
@@ -14,9 +15,15 @@
     "test": "cd orchestra && bun run test",
     "app:dev": "cd app && bun run dev",
     "app:build": "cd app && bun run build",
-    "app:install": "cd app && bun install"
+    "app:install": "cd app && bun install",
+    "desktop:dev": "cd desktop && bun run dev",
+    "desktop:build": "cd desktop && bun run build",
+    "desktop:tauri": "cd desktop && bun run tauri",
+    "lint": "biome check .",
+    "lint:fix": "biome check . --write"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.3.10",
     "@types/bun": "latest",
     "typescript": "^5.0.0"
   },

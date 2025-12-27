@@ -1,8 +1,8 @@
 import type { WorkerInstance } from "../types";
-import type { WorkerRegistry } from "./registry";
-import { buildPromptParts, extractTextFromPromptResponse } from "./prompt";
 import { prepareWorkerAttachments } from "./attachments";
 import type { WorkerAttachment } from "./prompt";
+import { buildPromptParts, extractTextFromPromptResponse } from "./prompt";
+import type { WorkerRegistry } from "./registry";
 
 export type WorkerSendOptions = {
   attachments?: WorkerAttachment[];
@@ -40,7 +40,7 @@ function buildTaskText(message: string, options?: { jobId?: string; from?: strin
   const jobIdStr = options?.jobId ?? "none";
   const sourceInfo =
     `<message-source from="${sourceFrom}" jobId="${jobIdStr}">\n` +
-    `This message was sent by ${sourceFrom === "orchestrator" ? "the orchestrator" : `worker \"${sourceFrom}\"`}.
+    `This message was sent by ${sourceFrom === "orchestrator" ? "the orchestrator" : `worker "${sourceFrom}"`}.
 ` +
     `</message-source>\n\n`;
 
@@ -52,9 +52,7 @@ function buildTaskText(message: string, options?: { jobId?: string; from?: strin
       `</orchestrator-job>`;
   } else {
     taskText +=
-      "\n\n<orchestrator-sync>\n" +
-      "IMPORTANT: Reply with your final answer as plain text.\n" +
-      "</orchestrator-sync>";
+      "\n\n<orchestrator-sync>\n" + "IMPORTANT: Reply with your final answer as plain text.\n" + "</orchestrator-sync>";
   }
 
   return taskText;
@@ -123,7 +121,7 @@ export async function sendWorkerMessage(input: {
         signal: abort.signal as any,
       } as any),
       timeoutMs,
-      abort
+      abort,
     );
 
     const sdkError: any = (result as any)?.error;

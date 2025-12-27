@@ -3,7 +3,7 @@
  */
 
 import { type Component, For, Show } from "solid-js";
-import { useOpenCode, type OpenCodeEventItem } from "@/context/opencode";
+import { type OpenCodeEventItem, useOpenCode } from "@/context/opencode";
 import { formatRelativeTime } from "@/lib/utils";
 
 export const LogsPanel: Component = () => {
@@ -30,22 +30,15 @@ export const LogsPanel: Component = () => {
       {/* Header */}
       <div class="flex items-center justify-between px-4 py-2 border-b border-border">
         <span class="text-sm font-medium">Logs</span>
-        <span class="text-xs text-muted-foreground">
-          {events().length} events
-        </span>
+        <span class="text-xs text-muted-foreground">{events().length} events</span>
       </div>
 
       {/* Content */}
       <div class="flex-1 overflow-auto scrollbar-thin p-4">
         {/* Events */}
         <div class="mb-6">
-          <h3 class="text-xs text-muted-foreground uppercase tracking-wider mb-3">
-            Events
-          </h3>
-          <Show
-            when={events().length > 0}
-            fallback={<p class="text-sm text-muted-foreground">No events</p>}
-          >
+          <h3 class="text-xs text-muted-foreground uppercase tracking-wider mb-3">Events</h3>
+          <Show when={events().length > 0} fallback={<p class="text-sm text-muted-foreground">No events</p>}>
             <div class="space-y-1">
               <For each={events()}>
                 {(event) => (
@@ -63,23 +56,14 @@ export const LogsPanel: Component = () => {
 
         {/* Recent sessions */}
         <div>
-          <h3 class="text-xs text-muted-foreground uppercase tracking-wider mb-3">
-            Recent Sessions
-          </h3>
-          <Show
-            when={sessions().length > 0}
-            fallback={<p class="text-sm text-muted-foreground">No sessions</p>}
-          >
+          <h3 class="text-xs text-muted-foreground uppercase tracking-wider mb-3">Recent Sessions</h3>
+          <Show when={sessions().length > 0} fallback={<p class="text-sm text-muted-foreground">No sessions</p>}>
             <div class="space-y-2">
               <For each={sessions().slice(0, 10)}>
                 {(session) => (
                   <div class="flex items-center justify-between text-xs">
-                    <span class="text-foreground truncate">
-                      {session.title || "Untitled"}
-                    </span>
-                    <span class="text-muted-foreground">
-                      {formatRelativeTime(session.time.updated)}
-                    </span>
+                    <span class="text-foreground truncate">{session.title || "Untitled"}</span>
+                    <span class="text-muted-foreground">{formatRelativeTime(session.time.updated)}</span>
                   </div>
                 )}
               </For>

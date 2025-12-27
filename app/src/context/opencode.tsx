@@ -5,26 +5,19 @@
  * OpenCode server runs on localhost:4096 by default.
  */
 
-import {
-  createContext,
-  useContext,
-  createEffect,
-  onCleanup,
-  type ParentComponent,
-  type Accessor,
-} from "solid-js";
-import { createStore, produce } from "solid-js/store";
 // Import only client module to avoid Node.js server dependencies in browser
 import {
-  createOpencodeClient,
-  type OpencodeClient,
-  type Session,
-  type Message,
-  type Part,
   type Agent,
-  type TextPartInput,
+  createOpencodeClient,
   type FilePartInput,
+  type Message,
+  type OpencodeClient,
+  type Part,
+  type Session,
+  type TextPartInput,
 } from "@opencode-ai/sdk/client";
+import { type Accessor, createContext, createEffect, onCleanup, type ParentComponent, useContext } from "solid-js";
+import { createStore, produce } from "solid-js/store";
 
 // =============================================================================
 // Re-export types for convenience
@@ -56,6 +49,11 @@ export type WorkerRuntime = {
   warning?: string;
 };
 
+export type ModelOption = {
+  value: string;
+  label: string;
+};
+
 // =============================================================================
 // State Types
 // =============================================================================
@@ -69,6 +67,8 @@ export interface OpenCodeState {
   agents: Agent[];
   events: OpenCodeEventItem[];
   workers: Record<string, WorkerRuntime>;
+  modelOptions: ModelOption[];
+  toolIds: string[];
   lastUpdate: number;
 }
 
@@ -83,6 +83,8 @@ export interface OpenCodeContextValue {
   events: Accessor<OpenCodeEventItem[]>;
   workers: Accessor<WorkerRuntime[]>;
   activeWorkerSessionIds: Accessor<Set<string>>;
+  modelOptions: Accessor<ModelOption[]>;
+  toolIds: Accessor<string[]>;
 
   // Session helpers
   getSession: (id: string) => Session | undefined;
@@ -93,6 +95,7 @@ export interface OpenCodeContextValue {
   refresh: () => Promise<void>;
   refreshSessions: () => Promise<void>; // alias for refresh
   fetchMessages: (id: string) => Promise<void>;
+  refreshCatalog: () => Promise<void>;
   createSession: () => Promise<Session | null>;
   deleteSession: (id: string) => Promise<boolean>;
   sendMessage: (
@@ -105,7 +108,7 @@ export interface OpenCodeContextValue {
       size?: number;
       url?: string;
       file?: File;
-    }>
+    }>,
   ) => Promise<void>;
   abortSession: (id: string) => Promise<boolean>;
 
@@ -134,8 +137,62 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     agents: [],
     events: [],
     workers: {},
+    modelOptions: [],
+    toolIds: [],
     lastUpdate: 0,
   });
+
+  const buildModelOptions = (providers: Array<Record<string, any>>): ModelOption[] => {
+    const byValue = new Map<string, ModelOption>();
+    byValue.set("auto", { value: "auto", label: "Auto (Best Available)" });
+
+    for (const provider of providers) {
+      const providerId = provider?.id ?? provider?.providerID;
+      if (!providerId) continue;
+      const providerName = provider?.name ?? providerId;
+      const models = provider?.models ?? {};
+
+      for (const [key, rawModel] of Object.entries(models)) {
+        const modelId = (rawModel as any)?.id ?? key;
+        if (!modelId) continue;
+        const value = String(modelId).includes(":") ? String(modelId) : `${providerId}:${modelId}`;
+        const modelName = (rawModel as any)?.name ?? modelId;
+        const label = `${providerName} · ${modelName}`;
+        byValue.set(value, { value, label });
+      }
+    }
+
+    const options = Array.from(byValue.values()).filter((option) => option.value !== "auto");
+    options.sort((a, b) => a.label.localeCompare(b.label));
+    return [byValue.get("auto")!, ...options];
+  };
+
+  const fetchCatalog = async () => {
+    const [providersRes, toolIdsRes] = await Promise.allSettled([client.config.providers(), client.tool.ids()]);
+    const providersPayload =
+      providersRes.status === "fulfilled"
+        ? (providersRes.value.data as { providers?: Array<Record<string, any>>; all?: Array<any> } | undefined)
+        : undefined;
+    const toolIdsPayload = toolIdsRes.status === "fulfilled" ? toolIdsRes.value.data : undefined;
+
+    if (providersRes.status === "rejected") {
+      console.error("[opencode] Failed to fetch providers:", providersRes.reason);
+    }
+    if (toolIdsRes.status === "rejected") {
+      console.error("[opencode] Failed to fetch tool IDs:", toolIdsRes.reason);
+    }
+
+    const providers = providersPayload?.providers ?? providersPayload?.all ?? [];
+    const modelOptions = Array.isArray(providers) ? buildModelOptions(providers) : [];
+    const toolIds = Array.isArray(toolIdsPayload) ? toolIdsPayload.map((id) => String(id)) : [];
+
+    setState(
+      produce((s) => {
+        s.modelOptions = modelOptions;
+        s.toolIds = toolIds;
+      }),
+    );
+  };
 
   // ---------------------------------------------------------------------------
   // Data Fetching
@@ -144,10 +201,7 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
   const fetchAll = async () => {
     try {
       // Fetch sessions and agents in parallel
-      const [sessionsRes, agentsRes] = await Promise.all([
-        client.session.list(),
-        client.app.agents(),
-      ]);
+      const [sessionsRes, agentsRes] = await Promise.all([client.session.list(), client.app.agents()]);
 
       // SDK returns { data, error, response } - extract data
       // The data is the actual response (array for list endpoints)
@@ -166,7 +220,7 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
           }
 
           s.lastUpdate = Date.now();
-        })
+        }),
       );
 
       console.log("[opencode] Fetched:", {
@@ -186,26 +240,31 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
       console.log(`🔍 [fetchMessages] SDK response for ${sessionId}:`, {
         status: res.response?.status,
         hasData: !!res.data,
-        dataKeys: res.data ? Object.keys(res.data) : 'no-data'
+        dataKeys: res.data ? Object.keys(res.data) : "no-data",
       });
-      
+
       const data = res.data as { messages?: Message[]; parts?: Part[] } | undefined;
 
       if (data) {
         console.log(`🔍 [fetchMessages] Processing data for ${sessionId}:`, {
           messageCount: data.messages?.length || 0,
           partCount: data.parts?.length || 0,
-          sampleMessage: data.messages?.[0] ? {
-            id: data.messages[0].id,
-            role: data.messages[0].role,
-            hasParts: !!(data.parts && data.messages && data.parts.find(p => p.messageID === data.messages![0].id))
-          } : 'no-messages'
+          sampleMessage: data.messages?.[0]
+            ? {
+                id: data.messages[0].id,
+                role: data.messages[0].role,
+                hasParts: !!(
+                  data.parts &&
+                  data.messages &&
+                  data.parts.find((p) => p.messageID === data.messages![0].id)
+                ),
+              }
+            : "no-messages",
         });
 
-        const oldState = { 
+        const oldState = {
           messageCount: state.messages[sessionId]?.length || 0,
-          partCount: Object.keys(state.parts).reduce((acc, msgId) => 
-            msgId.startsWith(sessionId) ? acc + 1 : acc, 0)
+          partCount: Object.keys(state.parts).reduce((acc, msgId) => (msgId.startsWith(sessionId) ? acc + 1 : acc), 0),
         };
 
         setState(
@@ -221,19 +280,18 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
               }
               s.parts[part.messageID].push(part);
             }
-          })
+          }),
         );
 
-        const newState = { 
+        const newState = {
           messageCount: state.messages[sessionId]?.length || 0,
-          partCount: Object.keys(state.parts).reduce((acc, msgId) => 
-            msgId.startsWith(sessionId) ? acc + 1 : acc, 0)
+          partCount: Object.keys(state.parts).reduce((acc, msgId) => (msgId.startsWith(sessionId) ? acc + 1 : acc), 0),
         };
 
         console.log(`🔍 [fetchMessages] State updated for ${sessionId}:`, {
           before: oldState,
           after: newState,
-          messages: state.messages[sessionId]?.map(m => ({ id: m.id, role: m.role })) || 'no-messages'
+          messages: state.messages[sessionId]?.map((m) => ({ id: m.id, role: m.role })) || "no-messages",
         });
       } else {
         console.log(`🔍 [fetchMessages] No data returned for session: ${sessionId}`);
@@ -261,6 +319,10 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     });
   });
 
+  createEffect(() => {
+    fetchCatalog();
+  });
+
   const pushEvent = (payload: any) => {
     const item: OpenCodeEventItem = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -271,7 +333,7 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     setState(
       produce((s) => {
         s.events = [item, ...s.events].slice(0, 200);
-      })
+      }),
     );
   };
 
@@ -281,7 +343,7 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
       produce((s) => {
         s.sessions[session.id] = session;
         s.lastUpdate = Date.now();
-      })
+      }),
     );
   };
 
@@ -291,7 +353,7 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
         delete s.sessions[sessionId];
         delete s.messages[sessionId];
         s.lastUpdate = Date.now();
-      })
+      }),
     );
   };
 
@@ -316,7 +378,7 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     setState(
       produce((s) => {
         s.workers[id] = next;
-      })
+      }),
     );
   };
 
@@ -376,7 +438,7 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
           produce((s) => {
             s.sessions[session.id] = session;
             s.lastUpdate = Date.now();
-          })
+          }),
         );
       }
       return session ?? null;
@@ -394,7 +456,7 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
           delete s.sessions[id];
           delete s.messages[id];
           s.lastUpdate = Date.now();
-        })
+        }),
       );
       return true;
     } catch (err) {
@@ -417,7 +479,7 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
       name?: string;
       url?: string;
       file?: File;
-    }>
+    }>,
   ): Promise<FilePartInput[]> => {
     if (!attachments || attachments.length === 0) return [];
     const parts: FilePartInput[] = [];
@@ -444,9 +506,12 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
       size?: number;
       url?: string;
       file?: File;
-    }>
+    }>,
   ): Promise<void> => {
-    console.log(`🔍 [sendMessage] Sending to session ${sessionId}:`, { contentLength: content.length, preview: content.slice(0, 50) });
+    console.log(`🔍 [sendMessage] Sending to session ${sessionId}:`, {
+      contentLength: content.length,
+      preview: content.slice(0, 50),
+    });
     try {
       const attachmentParts = await buildAttachmentParts(attachments);
       const parts: Array<TextPartInput | FilePartInput> = [];
@@ -463,7 +528,7 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
         },
       });
       console.log(`🔍 [sendMessage] Message sent successfully to ${sessionId}, fetching messages...`);
-      
+
       // Trigger message fetch after sending
       setTimeout(() => {
         console.log(`🔍 [sendMessage] Auto-fetching messages for ${sessionId}`);
@@ -493,10 +558,7 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     connected: () => state.connected,
     version: () => state.version,
 
-    sessions: () =>
-      Object.values(state.sessions).sort(
-        (a, b) => b.time.updated - a.time.updated
-      ),
+    sessions: () => Object.values(state.sessions).sort((a, b) => b.time.updated - a.time.updated),
 
     agents: () => state.agents,
     events: () => state.events,
@@ -505,8 +567,10 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
       new Set(
         Object.values(state.workers)
           .filter((w) => w.sessionId && (w.status === "ready" || w.status === "busy"))
-          .map((w) => w.sessionId as string)
+          .map((w) => w.sessionId as string),
       ),
+    modelOptions: () => state.modelOptions,
+    toolIds: () => state.toolIds,
 
     getSession: (id) => state.sessions[id],
     getSessionMessages: (id) => state.messages[id] ?? [],
@@ -515,6 +579,7 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     refresh: fetchAll,
     refreshSessions: fetchAll, // alias for refresh
     fetchMessages, // Export this for use in components
+    refreshCatalog: fetchCatalog,
     createSession,
     deleteSession,
     sendMessage,
@@ -523,11 +588,7 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     client,
   };
 
-  return (
-    <OpenCodeContext.Provider value={value}>
-      {props.children}
-    </OpenCodeContext.Provider>
-  );
+  return <OpenCodeContext.Provider value={value}>{props.children}</OpenCodeContext.Provider>;
 };
 
 export function useOpenCode(): OpenCodeContextValue {

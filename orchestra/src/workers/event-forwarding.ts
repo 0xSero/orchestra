@@ -1,6 +1,6 @@
-import type { WorkerInstance, WorkerForwardEvent } from "../types/worker";
-import type { WorkerSessionManager } from "./session-manager";
 import type { CommunicationService } from "../communication";
+import type { WorkerForwardEvent, WorkerInstance } from "../types/worker";
+import type { WorkerSessionManager } from "./session-manager";
 
 /**
  * Event forwarding handle that can be stopped.
@@ -33,7 +33,7 @@ export function startEventForwarding(
   instance: WorkerInstance,
   sessionManager: WorkerSessionManager,
   _communication: CommunicationService,
-  config?: Partial<EventForwardingConfig>
+  config?: Partial<EventForwardingConfig>,
 ): EventForwardingHandle {
   const events = config?.events ?? ["tool", "message", "error", "complete", "progress"];
   const pollIntervalMs = config?.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
@@ -126,7 +126,7 @@ async function processMessage(
   instance: WorkerInstance,
   sessionManager: WorkerSessionManager,
   _communication: CommunicationService,
-  events: WorkerForwardEvent[]
+  events: WorkerForwardEvent[],
 ): Promise<void> {
   const info = msg?.info;
   const parts = msg?.parts ?? [];
@@ -189,7 +189,7 @@ async function processMessage(
   // Check for completion
   if (role === "assistant" && events.includes("complete")) {
     const hasToolPending = parts.some(
-      (p: any) => p?.type === "tool-invocation" && p?.toolInvocation?.state === "pending"
+      (p: any) => p?.type === "tool-invocation" && p?.toolInvocation?.state === "pending",
     );
     if (!hasToolPending) {
       sessionManager.recordActivity(instance.sessionId!, {

@@ -34,10 +34,7 @@ export interface SkillFrontmatter {
   metadata?: Record<string, unknown>;
 }
 
-export type SkillSource =
-  | { type: "builtin" }
-  | { type: "global"; path: string }
-  | { type: "project"; path: string };
+export type SkillSource = { type: "builtin" } | { type: "global"; path: string } | { type: "project"; path: string };
 
 export interface Skill {
   id: string;

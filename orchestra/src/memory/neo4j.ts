@@ -1,7 +1,7 @@
-import neo4j, { type Driver, type Session } from "neo4j-driver";
-import type { Neo4jIntegrationConfig } from "../types";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import neo4j, { type Driver, type Session } from "neo4j-driver";
+import type { Neo4jIntegrationConfig } from "../types";
 
 export type Neo4jConfig = {
   uri: string;
@@ -121,14 +121,14 @@ export function loadNeo4jConfigFromIntegrations(): Neo4jConfig | undefined {
  * Load Neo4j config from all sources with priority:
  * 1. Environment variables (highest priority - allows override)
  * 2. Integrations config from orchestrator.json
- * 
+ *
  * This is the recommended function to use for Neo4j config resolution.
  */
 export function loadNeo4jConfig(): Neo4jConfig | undefined {
   // Env vars take priority (allows easy override without editing config)
   const fromEnv = loadNeo4jConfigFromEnv();
   if (fromEnv) return fromEnv;
-  
+
   // Fall back to integrations config
   return loadNeo4jConfigFromIntegrations();
 }
@@ -153,10 +153,7 @@ export function getNeo4jDriver(cfg: Neo4jConfig): Driver {
   return driver;
 }
 
-export async function withNeo4jSession<T>(
-  cfg: Neo4jConfig,
-  fn: (session: Session) => Promise<T>
-): Promise<T> {
+export async function withNeo4jSession<T>(cfg: Neo4jConfig, fn: (session: Session) => Promise<T>): Promise<T> {
   const d = getNeo4jDriver(cfg);
   const session = d.session(cfg.database ? { database: cfg.database } : undefined);
   try {
@@ -165,4 +162,3 @@ export async function withNeo4jSession<T>(
     await session.close();
   }
 }
-

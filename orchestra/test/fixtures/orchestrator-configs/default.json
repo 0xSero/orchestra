@@ -29,9 +29,6 @@
     "maxToolInputChars": 2000,
     "protectedTools": ["read_file", "list_files"]
   },
-  "profiles": [
-    "coder",
-    "researcher"
-  ],
+  "profiles": ["coder", "researcher"],
   "workers": []
 }

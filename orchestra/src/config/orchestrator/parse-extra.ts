@@ -1,5 +1,5 @@
-import type { OrchestratorConfig, OrchestratorConfigFile } from "../../types";
 import { isPlainObject } from "../../helpers/format";
+import type { OrchestratorConfig, OrchestratorConfigFile } from "../../types";
 
 export function parseMemorySection(raw: Record<string, unknown>, partial: Partial<OrchestratorConfigFile>): void {
   if (!isPlainObject(raw.memory)) return;
@@ -14,17 +14,23 @@ export function parseMemorySection(raw: Record<string, unknown>, partial: Partia
   if (isPlainObject(raw.memory.summaries)) {
     const summaries: Record<string, unknown> = {};
     if (typeof raw.memory.summaries.enabled === "boolean") summaries.enabled = raw.memory.summaries.enabled;
-    if (typeof raw.memory.summaries.sessionMaxChars === "number") summaries.sessionMaxChars = raw.memory.summaries.sessionMaxChars;
-    if (typeof raw.memory.summaries.projectMaxChars === "number") summaries.projectMaxChars = raw.memory.summaries.projectMaxChars;
+    if (typeof raw.memory.summaries.sessionMaxChars === "number")
+      summaries.sessionMaxChars = raw.memory.summaries.sessionMaxChars;
+    if (typeof raw.memory.summaries.projectMaxChars === "number")
+      summaries.projectMaxChars = raw.memory.summaries.projectMaxChars;
     memory.summaries = summaries;
   }
 
   if (isPlainObject(raw.memory.trim)) {
     const trim: Record<string, unknown> = {};
-    if (typeof raw.memory.trim.maxMessagesPerSession === "number") trim.maxMessagesPerSession = raw.memory.trim.maxMessagesPerSession;
-    if (typeof raw.memory.trim.maxMessagesPerProject === "number") trim.maxMessagesPerProject = raw.memory.trim.maxMessagesPerProject;
-    if (typeof raw.memory.trim.maxMessagesGlobal === "number") trim.maxMessagesGlobal = raw.memory.trim.maxMessagesGlobal;
-    if (typeof raw.memory.trim.maxProjectsGlobal === "number") trim.maxProjectsGlobal = raw.memory.trim.maxProjectsGlobal;
+    if (typeof raw.memory.trim.maxMessagesPerSession === "number")
+      trim.maxMessagesPerSession = raw.memory.trim.maxMessagesPerSession;
+    if (typeof raw.memory.trim.maxMessagesPerProject === "number")
+      trim.maxMessagesPerProject = raw.memory.trim.maxMessagesPerProject;
+    if (typeof raw.memory.trim.maxMessagesGlobal === "number")
+      trim.maxMessagesGlobal = raw.memory.trim.maxMessagesGlobal;
+    if (typeof raw.memory.trim.maxProjectsGlobal === "number")
+      trim.maxProjectsGlobal = raw.memory.trim.maxProjectsGlobal;
     memory.trim = trim;
   }
 
@@ -32,11 +38,15 @@ export function parseMemorySection(raw: Record<string, unknown>, partial: Partia
     const inject: Record<string, unknown> = {};
     if (typeof raw.memory.inject.maxChars === "number") inject.maxChars = raw.memory.inject.maxChars;
     if (typeof raw.memory.inject.maxEntries === "number") inject.maxEntries = raw.memory.inject.maxEntries;
-    if (typeof raw.memory.inject.includeMessages === "boolean") inject.includeMessages = raw.memory.inject.includeMessages;
-    if (typeof raw.memory.inject.includeSessionSummary === "boolean") inject.includeSessionSummary = raw.memory.inject.includeSessionSummary;
-    if (typeof raw.memory.inject.includeProjectSummary === "boolean") inject.includeProjectSummary = raw.memory.inject.includeProjectSummary;
+    if (typeof raw.memory.inject.includeMessages === "boolean")
+      inject.includeMessages = raw.memory.inject.includeMessages;
+    if (typeof raw.memory.inject.includeSessionSummary === "boolean")
+      inject.includeSessionSummary = raw.memory.inject.includeSessionSummary;
+    if (typeof raw.memory.inject.includeProjectSummary === "boolean")
+      inject.includeProjectSummary = raw.memory.inject.includeProjectSummary;
     if (typeof raw.memory.inject.includeGlobal === "boolean") inject.includeGlobal = raw.memory.inject.includeGlobal;
-    if (typeof raw.memory.inject.maxGlobalEntries === "number") inject.maxGlobalEntries = raw.memory.inject.maxGlobalEntries;
+    if (typeof raw.memory.inject.maxGlobalEntries === "number")
+      inject.maxGlobalEntries = raw.memory.inject.maxGlobalEntries;
     memory.inject = inject;
   }
 
@@ -68,7 +78,8 @@ export function parseIntegrationsSection(raw: Record<string, unknown>, partial: 
   }
   if (isPlainObject(raw.integrations.monitoring)) {
     const monitoring: Record<string, unknown> = {};
-    if (typeof raw.integrations.monitoring.enabled === "boolean") monitoring.enabled = raw.integrations.monitoring.enabled;
+    if (typeof raw.integrations.monitoring.enabled === "boolean")
+      monitoring.enabled = raw.integrations.monitoring.enabled;
     if (typeof raw.integrations.monitoring.port === "number") monitoring.port = raw.integrations.monitoring.port;
     if (typeof raw.integrations.monitoring.metricsPath === "string") {
       monitoring.metricsPath = raw.integrations.monitoring.metricsPath;

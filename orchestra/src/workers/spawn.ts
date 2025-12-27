@@ -1,17 +1,16 @@
-import type { WorkerInstance, WorkerProfile, WorkerSessionMode } from "../types";
-import type { ApiService } from "../api";
-import type { OrchestratorConfig } from "../types";
-import { hydrateProfileModelsFromOpencode, type ProfileModelHydrationChange } from "../models/hydrate";
-import { buildToolConfigFromPermissions, summarizePermissions } from "../permissions/validator";
-import { mergeOpenCodeConfig, loadOpenCodeConfig } from "../config/opencode";
-import { getRepoContextForWorker } from "../ux/repo-context";
-import type { WorkerRegistry } from "./registry";
-import type { WorkerSessionManager } from "./session-manager";
-import type { CommunicationService } from "../communication";
-import { startEventForwarding, stopEventForwarding } from "./event-forwarding";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { ApiService } from "../api";
+import type { CommunicationService } from "../communication";
+import { loadOpenCodeConfig, mergeOpenCodeConfig } from "../config/opencode";
+import { hydrateProfileModelsFromOpencode, type ProfileModelHydrationChange } from "../models/hydrate";
+import { buildToolConfigFromPermissions, summarizePermissions } from "../permissions/validator";
+import type { OrchestratorConfig, WorkerInstance, WorkerProfile, WorkerSessionMode } from "../types";
+import { getRepoContextForWorker } from "../ux/repo-context";
+import { startEventForwarding, stopEventForwarding } from "./event-forwarding";
+import type { WorkerRegistry } from "./registry";
+import type { WorkerSessionManager } from "./session-manager";
 
 export type ModelResolutionResult = {
   profile: WorkerProfile;
@@ -81,7 +80,7 @@ async function resolveProfileModel(input: {
     if (isNodeTag || !isExplicit) {
       throw new Error(
         `Profile "${input.profile.id}" uses "${input.profile.model}", but model resolution is unavailable. ` +
-          `Set a concrete provider/model ID for this profile.`
+          `Set a concrete provider/model ID for this profile.`,
       );
     }
     return { profile: input.profile, changes: [] };
@@ -142,7 +141,7 @@ function resolveWorkerEnv(profile: WorkerProfile): Record<string, string> {
  */
 async function resolveWorkerMcp(
   profile: WorkerProfile,
-  parentConfig: Record<string, unknown>
+  parentConfig: Record<string, unknown>,
 ): Promise<Record<string, unknown> | undefined> {
   const mcpConfig = profile.mcp;
   if (!mcpConfig) return undefined;
@@ -197,7 +196,11 @@ export async function spawnWorker(input: {
   /** Parent session ID (for child mode) */
   parentSessionId?: string;
 }): Promise<WorkerInstance> {
-  const { profile: resolvedProfile, changes, fallbackModel } = await resolveProfileModel({
+  const {
+    profile: resolvedProfile,
+    changes,
+    fallbackModel,
+  } = await resolveProfileModel({
     api: input.api,
     directory: input.directory,
     profile: input.profile,
@@ -210,11 +213,7 @@ export async function spawnWorker(input: {
     input.callbacks?.onModelResolved?.(change);
   }
   if (fallbackModel && resolvedProfile.model === fallbackModel) {
-    input.callbacks?.onModelFallback?.(
-      resolvedProfile.id,
-      fallbackModel,
-      `fallback from ${input.profile.model}`
-    );
+    input.callbacks?.onModelFallback?.(resolvedProfile.id, fallbackModel, `fallback from ${input.profile.model}`);
   }
 
   const hostname = "127.0.0.1";
@@ -277,10 +276,23 @@ export async function spawnWorker(input: {
       process.env.OPENCODE_WORKER_BRIDGE === "1" || Boolean(process.env.OPENCODE_WORKER_PLUGIN_PATH);
     const useWorkerBridge = Boolean(workerBridgePluginPath) && preferWorkerBridge;
 
+    const agentOverride =
+      resolvedProfile.temperature !== undefined
+        ? {
+            agent: {
+              general: {
+                model: resolvedProfile.model,
+                temperature: resolvedProfile.temperature,
+              },
+            },
+          }
+        : undefined;
+
     const mergedConfig = await mergeOpenCodeConfig(
       {
         model: resolvedProfile.model,
         plugin: [],
+        ...(agentOverride ?? {}),
         ...(toolConfig && { tools: toolConfig }),
         ...(resolvedProfile.permissions && { permissions: resolvedProfile.permissions }),
         ...(workerMcp && { mcp: workerMcp }),
@@ -288,7 +300,7 @@ export async function spawnWorker(input: {
       {
         dropOrchestratorPlugin: true,
         appendPlugins: useWorkerBridge ? [workerBridgePluginPath as string] : undefined,
-      }
+      },
     );
 
     // Inject worker env vars into process.env before starting server
@@ -340,14 +352,17 @@ export async function spawnWorker(input: {
             signal: sessionAbort.signal as any,
           } as any),
           input.timeoutMs,
-          sessionAbort
+          sessionAbort,
         );
       } catch (error) {
         return { error };
       }
     };
 
-    const updateInstanceServer = (bundle: { client: ApiService["client"]; server: { url: string; close: () => any } }) => {
+    const updateInstanceServer = (bundle: {
+      client: ApiService["client"];
+      server: { url: string; close: () => any };
+    }) => {
       const { client, server } = bundle;
       instance.shutdown = async () => server.close();
       instance.serverUrl = server.url;
@@ -393,13 +408,14 @@ export async function spawnWorker(input: {
           {
             model: resolvedProfile.model,
             plugin: [],
+            ...(agentOverride ?? {}),
             ...(toolConfig && { tools: toolConfig }),
             ...(resolvedProfile.permissions && { permissions: resolvedProfile.permissions }),
           },
           {
             dropOrchestratorPlugin: true,
             appendPlugins: [workerBridgePluginPath],
-          }
+          },
         );
         serverBundle = await startServer(mergedWithBridge, workerBridgePluginPath);
         ({ client, server } = updateInstanceServer(serverBundle));
@@ -461,7 +477,7 @@ export async function spawnWorker(input: {
         signal: bootstrapAbort.signal as any,
       } as any),
       bootstrapTimeoutMs,
-      bootstrapAbort
+      bootstrapAbort,
     ).catch(() => {});
 
     instance.status = "ready";
@@ -484,19 +500,10 @@ export async function spawnWorker(input: {
 
     // Start event forwarding for linked mode
     if (sessionMode === "linked" && input.sessionManager && input.communication) {
-      const forwardEvents = resolvedProfile.forwardEvents ?? [
-        "tool",
-        "message",
-        "error",
-        "complete",
-        "progress",
-      ];
-      instance.eventForwardingHandle = startEventForwarding(
-        instance,
-        input.sessionManager,
-        input.communication,
-        { events: forwardEvents }
-      );
+      const forwardEvents = resolvedProfile.forwardEvents ?? ["tool", "message", "error", "complete", "progress"];
+      instance.eventForwardingHandle = startEventForwarding(instance, input.sessionManager, input.communication, {
+        events: forwardEvents,
+      });
     }
 
     return instance;
@@ -529,10 +536,7 @@ export async function spawnWorker(input: {
 /**
  * Clean up a worker instance, stopping event forwarding and closing sessions.
  */
-export function cleanupWorkerInstance(
-  instance: WorkerInstance,
-  sessionManager?: WorkerSessionManager
-): void {
+export function cleanupWorkerInstance(instance: WorkerInstance, sessionManager?: WorkerSessionManager): void {
   stopEventForwarding(instance);
   if (sessionManager && instance.sessionId) {
     sessionManager.closeSession(instance.sessionId);

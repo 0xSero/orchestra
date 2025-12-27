@@ -43,11 +43,11 @@
 
 ## Overview
 
-**Open Orchestra** is a multi-agent orchestration plugin for [OpenCode](https://opencode.ai) that enables you to spawn, manage, and coordinate specialized AI workers. It implements a **hub-and-spoke architecture** where a central orchestrator coordinates multiple specialized workers, each optimized for specific tasks.
+**OpenCode Boomerang** is a multi-agent orchestration system for [OpenCode](https://opencode.ai). This repo ships the **Open Orchestra** plugin (`orchestra/`) plus a control panel UI (`app/`) to spawn, manage, and coordinate specialized AI workers. It implements a **hub-and-spoke architecture** where a central orchestrator coordinates multiple specialized workers, each optimized for specific tasks.
 
 ### Why Multiple AI Workers?
 
-Instead of asking one AI to do everything, Open Orchestra lets you use specialized workers:
+Instead of asking one AI to do everything, the Open Orchestra plugin lets you use specialized workers:
 
 | Worker | Best For | Example |
 |--------|----------|---------|
@@ -60,13 +60,13 @@ This specialization means better results, clearer reasoning, and the ability to 
 
 ## Prerequisites
 
-Before installing Open Orchestra, verify you have:
+Before installing the Open Orchestra plugin, verify you have:
 
 | Requirement | Check Command | Expected |
 |-------------|---------------|----------|
 | Bun runtime | `bun --version` | 1.0.0 or higher |
 | OpenCode CLI | `opencode --version` | Any recent version |
-| AI Provider | `list_models` (in OpenCode) | At least one model listed |
+| AI Provider | `opencode.json` provider config | At least one model configured |
 
 **Quick verification:**
 
@@ -90,17 +90,17 @@ See [docs/configuration.md](./docs/configuration.md) for detailed setup instruct
 
 ### Key Features
 
-- **6 Built-in Worker Profiles** - Vision, Docs, Coder, Architect, Explorer, Memory
-- **Hub-and-Spoke Architecture** - Central orchestrator with specialized workers
-- **8 Essential Tool APIs** - Focused tooling for worker management and delegation
-- **Profile-Based Spawning** - Auto-model resolution from OpenCode config
-- **Dynamic Port Allocation** - Avoids conflicts with automatic port assignment
-- **Session-Based Isolation** - Each worker maintains its own conversation context
-- **File-Based Memory (Neo4j Optional)** - Persistent knowledge without extra infrastructure
+- **Skill-defined Profiles** - Worker profiles come from `SKILL.md` files (project + global).
+- **Control Panel UI** - Sessions, profiles, logs, and SQLite-backed settings in `app/`.
+- **Skills + Sessions + DB API** - CRUD + SSE endpoints for skills, session tracking, and preferences.
+- **Built-in Workflows** - RooCode Boomerang plus bundled templates with security limits.
+- **Vision Auto-Routing** - Inline `[VISION ANALYSIS]` with `.opencode/vision/jobs.jsonl` logs.
+- **SQLite Overrides** - Persist user preferences and per-worker model/temperature overrides.
+- **Memory System** - File-based memory by default with optional Neo4j backing.
 
 ## Architecture
 
-Open Orchestra follows a hub-and-spoke pattern inspired by successful multi-agent systems like AutoGen and LangGraph, but optimized for OpenCode's plugin architecture.
+OpenCode Boomerang follows a hub-and-spoke pattern inspired by successful multi-agent systems like AutoGen and LangGraph, but optimized for OpenCode's plugin architecture.
 
 ```mermaid
 graph TB
@@ -175,7 +175,31 @@ EOF
 }
 ```
 
-**2. Create orchestrator config (optional - auto-setup available):**
+**2. Define skills (profiles):**
+
+Profiles are defined in `.opencode/skill/<id>/SKILL.md` (project) or `~/.opencode/skill/<id>/SKILL.md` (global).
+The repo includes sample skills under `orchestra/.opencode/skill` that you can copy into your project.
+
+```bash
+mkdir -p .opencode/skill/coder
+cat > .opencode/skill/coder/SKILL.md <<'EOF'
+---
+name: coder
+description: Code implementation specialist
+model: anthropic/claude-opus-4-5
+tools:
+  Read: true
+  Write: true
+  Bash: true
+tags:
+  - coding
+---
+
+You are a code implementation specialist. Focus on clean, testable changes.
+EOF
+```
+
+**3. Create orchestrator config (optional - auto-setup available):**
 
 ```json
 // .opencode/orchestrator.json or orchestrator.json
@@ -185,6 +209,34 @@ EOF
   "workers": ["vision", "docs", "coder"]
 }
 ```
+
+### Control Panel (app/)
+
+The control panel expects OpenCode at `http://localhost:4096` and the Skills/DB API at `http://localhost:4097`.
+If you change the skills API port, set `OPENCODE_SKILLS_PORT` for the plugin and `VITE_SKILLS_API_BASE` for the app.
+
+```bash
+cd app
+bun install
+VITE_SKILLS_API_BASE=http://localhost:4097 bun run dev
+```
+
+### Desktop App (desktop/)
+
+The desktop shell wraps the control panel UI and can spawn an OpenCode sidecar. To connect to an existing server,
+set explicit base URLs.
+
+```bash
+cd desktop
+bun install
+bun run tauri dev
+```
+
+**Overrides:**
+- `OPENCODE_PORT` / `OPENCODE_SKILLS_PORT`: use existing local ports instead of spawning a sidecar.
+- `OPENCODE_DESKTOP_BASE_URL`: full OpenCode server URL (skips sidecar).
+- `OPENCODE_DESKTOP_SKILLS_URL`: full Skills/DB API URL.
+- `OPENCODE_DESKTOP_PLUGIN_PATH`: absolute path to the orchestrator plugin entry (defaults to auto-detecting `orchestra/dist/index.js` when available).
 
 ### Basic Usage
 
@@ -211,7 +263,7 @@ spawn_worker({ profileId: "docs" })
 
 **Delegate tasks:**
 ```bash
-delegate_task({ task: "Analyze this screenshot", requiresVision: true })
+delegate_task({ task: "Analyze this screenshot", attachments: [...] })
 delegate_task({ task: "Find the official React hooks documentation" })
 ```
 
@@ -225,25 +277,53 @@ ask_worker({ workerId: "vision", message: "What's in this image?", attachments: 
 Workflows run multi-step sequences with security limits:
 
 ```bash
-list_workflows({ format: "markdown" })
+list_workflows()
 run_workflow({ workflowId: "roocode-boomerang", task: "Implement the new workflow tools" })
 ```
 
-Command shortcuts:
+Built-in workflow IDs:
+- `roocode-boomerang`
+- `bug-triage`
+- `security-audit`
+- `qa-regression`
+- `spec-to-implementation`
+- `data-digest`
 
-- `orchestrator.workflows`
-- `orchestrator.boomerang`
+Note: these workflows assume matching skill IDs exist (e.g., `reviewer`, `security`, `qa`, `product`, `analyst`).
 
-## Built-in Profiles
+Slash commands:
 
-| Profile | Model Tag | Vision | Web | Purpose |
-|---------|-----------|--------|-----|---------|
-| `vision` | `auto:vision` | Yes | No | Image analysis, OCR, UI review |
-| `docs` | `auto:docs` | No | Yes | Documentation research, examples, citations |
-| `coder` | `auto` | No | No | Code implementation, file operations |
-| `architect` | `auto` | No | No | System design, planning (read-only) |
-| `explorer` | `auto:fast` | No | No | Fast codebase searches |
-| `memory` | `auto` | No | Yes | File-based memory (Neo4j optional), context pruning |
+- `/orchestrator.status`
+- `/orchestrator.spawn <profileId>`
+- `/orchestrator.demo`
+- `/orchestrator.onboard [--mode council|multimodal|all]`
+- `/vision.analyze`
+- `/memory.record`
+- `/memory.query`
+
+## Onboarding (5-minute guided demo)
+
+Use the control panel route `/onboarding` or run:
+
+```bash
+/orchestrator.onboard --mode council
+/orchestrator.onboard --mode multimodal
+/orchestrator.onboard --mode all
+```
+
+Notes:
+- Progress is stored in SQLite preferences (`onboarding.step`, `onboarding.completed`, `onboarding.skipped`).
+- The multimodal demo uses the `glm47-vision-demo` profile; override or disable it via `orchestrator.json` if needed.
+
+## Profiles (Skills)
+
+Profiles are defined as skills; there are no hardcoded profiles. The orchestrator loads:
+
+- Project skills: `.opencode/skill/<id>/SKILL.md`
+- Global skills: `~/.opencode/skill/<id>/SKILL.md` (or `OPENCODE_SKILLS_HOME`)
+
+Sample skill IDs used in this repo's tests/dev assets: `architect`, `coder`, `docs`, `explorer`, `memory`, `vision`.
+Use `profiles` in `orchestrator.json` for overrides and the Settings UI for per-user SQLite overrides.
 
 ## Worker Lifecycle
 
@@ -262,17 +342,19 @@ stateDiagram-v2
 ## Documentation
 
 ### Getting Started
-- [Quickstart](./docs/quickstart.md) - Your first worker in 5 minutes
 - [Examples](./docs/examples.md) - Real-world use cases and workflows
-- [Troubleshooting](./docs/troubleshooting.md) - Common issues and fixes
+- [Configuration](./docs/configuration.md) - Orchestrator config and SKILL.md reference
+- [Tool Reference](./docs/reference.md) - Tools and slash commands
+- [Troubleshooting](./docs/runbooks/troubleshooting.md) - Common issues and fixes
 
 ### Reference
-- [Configuration](./docs/configuration.md) - Complete configuration reference
-- [Guide](./docs/guide.md) - Profiles, workflows, and advanced features
-- [Tool Reference](./docs/reference.md) - All tools with examples
+- [Primitives](./docs/primitives.md) - File-level map of core services and UI
+- [Inventory](./docs/inventory.md) - Module inventory and file map
 
 ### Deep Dive
 - [Architecture](./docs/architecture.md) - System design and patterns
+- [Vision Workflow Report](./docs/vision-workflow-report.md) - Vision routing behavior
+- [Runtime Profile](./docs/runtime-profile.md) - Build/test timing report
 - [CHANGELOG](./CHANGELOG.md) - Version history and changes
 
 ## Tools
@@ -280,13 +362,13 @@ stateDiagram-v2
 | Tool | Description |
 |------|-------------|
 | `spawn_worker` | Start a worker with a profile |
-| `ask_worker` | Send a message to a specific worker |
-| `delegate_task` | Auto-route task to the best worker |
-| `list_workers` | List running workers (use `workerId` for details) |
 | `stop_worker` | Stop a running worker |
+| `list_workers` | List running workers |
 | `list_profiles` | Show available worker profiles |
-| `list_models` | Show available models from OpenCode config |
-| `orchestrator_status` | Show orchestrator config and status |
+| `ask_worker` | Send a message to a specific worker |
+| `ask_worker_async` | Send a message asynchronously (returns job id) |
+| `await_worker_job` | Wait for an async job result |
+| `delegate_task` | Auto-route task to the best worker |
 | `list_workflows` | List registered workflows |
 | `run_workflow` | Run a workflow by id |
 
@@ -294,17 +376,17 @@ stateDiagram-v2
 
 | Command | Description |
 |---------|-------------|
-| `orchestrator.status` | Show workers, profiles, and config |
-| `orchestrator.models` | List available models |
-| `orchestrator.profiles` | List worker profiles |
-| `orchestrator.workers` | List running workers |
-| `orchestrator.spawn.<id>` | Spawn a worker (e.g. spawn.docs) |
-| `orchestrator.workflows` | List workflows |
-| `orchestrator.boomerang` | Run the RooCode boomerang workflow |
+| `orchestrator.status` | Show workers and profiles |
+| `orchestrator.spawn` | Spawn a worker by profile id |
+| `orchestrator.demo` | Run the demo walkthrough |
+| `orchestrator.onboard` | Run the 5-minute onboarding flow |
+| `vision.analyze` | Analyze clipboard or file image |
+| `memory.record` | Record a memory entry |
+| `memory.query` | Query memory entries |
 
 ## Advanced: Memory System
 
-Open Orchestra stores memory in a local file by default, with optional Neo4j-backed graph storage if you configure it. See the memory section in [Guide](./docs/guide.md) for setup instructions.
+OpenCode Boomerang stores memory in a local file by default, with optional Neo4j-backed graph storage if you configure it. See [docs/configuration.md](./docs/configuration.md) for setup instructions.
 
 ## Development
 
@@ -312,54 +394,46 @@ Open Orchestra stores memory in a local file by default, with optional Neo4j-bac
 # Install dependencies
 bun install
 
-# Type check
+# Orchestra (plugin)
+cd orchestra
 bun run typecheck
-
-# Build
-bun run build
-
-# Run tests
 bun test
+
+# Control panel
+cd ../app
+bun run typecheck
+bun run test
 ```
 
 ## Project Structure
 
 ```
-opencode-orchestrator/
-├── src/
-│   ├── index.ts              # Plugin entry point
-│   ├── config/
-│   │   ├── orchestrator.ts   # Config loading/merging
-│   │   └── profiles.ts       # Built-in worker profiles
-│   ├── core/
-│   │   └── worker-pool.ts    # Worker registry/pool
-│   ├── memory/
-│   │   ├── store.ts          # Memory backend selection
-│   │   ├── store-file.ts     # File-based memory
-│   │   ├── graph.ts          # Neo4j graph operations (optional)
-│   │   └── neo4j.ts          # Neo4j connection
-│   ├── models/
-│   │   ├── catalog.ts        # Model catalog utilities
-│   │   └── hydrate.ts        # Model resolution
-│   ├── tools/
-│   │   └── index.ts          # Tool exports
-│   ├── types/
-│   │   └── index.ts          # TypeScript definitions
-│   ├── ux/
-│   │   ├── idle-notification.ts
-│   │   └── pruning.ts        # Context pruning
-│   └── workers/
-│       ├── prompt.ts         # Prompt building
-│       └── spawner.ts        # Worker lifecycle
-├── schema/
-│   └── orchestrator.schema.json
-├── docs/
-│   ├── architecture.md
-│   ├── guide.md
-│   └── reference.md
-└── test/
-    ├── e2e.test.ts
-    └── orchestrator.test.ts
+opencode-boomerang/
+├── orchestra/                     # Open Orchestra plugin
+│   ├── src/
+│   │   ├── api/                   # Skills, sessions, DB routers
+│   │   ├── commands/              # Slash command handlers
+│   │   ├── communication/         # Event bus + SSE forwarding
+│   │   ├── config/                # Config loading + inheritance
+│   │   ├── core/                  # Service container + hooks
+│   │   ├── db/                    # SQLite persistence
+│   │   ├── memory/                # File/Neo4j memory backends
+│   │   ├── models/                # Model resolution
+│   │   ├── orchestrator/          # Routing + delegation
+│   │   ├── permissions/           # Tool permission system
+│   │   ├── skills/                # Skill parsing + CRUD
+│   │   ├── tools/                 # Tool definitions + guards
+│   │   ├── workers/               # Spawn/send/jobs/session manager
+│   │   └── workflows/             # Built-in workflows + engine
+│   ├── schema/                    # orchestrator.schema.json
+│   └── .opencode/                 # Sample skills + agent prompt
+├── app/                           # Control panel (Solid.js)
+│   ├── src/                       # Pages, components, contexts
+│   └── vite.config.ts
+├── desktop/                       # Desktop shell (Tauri + app/ UI)
+│   ├── src/                        # Tauri frontend wrapper
+│   └── src-tauri/                  # Tauri backend
+├── docs/                          # Documentation + runbooks
 ```
 
 ## Contributing

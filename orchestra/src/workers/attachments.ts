@@ -84,7 +84,7 @@ export async function prepareWorkerAttachments(input: {
           } catch {
             // ignore
           }
-        })
+        }),
       );
     },
   };

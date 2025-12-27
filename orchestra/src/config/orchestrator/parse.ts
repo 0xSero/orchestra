@@ -1,6 +1,12 @@
-import type { OrchestratorConfig, OrchestratorConfigFile, SpawnPolicy, ToolPermissions, WorkerProfile } from "../../types";
+import { asBooleanRecord, asStringArray, isPlainObject } from "../../helpers/format";
+import type {
+  OrchestratorConfig,
+  OrchestratorConfigFile,
+  SpawnPolicy,
+  ToolPermissions,
+  WorkerProfile,
+} from "../../types";
 import { resolveProfileInheritance, type WorkerProfileDefinition } from "../profile-inheritance";
-import { isPlainObject, asBooleanRecord, asStringArray } from "../../helpers/format";
 import { parseIntegrationsSection, parseMemorySection, parseTelemetrySection } from "./parse-extra";
 
 function parsePermissions(value: unknown): ToolPermissions | undefined {
@@ -8,13 +14,25 @@ function parsePermissions(value: unknown): ToolPermissions | undefined {
   const out: ToolPermissions = {};
   if (isPlainObject(value.categories)) {
     out.categories = {};
-    if (value.categories.filesystem === "full" || value.categories.filesystem === "read" || value.categories.filesystem === "none") {
+    if (
+      value.categories.filesystem === "full" ||
+      value.categories.filesystem === "read" ||
+      value.categories.filesystem === "none"
+    ) {
       out.categories.filesystem = value.categories.filesystem;
     }
-    if (value.categories.execution === "full" || value.categories.execution === "sandboxed" || value.categories.execution === "none") {
+    if (
+      value.categories.execution === "full" ||
+      value.categories.execution === "sandboxed" ||
+      value.categories.execution === "none"
+    ) {
       out.categories.execution = value.categories.execution;
     }
-    if (value.categories.network === "full" || value.categories.network === "localhost" || value.categories.network === "none") {
+    if (
+      value.categories.network === "full" ||
+      value.categories.network === "localhost" ||
+      value.categories.network === "none"
+    ) {
       out.categories.network = value.categories.network;
     }
   }
@@ -55,12 +73,12 @@ function parseSpawnPolicyEntry(value: unknown): SpawnPolicy | undefined {
  */
 function resolveWorkerEntry(
   entry: unknown,
-  baseProfiles: Record<string, WorkerProfile> = {}
+  baseProfiles: Record<string, WorkerProfile> = {},
 ): WorkerProfileDefinition | undefined {
   // String entry: reference to a profile that will be loaded from SKILL.md
   if (typeof entry === "string") {
     // Return the base profile if available, otherwise create a minimal reference
-    return baseProfiles[entry] ?? { id: entry } as WorkerProfileDefinition;
+    return baseProfiles[entry] ?? ({ id: entry } as WorkerProfileDefinition);
   }
   if (!isPlainObject(entry)) return undefined;
 
@@ -164,11 +182,19 @@ export function parseOrchestratorConfigFile(raw: unknown): Partial<OrchestratorC
 
   if (isPlainObject(raw.modelSelection)) {
     const modelSelection: Record<string, unknown> = {};
-    if (raw.modelSelection.mode === "performance" || raw.modelSelection.mode === "balanced" || raw.modelSelection.mode === "economical") {
+    if (
+      raw.modelSelection.mode === "performance" ||
+      raw.modelSelection.mode === "balanced" ||
+      raw.modelSelection.mode === "economical"
+    ) {
       modelSelection.mode = raw.modelSelection.mode;
     }
-    if (typeof raw.modelSelection.maxCostPer1kTokens === "number") modelSelection.maxCostPer1kTokens = raw.modelSelection.maxCostPer1kTokens;
-    if (Array.isArray(raw.modelSelection.preferredProviders) && raw.modelSelection.preferredProviders.every((p: unknown) => typeof p === "string")) {
+    if (typeof raw.modelSelection.maxCostPer1kTokens === "number")
+      modelSelection.maxCostPer1kTokens = raw.modelSelection.maxCostPer1kTokens;
+    if (
+      Array.isArray(raw.modelSelection.preferredProviders) &&
+      raw.modelSelection.preferredProviders.every((p: unknown) => typeof p === "string")
+    ) {
       modelSelection.preferredProviders = raw.modelSelection.preferredProviders;
     }
     partial.modelSelection = modelSelection as OrchestratorConfig["modelSelection"];
@@ -240,7 +266,10 @@ export function parseOrchestratorConfigFile(raw: unknown): Partial<OrchestratorC
     if (typeof raw.pruning.enabled === "boolean") pruning.enabled = raw.pruning.enabled;
     if (typeof raw.pruning.maxToolOutputChars === "number") pruning.maxToolOutputChars = raw.pruning.maxToolOutputChars;
     if (typeof raw.pruning.maxToolInputChars === "number") pruning.maxToolInputChars = raw.pruning.maxToolInputChars;
-    if (Array.isArray(raw.pruning.protectedTools) && raw.pruning.protectedTools.every((t: unknown) => typeof t === "string")) {
+    if (
+      Array.isArray(raw.pruning.protectedTools) &&
+      raw.pruning.protectedTools.every((t: unknown) => typeof t === "string")
+    ) {
       pruning.protectedTools = raw.pruning.protectedTools;
     }
     partial.pruning = pruning as OrchestratorConfig["pruning"];
@@ -251,10 +280,14 @@ export function parseOrchestratorConfigFile(raw: unknown): Partial<OrchestratorC
     if (typeof raw.workflows.enabled === "boolean") workflows.enabled = raw.workflows.enabled;
     if (isPlainObject(raw.workflows.roocodeBoomerang)) {
       const roocode: Record<string, unknown> = {};
-      if (typeof raw.workflows.roocodeBoomerang.enabled === "boolean") roocode.enabled = raw.workflows.roocodeBoomerang.enabled;
-      if (typeof raw.workflows.roocodeBoomerang.maxSteps === "number") roocode.maxSteps = raw.workflows.roocodeBoomerang.maxSteps;
-      if (typeof raw.workflows.roocodeBoomerang.maxTaskChars === "number") roocode.maxTaskChars = raw.workflows.roocodeBoomerang.maxTaskChars;
-      if (typeof raw.workflows.roocodeBoomerang.maxCarryChars === "number") roocode.maxCarryChars = raw.workflows.roocodeBoomerang.maxCarryChars;
+      if (typeof raw.workflows.roocodeBoomerang.enabled === "boolean")
+        roocode.enabled = raw.workflows.roocodeBoomerang.enabled;
+      if (typeof raw.workflows.roocodeBoomerang.maxSteps === "number")
+        roocode.maxSteps = raw.workflows.roocodeBoomerang.maxSteps;
+      if (typeof raw.workflows.roocodeBoomerang.maxTaskChars === "number")
+        roocode.maxTaskChars = raw.workflows.roocodeBoomerang.maxTaskChars;
+      if (typeof raw.workflows.roocodeBoomerang.maxCarryChars === "number")
+        roocode.maxCarryChars = raw.workflows.roocodeBoomerang.maxCarryChars;
       if (typeof raw.workflows.roocodeBoomerang.perStepTimeoutMs === "number") {
         roocode.perStepTimeoutMs = raw.workflows.roocodeBoomerang.perStepTimeoutMs;
       }
@@ -284,8 +317,10 @@ export function parseOrchestratorConfigFile(raw: unknown): Partial<OrchestratorC
     if (isPlainObject(raw.security.workflows)) {
       const workflows: Record<string, unknown> = {};
       if (typeof raw.security.workflows.maxSteps === "number") workflows.maxSteps = raw.security.workflows.maxSteps;
-      if (typeof raw.security.workflows.maxTaskChars === "number") workflows.maxTaskChars = raw.security.workflows.maxTaskChars;
-      if (typeof raw.security.workflows.maxCarryChars === "number") workflows.maxCarryChars = raw.security.workflows.maxCarryChars;
+      if (typeof raw.security.workflows.maxTaskChars === "number")
+        workflows.maxTaskChars = raw.security.workflows.maxTaskChars;
+      if (typeof raw.security.workflows.maxCarryChars === "number")
+        workflows.maxCarryChars = raw.security.workflows.maxCarryChars;
       if (typeof raw.security.workflows.perStepTimeoutMs === "number") {
         workflows.perStepTimeoutMs = raw.security.workflows.perStepTimeoutMs;
       }
@@ -304,7 +339,7 @@ export function parseOrchestratorConfigFile(raw: unknown): Partial<OrchestratorC
 /**
  * Collect profile overrides and spawn list from orchestrator.json config.
  *
- * Profiles are now primarily loaded from SKILL.md files in .opencode/agent/subagents/.
+ * Profiles are now primarily loaded from SKILL.md files in .opencode/skill/.
  * This function processes config file overrides and determines which workers to spawn.
  *
  * @param input - Parsed orchestrator.json config
@@ -312,7 +347,7 @@ export function parseOrchestratorConfigFile(raw: unknown): Partial<OrchestratorC
  */
 export function collectProfilesAndSpawn(
   input: OrchestratorConfigFile,
-  baseProfiles: Record<string, WorkerProfile> = {}
+  baseProfiles: Record<string, WorkerProfile> = {},
 ): {
   profiles: Record<string, WorkerProfile>;
   spawn: string[];
@@ -329,8 +364,7 @@ export function collectProfilesAndSpawn(
 
   const enqueueSpawn = (id: string | undefined) => {
     if (!id) return;
-    // Accept spawn if profile exists in base profiles or definitions
-    if (!(id in baseProfiles) && !(id in definitions)) return;
+    // Accept spawn entries even if the profile is loaded later from SKILL.md.
     if (seen.has(id)) return;
     seen.add(id);
     spawn.push(id);

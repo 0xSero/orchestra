@@ -126,7 +126,9 @@ export class WorkerJobRegistry {
     const set = this.waiters.get(id);
     if (!set) return;
     this.waiters.delete(id);
-    set.forEach((cb) => cb(job));
+    for (const cb of set) {
+      cb(job);
+    }
   }
 
   private prune() {

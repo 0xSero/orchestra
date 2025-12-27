@@ -30,7 +30,10 @@ export function parseSkillFile(contents: string): ParsedSkillFile {
     throw new Error("Skill frontmatter must be a YAML object.");
   }
 
-  const body = lines.slice(endIndex + 1).join("\n").trim();
+  const body = lines
+    .slice(endIndex + 1)
+    .join("\n")
+    .trim();
 
   return {
     frontmatter: parsed as Record<string, unknown>,

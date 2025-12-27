@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { recordMessageMemory } from "../src/memory/auto";
-import { recentMemory, searchMemory } from "../src/memory/store";
-import { buildMemoryInjection } from "../src/memory/inject";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { recordMessageMemory } from "../src/memory/auto";
+import { buildMemoryInjection } from "../src/memory/inject";
+import { recentMemory, searchMemory } from "../src/memory/store";
 
 describe("memory auto record (file)", () => {
   let tempDir = "";

@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createSkillsService } from "../../src/skills/service";
 import { createSkillsApiServer } from "../../src/api/skills-server";
+import { createSkillsService } from "../../src/skills/service";
 
 let projectDir: string;
 let homeDir: string;

@@ -1,0 +1,36 @@
+{
+  "name": "@opencode-ai/desktop",
+  "private": true,
+  "version": "1.0.203",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -b",
+    "predev": "bun ./scripts/predev.ts",
+    "dev": "vite",
+    "build": "bun run typecheck && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@opencode-ai/app": "workspace:*",
+    "@solid-primitives/storage": "^4.3.1",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "~2",
+    "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-os": "~2",
+    "@tauri-apps/plugin-process": "~2",
+    "@tauri-apps/plugin-shell": "~2",
+    "@tauri-apps/plugin-store": "~2",
+    "@tauri-apps/plugin-updater": "~2",
+    "@tauri-apps/plugin-http": "~2",
+    "@tauri-apps/plugin-window-state": "~2",
+    "solid-js": "^1.9.3"
+  },
+  "devDependencies": {
+    "@actions/artifact": "4.0.0",
+    "@tauri-apps/cli": "^2",
+    "@types/bun": "latest",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}

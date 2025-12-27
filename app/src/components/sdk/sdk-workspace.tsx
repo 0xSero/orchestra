@@ -1,9 +1,9 @@
-import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
-import { useOpenCode } from "@/context/opencode";
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useOpenCode } from "@/context/opencode";
 import { cn, formatRelativeTime } from "@/lib/utils";
-import { sdkActions, type SdkAction } from "./sdk-actions";
+import { type SdkAction, sdkActions } from "./sdk-actions";
 
 const ACTIONS = sdkActions;
 
@@ -34,9 +34,7 @@ export function SdkWorkspace() {
     return groups;
   });
 
-  const selectedAction = createMemo(() =>
-    ACTIONS.find((action) => action.id === selectedActionId())
-  );
+  const selectedAction = createMemo(() => ACTIONS.find((action) => action.id === selectedActionId()));
 
   createEffect(() => {
     const action = selectedAction();
@@ -80,33 +78,37 @@ export function SdkWorkspace() {
       const normalized = normalizeOutput(result);
       const output = JSON.stringify(normalized, null, 2);
 
-      setRuns((prev) => [
-        {
-          id: `${startedAt}-${Math.random().toString(36).slice(2)}`,
-          actionId: action.id,
-          actionLabel: action.label,
-          startedAt,
-          durationMs: Date.now() - startedAt,
-          ok: !(normalized as any)?.error,
-          output,
-        },
-        ...prev,
-      ].slice(0, 25));
+      setRuns((prev) =>
+        [
+          {
+            id: `${startedAt}-${Math.random().toString(36).slice(2)}`,
+            actionId: action.id,
+            actionLabel: action.label,
+            startedAt,
+            durationMs: Date.now() - startedAt,
+            ok: !(normalized as any)?.error,
+            output,
+          },
+          ...prev,
+        ].slice(0, 25),
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
-      setRuns((prev) => [
-        {
-          id: `${startedAt}-${Math.random().toString(36).slice(2)}`,
-          actionId: action.id,
-          actionLabel: action.label,
-          startedAt,
-          durationMs: Date.now() - startedAt,
-          ok: false,
-          output: JSON.stringify({ error: message }, null, 2),
-        },
-        ...prev,
-      ].slice(0, 25));
+      setRuns((prev) =>
+        [
+          {
+            id: `${startedAt}-${Math.random().toString(36).slice(2)}`,
+            actionId: action.id,
+            actionLabel: action.label,
+            startedAt,
+            durationMs: Date.now() - startedAt,
+            ok: false,
+            output: JSON.stringify({ error: message }, null, 2),
+          },
+          ...prev,
+        ].slice(0, 25),
+      );
     } finally {
       setRunning(false);
     }
@@ -137,7 +139,7 @@ export function SdkWorkspace() {
                 <select
                   class={cn(
                     "mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm",
-                    "focus:outline-none focus:ring-2 focus:ring-ring/30"
+                    "focus:outline-none focus:ring-2 focus:ring-ring/30",
                   )}
                   value={selectedActionId()}
                   onChange={(e) => setSelectedActionId(e.currentTarget.value)}
@@ -145,11 +147,7 @@ export function SdkWorkspace() {
                   <For each={Object.entries(groupedActions())}>
                     {([group, actions]) => (
                       <optgroup label={group}>
-                        <For each={actions}>
-                          {(action) => (
-                            <option value={action.id}>{action.label}</option>
-                          )}
-                        </For>
+                        <For each={actions}>{(action) => <option value={action.id}>{action.label}</option>}</For>
                       </optgroup>
                     )}
                   </For>
@@ -160,7 +158,7 @@ export function SdkWorkspace() {
                 <textarea
                   class={cn(
                     "mt-1 h-32 w-full rounded-md border border-border bg-background px-2 py-2 text-xs font-mono",
-                    "focus:outline-none focus:ring-2 focus:ring-ring/30"
+                    "focus:outline-none focus:ring-2 focus:ring-ring/30",
                   )}
                   value={inputText()}
                   onInput={(e) => setInputText(e.currentTarget.value)}
@@ -179,12 +177,7 @@ export function SdkWorkspace() {
               <Button size="sm" onClick={runAction} disabled={running()}>
                 {running() ? "Running..." : "Run"}
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setRuns([])}
-                disabled={runs().length === 0}
-              >
+              <Button size="sm" variant="ghost" onClick={() => setRuns([])} disabled={runs().length === 0}>
                 Clear Runs
               </Button>
             </div>
@@ -196,10 +189,7 @@ export function SdkWorkspace() {
             <CardTitle class="text-sm">Latest Output</CardTitle>
           </CardHeader>
           <CardContent>
-            <Show
-              when={latestRun()}
-              fallback={<div class="text-xs text-muted-foreground">No runs yet.</div>}
-            >
+            <Show when={latestRun()} fallback={<div class="text-xs text-muted-foreground">No runs yet.</div>}>
               {(run) => (
                 <div>
                   <div class="flex items-center justify-between text-xs text-muted-foreground">
@@ -220,10 +210,7 @@ export function SdkWorkspace() {
             <CardTitle class="text-sm">Recent Runs</CardTitle>
           </CardHeader>
           <CardContent>
-            <Show
-              when={runs().length > 0}
-              fallback={<div class="text-xs text-muted-foreground">No activity yet.</div>}
-            >
+            <Show when={runs().length > 0} fallback={<div class="text-xs text-muted-foreground">No activity yet.</div>}>
               <div class="space-y-2">
                 <For each={runs()}>
                   {(run) => (
@@ -233,9 +220,7 @@ export function SdkWorkspace() {
                         <div class="text-muted-foreground">{formatRelativeTime(run.startedAt)}</div>
                       </div>
                       <div class="text-right">
-                        <div class={run.ok ? "text-green-500" : "text-destructive"}>
-                          {run.ok ? "ok" : "error"}
-                        </div>
+                        <div class={run.ok ? "text-green-500" : "text-destructive"}>{run.ok ? "ok" : "error"}</div>
                         <div class="text-muted-foreground">{run.durationMs} ms</div>
                       </div>
                     </div>

@@ -1,5 +1,6 @@
 import { createOpencode, createOpencodeClient } from "@opencode-ai/sdk";
 import type { Factory, ServiceLifecycle } from "../types";
+
 export * from "./skills-server";
 
 export type ApiConfig = {

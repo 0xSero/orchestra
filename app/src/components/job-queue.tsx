@@ -2,12 +2,22 @@
  * Activity panel - lightweight view of recent session updates.
  */
 
-import { type Component, For, Show, createMemo } from "solid-js";
+import { type Component, createMemo, For, Show } from "solid-js";
 import { useOpenCode } from "@/context/opencode";
 import { formatRelativeTime } from "@/lib/utils";
 
 const ClockIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <circle cx="12" cy="12" r="10" />
     <polyline points="12 6 12 12 16 14" />
   </svg>
@@ -42,9 +52,7 @@ export const JobQueue: Component = () => {
               {(session) => (
                 <div class="rounded-md border border-border/60 px-3 py-2">
                   <div class="text-sm text-foreground truncate">{session.title || "Untitled Session"}</div>
-                  <div class="text-xs text-muted-foreground">
-                    Updated {formatRelativeTime(session.time.updated)}
-                  </div>
+                  <div class="text-xs text-muted-foreground">Updated {formatRelativeTime(session.time.updated)}</div>
                 </div>
               )}
             </For>

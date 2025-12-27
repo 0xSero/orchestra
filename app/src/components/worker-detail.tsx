@@ -2,32 +2,40 @@
  * ChatView - Chat interface with session metadata header
  */
 
-import { type Component, Show, For, createMemo, createEffect, createSignal } from "solid-js";
-import { useOpenCode, type Message, type Part, type WorkerRuntime } from "@/context/opencode";
+import { type Component, createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import { type Attachment as PromptAttachment, PromptInput } from "@/components/prompt-input";
 import { useLayout } from "@/context/layout";
+import { type Message, type Part, useOpenCode, type WorkerRuntime } from "@/context/opencode";
 
 // Icons
-const AttachmentIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M21.44 11.05l-8.49 8.49a5 5 0 0 1-7.07-7.07l8.49-8.49a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.49a2 2 0 0 1-2.83-2.83l7.78-7.78" />
-  </svg>
-);
-
-const SendIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M22 2L11 13" />
-    <path d="M22 2l-7 20-4-9-9-4 20-7z" />
-  </svg>
-);
-
 const StopIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <rect width="14" height="14" x="5" y="5" rx="2" />
   </svg>
 );
 
 const TrashIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <path d="M3 6h18" />
     <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
     <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
@@ -35,7 +43,17 @@ const TrashIcon = () => (
 );
 
 const ServerIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
     <rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
     <line x1="6" x2="6.01" y1="6" y2="6" />
@@ -44,14 +62,34 @@ const ServerIcon = () => (
 );
 
 const ClockIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <circle cx="12" cy="12" r="10" />
     <polyline points="12,6 12,12 16,14" />
   </svg>
 );
 
 const ChatIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="48"
+    height="48"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
   </svg>
 );
@@ -77,7 +115,10 @@ const formatDuration = (startTime: number): string => {
 // 1. Worker status (if we have worker data from orchestra events)
 // 2. Recent activity (time.updated within last 30 seconds = likely active)
 // 3. Compacting state (time.compacting exists = processing)
-const getStatus = (session?: { time?: { updated?: number; compacting?: number } }, worker?: WorkerRuntime): "ready" | "busy" | "error" | "stopped" | "starting" => {
+const getStatus = (
+  session?: { time?: { updated?: number; compacting?: number } },
+  worker?: WorkerRuntime,
+): "ready" | "busy" | "error" | "stopped" | "starting" => {
   // If we have worker data, use it
   if (worker) {
     if (worker.status === "busy") return "busy";
@@ -106,21 +147,33 @@ const getStatus = (session?: { time?: { updated?: number; compacting?: number } 
 
 const getStatusLabel = (status: string): string => {
   switch (status) {
-    case "ready": return "Idle";
-    case "busy": return "Running";
-    case "error": return "Error";
-    case "starting": return "Starting";
-    default: return "Stopped";
+    case "ready":
+      return "Idle";
+    case "busy":
+      return "Running";
+    case "error":
+      return "Error";
+    case "starting":
+      return "Starting";
+    default:
+      return "Stopped";
   }
 };
 
 export const ChatView: Component = () => {
-  const { getSession, getSessionMessages, getMessageParts, deleteSession, fetchMessages, sendMessage, abortSession, workers } = useOpenCode();
+  const {
+    getSession,
+    getSessionMessages,
+    getMessageParts,
+    deleteSession,
+    fetchMessages,
+    sendMessage,
+    abortSession,
+    workers,
+  } = useOpenCode();
   const { selectedWorkerId, selectWorker } = useLayout();
 
-  const [message, setMessage] = createSignal("");
-  const [isLoading, setIsLoading] = createSignal(false);
-  let inputRef: HTMLTextAreaElement | undefined;
+  const [isSending, setIsSending] = createSignal(false);
   let messagesEndRef: HTMLDivElement | undefined;
 
   const session = createMemo(() => {
@@ -137,10 +190,11 @@ export const ChatView: Component = () => {
   const worker = createMemo(() => {
     const id = selectedWorkerId();
     if (!id) return undefined;
-    return workers().find(w => w.sessionId === id);
+    return workers().find((w) => w.sessionId === id);
   });
 
   const status = createMemo(() => getStatus(session(), worker()));
+  const isBusy = createMemo(() => status() === "busy" || status() === "starting");
 
   // Fetch messages when session changes
   createEffect(async () => {
@@ -157,50 +211,41 @@ export const ChatView: Component = () => {
   });
 
   const getMessageText = (parts: Part[]): string => {
-    const textParts = parts.filter(
-      (p) => p.type === "text" || p.type === "reasoning"
-    ) as Array<{ type: "text" | "reasoning"; text: string }>;
+    const textParts = parts.filter((p) => p.type === "text" || p.type === "reasoning") as Array<{
+      type: "text" | "reasoning";
+      text: string;
+    }>;
     return textParts
       .map((p) => p.text.trim())
       .filter(Boolean)
       .join("\n");
   };
 
-  const getMessageContent = (msg: Message): string => {
+  const getFileParts = (parts: Part[]) =>
+    parts.filter((part) => part.type === "file") as Array<
+      Part & { type: "file"; url: string; mime: string; filename?: string }
+    >;
+
+  const getMessageDisplay = (msg: Message) => {
     const parts = getMessageParts(msg.id);
-    const text = getMessageText(parts);
-    return text || `[${msg.role} message]`;
+    return {
+      text: getMessageText(parts),
+      files: getFileParts(parts),
+    };
   };
 
-  const handleSubmit = async () => {
-    const text = message().trim();
+  const handleSubmit = async (text: string, attachments: PromptAttachment[]) => {
     const id = selectedWorkerId();
-    if (!text || !id || isLoading()) return;
+    if (!id || isSending()) return;
 
-    setIsLoading(true);
+    setIsSending(true);
     try {
-      await sendMessage(id, text, []);
-      setMessage("");
-      if (inputRef) inputRef.style.height = "auto";
+      await sendMessage(id, text, attachments);
     } catch (err) {
       console.error("Failed to send:", err);
     } finally {
-      setIsLoading(false);
+      setIsSending(false);
     }
-  };
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
-
-  const handleInput = (e: Event) => {
-    const ta = e.target as HTMLTextAreaElement;
-    setMessage(ta.value);
-    ta.style.height = "auto";
-    ta.style.height = `${Math.min(ta.scrollHeight, 150)}px`;
   };
 
   const handleDelete = async () => {
@@ -226,23 +271,15 @@ export const ChatView: Component = () => {
                 <div class="flex items-center gap-4 min-w-0">
                   <div class="flex items-center gap-2">
                     <span class={`status-dot ${status()}`} />
-                    <span class="text-sm font-medium text-foreground truncate">
-                      {s().title || "Untitled Session"}
-                    </span>
+                    <span class="text-sm font-medium text-foreground truncate">{s().title || "Untitled Session"}</span>
                   </div>
 
-                  <span class={`status-badge ${status()}`}>
-                    {getStatusLabel(status())}
-                  </span>
+                  <span class={`status-badge ${status()}`}>{getStatusLabel(status())}</span>
                 </div>
 
                 <div class="flex items-center gap-2">
                   <Show when={status() === "busy"}>
-                    <button
-                      class="btn btn-sm btn-ghost"
-                      onClick={handleAbort}
-                      title="Stop session"
-                    >
+                    <button class="btn btn-sm btn-ghost" onClick={handleAbort} title="Stop session">
                       <StopIcon />
                       Stop
                     </button>
@@ -273,20 +310,14 @@ export const ChatView: Component = () => {
                 </Show>
 
                 <Show when={worker()?.serverUrl}>
-                  <span class="flex items-center gap-1.5 font-mono truncate">
-                    URL: {worker()?.serverUrl}
-                  </span>
+                  <span class="flex items-center gap-1.5 font-mono truncate">URL: {worker()?.serverUrl}</span>
                 </Show>
 
                 <Show when={worker()?.model}>
-                  <span class="truncate">
-                    Model: {worker()?.model}
-                  </span>
+                  <span class="truncate">Model: {worker()?.model}</span>
                 </Show>
 
-                <span class="font-mono text-muted-foreground/70 truncate">
-                  ID: {s().id.slice(0, 12)}...
-                </span>
+                <span class="font-mono text-muted-foreground/70 truncate">ID: {s().id.slice(0, 12)}...</span>
               </div>
             </div>
 
@@ -306,18 +337,62 @@ export const ChatView: Component = () => {
               >
                 <div class="max-w-3xl mx-auto py-4">
                   <For each={messages()}>
-                    {(msg) => (
-                      <div class={`message ${msg.role === "user" ? "message-user" : "message-assistant"} animate-fade-in`}>
-                        <div class="flex items-center gap-2 mb-2">
-                          <span class="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                            {msg.role}
-                          </span>
+                    {(msg) => {
+                      const display = getMessageDisplay(msg);
+                      const content = display.text || (display.files.length > 0 ? "" : `[${msg.role} message]`);
+
+                      return (
+                        <div
+                          class={`message ${msg.role === "user" ? "message-user" : "message-assistant"} animate-fade-in`}
+                        >
+                          <div class="flex items-center gap-2 mb-2">
+                            <span class="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                              {msg.role}
+                            </span>
+                          </div>
+
+                          <Show when={content}>
+                            <div class="message-content whitespace-pre-wrap">{content}</div>
+                          </Show>
+
+                          <Show when={display.files.length > 0}>
+                            <div class="mt-3 grid gap-2">
+                              <For each={display.files}>
+                                {(file) => (
+                                  <Show
+                                    when={file.mime?.startsWith("image/")}
+                                    fallback={
+                                      <a
+                                        href={file.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        class="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-xs"
+                                      >
+                                        <div class="flex flex-col gap-1">
+                                          <span class="font-medium text-foreground">
+                                            {file.filename ?? "Attachment"}
+                                          </span>
+                                          <span class="text-[10px] text-muted-foreground">{file.mime}</span>
+                                        </div>
+                                        <span class="text-[10px] text-muted-foreground">Open</span>
+                                      </a>
+                                    }
+                                  >
+                                    <a href={file.url} target="_blank" rel="noopener noreferrer" class="block w-fit">
+                                      <img
+                                        src={file.url}
+                                        alt={file.filename ?? "attachment"}
+                                        class="max-h-48 rounded-md border border-border/60"
+                                      />
+                                    </a>
+                                  </Show>
+                                )}
+                              </For>
+                            </div>
+                          </Show>
                         </div>
-                        <div class="message-content whitespace-pre-wrap">
-                          {getMessageContent(msg)}
-                        </div>
-                      </div>
-                    )}
+                      );
+                    }}
                   </For>
                   <div ref={messagesEndRef} />
                 </div>
@@ -327,32 +402,13 @@ export const ChatView: Component = () => {
             {/* Input area */}
             <div class="border-t border-border p-4 bg-card/30">
               <div class="max-w-3xl mx-auto">
-                <div class="composer">
-                  <button class="btn btn-ghost btn-icon" title="Attach file">
-                    <AttachmentIcon />
-                  </button>
-
-                  <textarea
-                    ref={inputRef}
-                    value={message()}
-                    onInput={handleInput}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Type a message..."
-                    disabled={isLoading()}
-                    rows={1}
-                    class="composer-textarea"
-                  />
-
-                  <button
-                    class="btn btn-primary btn-sm"
-                    onClick={handleSubmit}
-                    disabled={!message().trim() || isLoading()}
-                  >
-                    <Show when={isLoading()} fallback={<><SendIcon /> Send</>}>
-                      <span class="animate-pulse-soft">Sending...</span>
-                    </Show>
-                  </button>
-                </div>
+                <PromptInput
+                  onSubmit={handleSubmit}
+                  onCancel={handleAbort}
+                  isLoading={isSending() || isBusy()}
+                  allowFilePicker
+                  placeholder="Type a message..."
+                />
 
                 <div class="flex items-center justify-between mt-2 text-xs text-muted-foreground">
                   <span>Press Enter to send, Shift+Enter for new line</span>
@@ -382,9 +438,7 @@ const EmptyState: Component = () => {
         <ChatIcon />
       </div>
       <p class="empty-state-title">Start a conversation</p>
-      <p class="empty-state-description">
-        Select a session or create a new one.
-      </p>
+      <p class="empty-state-description">Select a session or create a new one.</p>
       <button class="btn" onClick={handleNew}>
         New Chat
       </button>

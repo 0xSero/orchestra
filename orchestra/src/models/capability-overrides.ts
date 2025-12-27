@@ -4,7 +4,7 @@ export type CapabilityOverrideMap = Record<string, Partial<ModelCapabilities>>;
 
 export function resolveCapabilityOverride(
   modelFullId: string,
-  overrides?: CapabilityOverrideMap
+  overrides?: CapabilityOverrideMap,
 ): Partial<ModelCapabilities> | undefined {
   if (!overrides) return undefined;
   if (overrides[modelFullId]) return overrides[modelFullId];

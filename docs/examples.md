@@ -22,13 +22,13 @@ run_workflow({
 })
 ```
 
-## 3) Memory Injection
+## 3) Memory Records
 
-Record a decision and inject memory into a session:
+Record a decision and query recent memory (injection happens automatically when enabled):
 
 ```
-record_memory({ key: "decision:csv-export", value: "Use server-side streaming for large exports" })
-inject_memory({ scope: "project", maxEntries: 6 })
+/memory.record decision:csv-export Use server-side streaming for large exports --tags decisions
+/memory.query csv export --limit 5
 ```
 
 ## More

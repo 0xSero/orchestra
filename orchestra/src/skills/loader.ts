@@ -1,11 +1,10 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { Skill } from "../types";
-import type { SkillSource } from "../types";
+import type { Skill, SkillSource } from "../types";
 import { parseSkillFile } from "./parse";
-import { validateSkillFrontmatter } from "./validate";
 import { getGlobalSkillsDir, getProjectSkillsDir } from "./paths";
+import { validateSkillFrontmatter } from "./validate";
 
 type SkillLocation = {
   id: string;
@@ -72,7 +71,8 @@ export async function loadSkill(id: string, projectDir?: string): Promise<Skill 
   }
 
   const globalPath = join(globalRoot, id, "SKILL.md");
-  if (existsSync(globalPath)) locations.push({ id, filePath: globalPath, source: { type: "global", path: globalRoot } });
+  if (existsSync(globalPath))
+    locations.push({ id, filePath: globalPath, source: { type: "global", path: globalRoot } });
 
   if (locations.length > 0) {
     return await loadSkillFile(locations[0]);

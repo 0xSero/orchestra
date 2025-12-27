@@ -2,8 +2,8 @@
  * Select Component - Kobalte-based dropdown select
  */
 
+import { type CollectionNode, Select as KobalteSelect } from "@kobalte/core";
 import { type Component, type JSX, splitProps } from "solid-js";
-import { Select as KobalteSelect, type CollectionNode } from "@kobalte/core";
 import { cn } from "@/lib/utils";
 
 // Icons
@@ -58,7 +58,7 @@ export const SelectTrigger: Component<SelectTriggerProps> = (props) => {
         "ring-offset-background placeholder:text-muted-foreground",
         "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
         "disabled:cursor-not-allowed disabled:opacity-50",
-        local.class
+        local.class,
       )}
       {...others}
     >
@@ -84,7 +84,7 @@ export const SelectContent: Component<SelectContentProps> = (props) => {
           "data-[expanded]:animate-in data-[closed]:animate-out",
           "data-[closed]:fade-out-0 data-[expanded]:fade-in-0",
           "data-[closed]:zoom-out-95 data-[expanded]:zoom-in-95",
-          local.class
+          local.class,
         )}
         {...others}
       >
@@ -109,7 +109,7 @@ export const SelectItem: Component<SelectItemProps> = (props) => {
         "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none",
         "focus:bg-accent focus:text-accent-foreground",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-        local.class
+        local.class,
       )}
       {...others}
     >

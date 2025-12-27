@@ -23,7 +23,10 @@ describe("neo4j real integration", () => {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const code = (error as { code?: string } | undefined)?.code;
-      if (code === "Neo.DatabaseError.Transaction.TransactionStartFailed" || message.includes("needs to be restarted")) {
+      if (
+        code === "Neo.DatabaseError.Transaction.TransactionStartFailed" ||
+        message.includes("needs to be restarted")
+      ) {
         return;
       }
       throw error;

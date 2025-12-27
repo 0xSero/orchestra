@@ -26,7 +26,7 @@ export const ScrollArea: Component<ScrollAreaProps> = (props) => {
         overflowClass[orientation],
         // Custom scrollbar styles
         "scrollbar-thin scrollbar-track-transparent scrollbar-thumb-border hover:scrollbar-thumb-muted-foreground/30",
-        local.class
+        local.class,
       )}
       {...others}
     >

@@ -1,13 +1,13 @@
 /**
  * Repo Context - Gathers context about the repository for worker injection
- * 
+ *
  * Used primarily for the docs worker to understand the project it's helping with.
  */
 
+import { execSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { execSync } from "node:child_process";
 
 export type RepoContext = {
   /** Root directory of the repo */
@@ -36,7 +36,7 @@ export type RepoContext = {
 
 function clampText(input: string, maxChars: number): { text: string; truncated: boolean } {
   if (input.length <= maxChars) return { text: input, truncated: false };
-  return { text: input.slice(0, Math.max(0, maxChars)) + "\n\n...(truncated)\n", truncated: true };
+  return { text: `${input.slice(0, Math.max(0, maxChars))}\n\n...(truncated)\n`, truncated: true };
 }
 
 function getGitInfo(directory: string): RepoContext["git"] | undefined {
@@ -207,7 +207,7 @@ export async function getRepoContext(options: {
     const deps = Object.keys((packageJson.dependencies as Record<string, string>) ?? {});
     const devDeps = Object.keys((packageJson.devDependencies as Record<string, string>) ?? {});
     const scripts = Object.keys((packageJson.scripts as Record<string, string>) ?? {});
-    
+
     if (scripts.length > 0) {
       sections.push(`- Scripts: ${scripts.slice(0, 10).join(", ")}${scripts.length > 10 ? "..." : ""}`);
     }

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createSkill, updateSkill, deleteSkill, duplicateSkill } from "../../src/skills/crud";
+import { createSkill, deleteSkill, duplicateSkill, updateSkill } from "../../src/skills/crud";
 
 describe("skills crud", () => {
   test("create, update, duplicate, delete", async () => {
@@ -18,7 +18,7 @@ describe("skills crud", () => {
         systemPrompt: "Test prompt",
       },
       "project",
-      projectDir
+      projectDir,
     );
     expect(created.id).toBe("tester");
 
@@ -26,7 +26,7 @@ describe("skills crud", () => {
       "tester",
       { frontmatter: { description: "Updated skill", model: "auto" } },
       "project",
-      projectDir
+      projectDir,
     );
     expect(updated.frontmatter.description).toBe("Updated skill");
 

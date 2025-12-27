@@ -1,10 +1,9 @@
-import type { Factory, ServiceLifecycle } from "../types";
-import type { MemoryConfig } from "../types";
 import type { ApiService } from "../api";
-import type { MemoryScope } from "./store";
-import { buildMemoryInjection } from "./inject";
+import type { Factory, MemoryConfig, ServiceLifecycle } from "../types";
 import { recordMessageMemory } from "./auto";
+import { buildMemoryInjection } from "./inject";
 import { loadNeo4jConfig, type Neo4jConfig } from "./neo4j";
+import type { MemoryScope } from "./store";
 
 type SessionClient = {
   session: {
@@ -30,10 +29,7 @@ export type MemoryService = ServiceLifecycle & {
   }) => Promise<void>;
 };
 
-export const createMemoryStore: Factory<MemoryConfig | undefined, MemoryDeps, MemoryService> = ({
-  config,
-  deps,
-}) => {
+export const createMemoryStore: Factory<MemoryConfig | undefined, MemoryDeps, MemoryService> = ({ config, deps }) => {
   const cfg: MemoryConfig = config ?? {};
   const enabled = cfg.enabled !== false;
   const autoRecord = cfg.autoRecord !== false;

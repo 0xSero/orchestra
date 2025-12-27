@@ -1,4 +1,4 @@
-import type { Config, Provider, Model } from "@opencode-ai/sdk";
+import type { Config, Model, Provider } from "@opencode-ai/sdk";
 import { resolveModel } from "./resolver";
 
 export type ModelCatalogEntry = {
@@ -57,9 +57,9 @@ export function flattenProviders(providers: Provider[]): ModelCatalogEntry[] {
 
 export function filterProviders(providers: Provider[], scope: "configured" | "all"): Provider[] {
   if (scope === "all") return providers;
-  
+
   // Filter to only providers that are usable (have credentials or are explicitly configured).
-  // 
+  //
   // The SDK's Provider.source field tells us how the provider was registered:
   //   - "config": Explicitly configured in opencode.json
   //   - "custom": Custom provider (npm package, explicitly configured)
@@ -73,25 +73,25 @@ export function filterProviders(providers: Provider[], scope: "configured" | "al
   // The "opencode" provider is special and always available.
   return providers.filter((p) => {
     if (p.id === "opencode") return true;
-    
+
     // Include explicitly configured providers
     if (p.source === "config" || p.source === "custom") return true;
-    
+
     // Include environment-detected providers (they have API keys set)
     if (p.source === "env") return true;
-    
+
     // For API catalog providers, check if they have credentials set.
     // The SDK's Provider type has an optional `key` field that's populated when
     // credentials are available (set via /connect command which stores in auth.json).
     if (p.source === "api" && p.key) return true;
-    
+
     return false;
   });
 }
 
 export function resolveModelRef(
   input: string,
-  providers: Provider[]
+  providers: Provider[],
 ): { full: string; providerID: string; modelID: string } | { error: string; suggestions?: string[] } {
   const resolved = resolveModel(input, { providers });
   if ("error" in resolved) return resolved;
@@ -149,7 +149,10 @@ export async function fetchOpencodeConfig(client: any, directory: string): Promi
   return res?.data as Config | undefined;
 }
 
-export async function fetchProviders(client: any, directory: string): Promise<{ providers: Provider[]; defaults: Record<string, string> }> {
+export async function fetchProviders(
+  client: any,
+  directory: string,
+): Promise<{ providers: Provider[]; defaults: Record<string, string> }> {
   const res = await client.config.providers({ query: { directory } });
   return { providers: (res.data as any)?.providers ?? [], defaults: (res.data as any)?.default ?? {} };
 }

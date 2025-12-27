@@ -3,13 +3,13 @@
  */
 
 import {
+  type Accessor,
   createContext,
-  useContext,
-  createSignal,
   createEffect,
+  createSignal,
   onCleanup,
   type ParentComponent,
-  type Accessor,
+  useContext,
 } from "solid-js";
 import { createStore } from "solid-js/store";
 
@@ -20,6 +20,8 @@ interface LayoutState {
   showLogs: boolean;
   activePanel: "workers" | "skills" | "jobs" | "logs" | "settings";
   commandPaletteOpen: boolean;
+  commandPaletteQuery: string;
+  spawnDialogOpen: boolean;
 }
 
 interface LayoutContextValue {
@@ -49,6 +51,11 @@ interface LayoutContextValue {
   openCommandPalette: () => void;
   closeCommandPalette: () => void;
   toggleCommandPalette: () => void;
+  setCommandPaletteQuery: (query: string) => void;
+
+  // Spawn dialog
+  openSpawnDialog: () => void;
+  closeSpawnDialog: () => void;
 }
 
 const LayoutContext = createContext<LayoutContextValue>();
@@ -65,12 +72,12 @@ export const LayoutProvider: ParentComponent = (props) => {
     showLogs: true,
     activePanel: "workers",
     commandPaletteOpen: false,
+    commandPaletteQuery: "",
+    spawnDialogOpen: false,
   });
 
   // Responsive signals
-  const [windowWidth, setWindowWidth] = createSignal(
-    typeof window !== "undefined" ? window.innerWidth : 1024
-  );
+  const [windowWidth, setWindowWidth] = createSignal(typeof window !== "undefined" ? window.innerWidth : 1024);
 
   const isMobile = () => windowWidth() < MOBILE_BREAKPOINT;
   const isTablet = () => windowWidth() >= MOBILE_BREAKPOINT && windowWidth() < TABLET_BREAKPOINT;
@@ -103,7 +110,10 @@ export const LayoutProvider: ParentComponent = (props) => {
       // Cmd/Ctrl + K for command palette
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        setState("commandPaletteOpen", (v) => !v);
+        setState("commandPaletteOpen", (v) => {
+          if (v) setState("commandPaletteQuery", "");
+          return !v;
+        });
       }
       // Cmd/Ctrl + B for sidebar
       if ((e.metaKey || e.ctrlKey) && e.key === "b") {
@@ -114,6 +124,7 @@ export const LayoutProvider: ParentComponent = (props) => {
       if (e.key === "Escape") {
         if (state.commandPaletteOpen) {
           setState("commandPaletteOpen", false);
+          setState("commandPaletteQuery", "");
         }
       }
     };
@@ -150,15 +161,22 @@ export const LayoutProvider: ParentComponent = (props) => {
     setActivePanel: (panel) => setState("activePanel", panel),
 
     openCommandPalette: () => setState("commandPaletteOpen", true),
-    closeCommandPalette: () => setState("commandPaletteOpen", false),
-    toggleCommandPalette: () => setState("commandPaletteOpen", (v) => !v),
+    closeCommandPalette: () => {
+      setState("commandPaletteOpen", false);
+      setState("commandPaletteQuery", "");
+    },
+    toggleCommandPalette: () =>
+      setState("commandPaletteOpen", (v) => {
+        if (v) setState("commandPaletteQuery", "");
+        return !v;
+      }),
+    setCommandPaletteQuery: (query) => setState("commandPaletteQuery", query),
+
+    openSpawnDialog: () => setState("spawnDialogOpen", true),
+    closeSpawnDialog: () => setState("spawnDialogOpen", false),
   };
 
-  return (
-    <LayoutContext.Provider value={value}>
-      {props.children}
-    </LayoutContext.Provider>
-  );
+  return <LayoutContext.Provider value={value}>{props.children}</LayoutContext.Provider>;
 };
 
 export function useLayout(): LayoutContextValue {

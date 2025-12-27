@@ -4,8 +4,8 @@
  * Provides isolated XDG directories for tests and restores env vars on cleanup.
  */
 
-import { copyFile, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { copyFile, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -35,9 +35,7 @@ async function copyOpenCodeConfig(sourceConfigHome: string | undefined, targetCo
       const raw = await readFile(opencodePath, "utf8");
       const parsed = JSON.parse(raw) as Record<string, unknown>;
       if (parsed && typeof parsed === "object" && Array.isArray(parsed.plugin)) {
-        parsed.plugin = parsed.plugin.filter(
-          (entry) => typeof entry === "string" && !entry.includes("orchestrator.")
-        );
+        parsed.plugin = parsed.plugin.filter((entry) => typeof entry === "string" && !entry.includes("orchestrator."));
       }
       await writeFile(join(targetDir, "opencode.json"), JSON.stringify(parsed, null, 2));
     } catch {

@@ -2,14 +2,24 @@
  * Agents Page - View and manage agents/workers with real data
  */
 
-import { type Component, For, Show, createSignal, createMemo } from "solid-js";
-import { useOpenCode } from "@/context/opencode";
-import { useLayout } from "@/context/layout";
 import { A } from "@solidjs/router";
+import { type Component, createMemo, createSignal, For, Show } from "solid-js";
+import { useLayout } from "@/context/layout";
+import { useOpenCode } from "@/context/opencode";
 
 // Icons
 const BotIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <path d="M12 8V4H8" />
     <rect width="16" height="12" x="4" y="8" rx="2" />
     <path d="M2 14h2" />
@@ -20,7 +30,17 @@ const BotIcon = () => (
 );
 
 const ServerIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
     <rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
     <line x1="6" x2="6.01" y1="6" y2="6" />
@@ -29,19 +49,49 @@ const ServerIcon = () => (
 );
 
 const StopIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <rect width="14" height="14" x="5" y="5" rx="2" />
   </svg>
 );
 
 const ChatIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
   </svg>
 );
 
 const ExternalLinkIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
     <path d="M15 3h6v6" />
     <path d="M10 14 21 3" />
     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
@@ -68,12 +118,18 @@ const formatDuration = (startTime?: string | number): string => {
 
 const getStatusLabel = (status: string): string => {
   switch (status) {
-    case "ready": return "Idle";
-    case "busy": return "Running";
-    case "error": return "Error";
-    case "starting": return "Starting";
-    case "stopped": return "Stopped";
-    default: return status;
+    case "ready":
+      return "Idle";
+    case "busy":
+      return "Running";
+    case "error":
+      return "Error";
+    case "starting":
+      return "Starting";
+    case "stopped":
+      return "Stopped";
+    default:
+      return status;
   }
 };
 
@@ -86,7 +142,7 @@ export const AgentsPage: Component = () => {
   const workerDetails = createMemo(() => {
     const id = selectedWorker();
     if (!id) return null;
-    return workers().find(w => w.id === id) || null;
+    return workers().find((w) => w.id === id) || null;
   });
 
   // Stats
@@ -94,9 +150,9 @@ export const AgentsPage: Component = () => {
     const w = workers();
     return {
       total: w.length,
-      active: w.filter(x => x.status === "busy" || x.status === "starting").length,
-      ready: w.filter(x => x.status === "ready").length,
-      error: w.filter(x => x.status === "error").length,
+      active: w.filter((x) => x.status === "busy" || x.status === "starting").length,
+      ready: w.filter((x) => x.status === "ready").length,
+      error: w.filter((x) => x.status === "error").length,
     };
   });
 
@@ -147,20 +203,15 @@ export const AgentsPage: Component = () => {
                 <div class="session-item-header">
                   <div class="flex items-center gap-2 min-w-0 flex-1">
                     <span class={`status-dot ${worker.status}`} />
-                    <span class="session-item-title">
-                      {worker.name || worker.id.slice(0, 12)}
-                    </span>
+                    <span class="session-item-title">{worker.name || worker.id.slice(0, 12)}</span>
                   </div>
-                  <span class={`status-badge ${worker.status}`}>
-                    {getStatusLabel(worker.status)}
-                  </span>
+                  <span class={`status-badge ${worker.status}`}>{getStatusLabel(worker.status)}</span>
                 </div>
 
                 <div class="session-item-meta mt-1">
                   <Show when={worker.port}>
                     <span class="flex items-center gap-1 font-mono">
-                      <ServerIcon />
-                      :{worker.port}
+                      <ServerIcon />:{worker.port}
                     </span>
                   </Show>
                   <Show when={worker.model}>
@@ -188,7 +239,7 @@ export const AgentsPage: Component = () => {
         <Show when={workerDetails()}>
           {(worker) => {
             const session = createMemo(() =>
-              worker().sessionId ? sessions().find(s => s.id === worker().sessionId) : undefined
+              worker().sessionId ? sessions().find((s) => s.id === worker().sessionId) : undefined,
             );
 
             return (
@@ -204,9 +255,7 @@ export const AgentsPage: Component = () => {
                         <h1 class="text-xl font-semibold text-foreground">
                           {worker().name || worker().id.slice(0, 16)}
                         </h1>
-                        <p class="text-sm text-muted-foreground font-mono">
-                          {worker().id}
-                        </p>
+                        <p class="text-sm text-muted-foreground font-mono">{worker().id}</p>
                       </div>
                     </div>
                   </div>
@@ -247,16 +296,12 @@ export const AgentsPage: Component = () => {
 
                   <div class="card p-4">
                     <div class="text-xs text-muted-foreground mb-1">Port</div>
-                    <div class="font-mono font-medium">
-                      {worker().port || "N/A"}
-                    </div>
+                    <div class="font-mono font-medium">{worker().port || "N/A"}</div>
                   </div>
 
                   <div class="card p-4">
                     <div class="text-xs text-muted-foreground mb-1">Model</div>
-                    <div class="font-medium truncate">
-                      {worker().model || "default"}
-                    </div>
+                    <div class="font-medium truncate">{worker().model || "default"}</div>
                   </div>
 
                   <div class="card p-4">
@@ -272,9 +317,7 @@ export const AgentsPage: Component = () => {
                   <div class="card p-4 mb-6">
                     <div class="text-xs text-muted-foreground mb-2">Server URL</div>
                     <div class="flex items-center gap-2">
-                      <code class="text-sm font-mono text-foreground flex-1 truncate">
-                        {worker().serverUrl}
-                      </code>
+                      <code class="text-sm font-mono text-foreground flex-1 truncate">{worker().serverUrl}</code>
                       <a
                         href={worker().serverUrl}
                         target="_blank"
@@ -306,18 +349,14 @@ export const AgentsPage: Component = () => {
                 <Show when={worker().error}>
                   <div class="card p-4 mb-6 border-status-error/50 bg-status-error/5">
                     <div class="text-xs text-status-error mb-2">Error</div>
-                    <div class="text-sm text-foreground">
-                      {worker().error}
-                    </div>
+                    <div class="text-sm text-foreground">{worker().error}</div>
                   </div>
                 </Show>
 
                 <Show when={worker().warning}>
                   <div class="card p-4 mb-6 border-status-busy/50 bg-status-busy/5">
                     <div class="text-xs text-status-busy mb-2">Warning</div>
-                    <div class="text-sm text-foreground">
-                      {worker().warning}
-                    </div>
+                    <div class="text-sm text-foreground">{worker().warning}</div>
                   </div>
                 </Show>
 
@@ -328,18 +367,10 @@ export const AgentsPage: Component = () => {
                       <div class="text-xs text-muted-foreground mb-3">Linked Session</div>
                       <div class="flex items-center justify-between">
                         <div>
-                          <div class="font-medium text-foreground">
-                            {s().title || "Untitled Session"}
-                          </div>
-                          <div class="text-xs text-muted-foreground font-mono mt-1">
-                            {s().id}
-                          </div>
+                          <div class="font-medium text-foreground">{s().title || "Untitled Session"}</div>
+                          <div class="text-xs text-muted-foreground font-mono mt-1">{s().id}</div>
                         </div>
-                        <A
-                          href="/chat"
-                          class="btn btn-sm"
-                          onClick={() => selectWorker(s().id)}
-                        >
+                        <A href="/chat" class="btn btn-sm" onClick={() => selectWorker(s().id)}>
                           Open Chat
                         </A>
                       </div>
@@ -357,9 +388,7 @@ export const AgentsPage: Component = () => {
               <BotIcon />
             </div>
             <p class="empty-state-title">Select a worker</p>
-            <p class="empty-state-description">
-              Choose a worker from the sidebar to view details.
-            </p>
+            <p class="empty-state-description">Choose a worker from the sidebar to view details.</p>
           </div>
         </Show>
       </div>
@@ -368,9 +397,7 @@ export const AgentsPage: Component = () => {
       <aside class="w-72 border-l border-border overflow-hidden flex flex-col">
         <div class="p-4 border-b border-border">
           <h2 class="text-sm font-semibold text-foreground">Registered Agents</h2>
-          <p class="text-xs text-muted-foreground mt-1">
-            {agents().length} agents
-          </p>
+          <p class="text-xs text-muted-foreground mt-1">{agents().length} agents</p>
         </div>
 
         <div class="flex-1 overflow-auto scrollbar-thin">
@@ -382,9 +409,7 @@ export const AgentsPage: Component = () => {
                     <div class="w-6 h-6 rounded bg-primary/10 flex items-center justify-center">
                       <BotIcon />
                     </div>
-                    <span class="text-sm font-medium text-foreground truncate">
-                      {agent.name}
-                    </span>
+                    <span class="text-sm font-medium text-foreground truncate">{agent.name}</span>
                   </div>
                   <div class="text-xs text-muted-foreground ml-8">
                     {agent.mode === "primary" ? "Primary" : agent.mode === "subagent" ? "Subagent" : "Shared"}
@@ -395,9 +420,7 @@ export const AgentsPage: Component = () => {
           </For>
 
           <Show when={agents().length === 0}>
-            <div class="p-4 text-center text-muted-foreground text-sm">
-              No agents registered
-            </div>
+            <div class="p-4 text-center text-muted-foreground text-sm">No agents registered</div>
           </Show>
         </div>
       </aside>

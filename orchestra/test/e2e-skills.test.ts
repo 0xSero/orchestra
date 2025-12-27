@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
+import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { request } from "node:http";
-import { createSkillsService } from "../src/skills/service";
 import { createSkillsApiServer } from "../src/api/skills-server";
+import { createSkillsService } from "../src/skills/service";
 
 async function waitForSse(baseUrl: string, matcher: RegExp, timeoutMs = 4000) {
   return await new Promise<string>((resolve, reject) => {

@@ -1,12 +1,11 @@
-import type { Skill, SkillFrontmatter, SkillSource } from "../types";
-import type { WorkerProfile } from "../types";
+import type { Skill, SkillFrontmatter, SkillSource, WorkerProfile } from "../types";
 
 function combineDescription(purpose?: string, whenToUse?: string): string {
   const parts = [purpose?.trim(), whenToUse?.trim()].filter(Boolean) as string[];
   if (parts.length === 0) return "General-purpose skill.";
   if (parts.length === 1) return parts[0];
   const combined = `${parts[0]} When to use: ${parts[1]}`;
-  return combined.length > 1024 ? combined.slice(0, 1021).trimEnd() + "..." : combined;
+  return combined.length > 1024 ? `${combined.slice(0, 1021).trimEnd()}...` : combined;
 }
 
 export function profileToSkill(profile: WorkerProfile, source: SkillSource): Skill {

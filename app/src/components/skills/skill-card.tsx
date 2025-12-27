@@ -1,7 +1,7 @@
 import type { Component } from "solid-js";
-import type { Skill } from "@/types/skill";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import type { Skill } from "@/types/skill";
 
 const sourceLabel = (skill: Skill) => {
   if (skill.source.type === "builtin") return "Built-in";
@@ -16,11 +16,7 @@ export const SkillCard: Component<{
 }> = (props) => {
   return (
     <button
-      class={cn(
-        "skill-item",
-        "focus:outline-none focus:ring-2 focus:ring-ring/30",
-        props.selected && "selected"
-      )}
+      class={cn("skill-item", "focus:outline-none focus:ring-2 focus:ring-ring/30", props.selected && "selected")}
       onClick={props.onClick}
     >
       <div class="flex items-center justify-between gap-2">
@@ -29,12 +25,8 @@ export const SkillCard: Component<{
           {sourceLabel(props.skill)}
         </Badge>
       </div>
-      <p class="mt-1 text-xs text-muted-foreground truncate">
-        {props.skill.frontmatter.description}
-      </p>
-      <div class="mt-2 text-[10px] text-muted-foreground">
-        {props.skill.frontmatter.model}
-      </div>
+      <p class="mt-1 text-xs text-muted-foreground truncate">{props.skill.frontmatter.description}</p>
+      <div class="mt-2 text-[10px] text-muted-foreground">{props.skill.frontmatter.model}</div>
     </button>
   );
 };

@@ -1,5 +1,5 @@
 import type { Event as OpenCodeEvent } from "@opencode-ai/sdk";
-import type { Skill, SkillScope, WorkerInstance, WorkerSessionMode, WorkerForwardEvent } from "../types";
+import type { Skill, SkillScope, WorkerForwardEvent, WorkerInstance, WorkerSessionMode } from "../types";
 import type { WorkerJob } from "../workers/jobs";
 
 export type OrchestraEventMeta = {

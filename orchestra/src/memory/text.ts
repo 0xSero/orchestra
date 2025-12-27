@@ -40,4 +40,3 @@ export function appendRollingSummary(prev: string | undefined, entry: string, ma
   const next = prev && prev.trim().length > 0 ? `${prev.trim()}\n${entry}` : entry;
   return shortenWithMarker(next, maxChars, { headRatio: 0.35 });
 }
-
