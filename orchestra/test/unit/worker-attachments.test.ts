@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,10 +17,14 @@ describe("worker attachments", () => {
 
     const prepared = result.attachments?.[0];
     expect(prepared?.path).toBeTruthy();
-    expect(prepared?.path && existsSync(prepared.path)).toBe(true);
+    if (prepared?.path) {
+      expect(await Bun.file(prepared.path).exists()).toBe(true);
+    }
 
     await result.cleanup();
-    expect(prepared?.path && existsSync(prepared.path)).toBe(false);
+    if (prepared?.path) {
+      expect(await Bun.file(prepared.path).exists()).toBe(false);
+    }
   });
 
   test("copies external paths into sandbox", async () => {
@@ -71,5 +74,40 @@ describe("worker attachments", () => {
     });
     expect(gif.attachments?.[0]?.path?.endsWith(".gif")).toBe(true);
     await gif.cleanup();
+  });
+
+  test("preserves non-image attachments as-is", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "orch-attachments-text-"));
+    const attachments = [{ type: "text", text: "note" }] as never;
+
+    const result = await prepareWorkerAttachments({
+      baseDir,
+      workerId: "tester",
+      attachments,
+    });
+
+    expect(result.attachments).toEqual(attachments);
+    await result.cleanup();
+  });
+
+  test("keeps image attachments without file content", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "orch-attachments-empty-"));
+    const attachments = [{ type: "image" }] as never;
+
+    const result = await prepareWorkerAttachments({
+      baseDir,
+      workerId: "tester",
+      attachments,
+    });
+
+    expect(result.attachments).toEqual(attachments);
+    await result.cleanup();
+  });
+
+  test("returns early when no attachments are provided", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "orch-attachments-none-"));
+    const result = await prepareWorkerAttachments({ baseDir, workerId: "tester" });
+    expect(result.attachments).toBeUndefined();
+    await result.cleanup();
   });
 });

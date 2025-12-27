@@ -15,17 +15,12 @@ describe("e2e env helper", () => {
       "utf8",
     );
 
-    const original = process.env.XDG_CONFIG_HOME;
-    process.env.XDG_CONFIG_HOME = source;
-
-    const env = await setupE2eEnv();
+    const env = await setupE2eEnv({ sourceConfigHome: source });
     const copied = await readFile(join(env.root, "config", "opencode", "opencode.json"), "utf8");
     const parsed = JSON.parse(copied) as { plugin?: string[] };
     expect(parsed.plugin).toEqual(["keep-me"]);
 
     env.restore();
-    if (original === undefined) delete process.env.XDG_CONFIG_HOME;
-    else process.env.XDG_CONFIG_HOME = original;
 
     await rm(source, { recursive: true, force: true });
     await rm(env.root, { recursive: true, force: true });
@@ -38,18 +33,37 @@ describe("e2e env helper", () => {
     const badPayload = "{ invalid";
     await writeFile(join(opencodeDir, "opencode.json"), badPayload, "utf8");
 
-    const original = process.env.XDG_CONFIG_HOME;
-    process.env.XDG_CONFIG_HOME = source;
-
-    const env = await setupE2eEnv();
+    const env = await setupE2eEnv({ sourceConfigHome: source });
     const copied = await readFile(join(env.root, "config", "opencode", "opencode.json"), "utf8");
     expect(copied).toBe(badPayload);
 
     env.restore();
-    if (original === undefined) delete process.env.XDG_CONFIG_HOME;
-    else process.env.XDG_CONFIG_HOME = original;
 
     await rm(source, { recursive: true, force: true });
+    await rm(env.root, { recursive: true, force: true });
+  });
+
+  test("handles missing source config directory", async () => {
+    const source = await mkdtemp(join(tmpdir(), "orch-e2e-src-empty-"));
+    const env = await setupE2eEnv({ sourceConfigHome: source });
+    expect(env.root).toContain("opencode-e2e-");
+    env.restore();
+    await rm(source, { recursive: true, force: true });
+    await rm(env.root, { recursive: true, force: true });
+  });
+
+  test("restores preexisting env values", async () => {
+    const originalState = process.env.XDG_STATE_HOME;
+    process.env.XDG_STATE_HOME = "/tmp/state-home";
+
+    const env = await setupE2eEnv();
+    env.restore();
+
+    expect(process.env.XDG_STATE_HOME).toBe("/tmp/state-home");
+
+    if (originalState === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = originalState;
+
     await rm(env.root, { recursive: true, force: true });
   });
 });

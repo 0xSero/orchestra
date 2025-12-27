@@ -1,10 +1,24 @@
 import { execSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { platform } from "node:process";
 
-const PID_DIR = join(homedir(), ".opencode");
-const PID_FILE = join(PID_DIR, "worker-pids.json");
+type PidTrackerDeps = {
+  platform?: string;
+  execSync?: typeof execSync;
+  homedir?: typeof homedir;
+};
+
+const resolveHomeDir = (deps?: PidTrackerDeps): string => {
+  const platform = deps?.platform ?? process.platform;
+  const homedirFn = deps?.homedir ?? homedir;
+  if (platform === "win32") {
+    return process.env.USERPROFILE || homedirFn();
+  }
+  return process.env.HOME || homedirFn();
+};
+
+const getPidDir = (deps?: PidTrackerDeps): string => join(resolveHomeDir(deps), ".opencode");
+const getPidFile = (deps?: PidTrackerDeps): string => join(getPidDir(deps), "worker-pids.json");
 
 type PidEntry = {
   pid: number;
@@ -19,16 +33,17 @@ type PidStore = {
   updatedAt: number;
 };
 
-async function ensurePidDir(): Promise<void> {
-  const dir = Bun.file(PID_DIR);
+async function ensurePidDir(deps?: PidTrackerDeps): Promise<void> {
+  const dirPath = getPidDir(deps);
+  const dir = Bun.file(dirPath);
   if (!(await dir.exists())) {
-    await Bun.write(join(PID_DIR, ".keep"), "");
+    await Bun.write(join(dirPath, ".keep"), "");
   }
 }
 
-async function readPidStore(): Promise<PidStore> {
+async function readPidStore(deps?: PidTrackerDeps): Promise<PidStore> {
   try {
-    const file = Bun.file(PID_FILE);
+    const file = Bun.file(getPidFile(deps));
     if (await file.exists()) {
       const data = await file.json();
       if (data && Array.isArray(data.entries)) {
@@ -41,10 +56,10 @@ async function readPidStore(): Promise<PidStore> {
   return { entries: [], updatedAt: Date.now() };
 }
 
-async function writePidStore(store: PidStore): Promise<void> {
-  await ensurePidDir();
+async function writePidStore(store: PidStore, deps?: PidTrackerDeps): Promise<void> {
+  await ensurePidDir(deps);
   store.updatedAt = Date.now();
-  await Bun.write(PID_FILE, JSON.stringify(store, null, 2));
+  await Bun.write(getPidFile(deps), JSON.stringify(store, null, 2));
 }
 
 /**
@@ -54,8 +69,9 @@ export async function trackWorkerPid(input: {
   pid: number;
   workerId: string;
   port?: number;
+  deps?: PidTrackerDeps;
 }): Promise<void> {
-  const store = await readPidStore();
+  const store = await readPidStore(input.deps);
 
   // Remove any existing entry for this worker (in case of restart)
   store.entries = store.entries.filter((e) => e.workerId !== input.workerId);
@@ -68,16 +84,16 @@ export async function trackWorkerPid(input: {
     parentPid: process.pid,
   });
 
-  await writePidStore(store);
+  await writePidStore(store, input.deps);
 }
 
 /**
  * Remove a worker from PID tracking (called on graceful shutdown).
  */
-export async function untrackWorkerPid(workerId: string): Promise<void> {
-  const store = await readPidStore();
+export async function untrackWorkerPid(workerId: string, deps?: PidTrackerDeps): Promise<void> {
+  const store = await readPidStore(deps);
   store.entries = store.entries.filter((e) => e.workerId !== workerId);
-  await writePidStore(store);
+  await writePidStore(store, deps);
 }
 
 /**
@@ -96,18 +112,20 @@ function isProcessAlive(pid: number): boolean {
  * Check if a port is in use (indicates worker server is running).
  * More reliable than PID checking since we track orchestrator PID, not worker PID.
  */
-function isPortInUse(port: number): boolean {
+function isPortInUse(port: number, deps?: PidTrackerDeps): boolean {
   if (!port || port === 0) return false;
   try {
+    const platform = deps?.platform ?? process.platform;
+    const exec = deps?.execSync ?? execSync;
     if (platform === "win32") {
-      const result = execSync(`netstat -ano | findstr :${port}`, {
+      const result = exec(`netstat -ano | findstr :${port}`, {
         encoding: "utf8",
         stdio: ["pipe", "pipe", "pipe"],
       });
       return result.includes(`:${port}`);
     } else {
       // Unix-like: use lsof which is more reliable
-      const result = execSync(`lsof -i :${port} -t 2>/dev/null || true`, {
+      const result = exec(`lsof -i :${port} -t 2>/dev/null || true`, {
         encoding: "utf8",
         stdio: ["pipe", "pipe", "pipe"],
       });
@@ -150,18 +168,20 @@ async function killProcess(pid: number): Promise<boolean> {
 export async function cleanupStaleWorkers(options?: {
   maxAgeMs?: number;
   dryRun?: boolean;
+  deps?: PidTrackerDeps;
 }): Promise<{ killed: string[]; removed: string[] }> {
   const maxAgeMs = options?.maxAgeMs ?? 24 * 60 * 60 * 1000; // 24 hours default
   const dryRun = options?.dryRun ?? false;
+  const deps = options?.deps;
 
-  const store = await readPidStore();
+  const store = await readPidStore(deps);
   const removed: string[] = [];
   const alive: PidEntry[] = [];
 
   for (const entry of store.entries) {
     const isStale = Date.now() - entry.createdAt > maxAgeMs;
     const parentDead = !isProcessAlive(entry.parentPid);
-    const portActive = entry.port ? isPortInUse(entry.port) : false;
+    const portActive = entry.port ? isPortInUse(entry.port, deps) : false;
 
     if (!portActive && !isProcessAlive(entry.pid)) {
       // Neither port nor process active, safe to remove from tracking
@@ -182,7 +202,7 @@ export async function cleanupStaleWorkers(options?: {
 
   if (!dryRun) {
     store.entries = alive;
-    await writePidStore(store);
+    await writePidStore(store, deps);
   }
 
   // Return empty killed array - we no longer kill processes on cleanup
@@ -192,11 +212,14 @@ export async function cleanupStaleWorkers(options?: {
 /**
  * Kill process(es) listening on a specific port.
  */
-async function killProcessOnPort(port: number): Promise<boolean> {
+/** @internal */
+export async function killProcessOnPort(port: number, deps?: PidTrackerDeps): Promise<boolean> {
   try {
+    const platform = deps?.platform ?? process.platform;
+    const exec = deps?.execSync ?? execSync;
     if (platform === "win32") {
       // Windows: find PID and kill it
-      const result = execSync(`netstat -ano | findstr :${port}`, {
+      const result = exec(`netstat -ano | findstr :${port}`, {
         encoding: "utf8",
         stdio: ["pipe", "pipe", "pipe"],
       });
@@ -211,7 +234,7 @@ async function killProcessOnPort(port: number): Promise<boolean> {
       return pids.size > 0;
     } else {
       // Unix: use lsof to find and kill
-      const result = execSync(`lsof -i :${port} -t 2>/dev/null || true`, {
+      const result = exec(`lsof -i :${port} -t 2>/dev/null || true`, {
         encoding: "utf8",
         stdio: ["pipe", "pipe", "pipe"],
       });
@@ -233,8 +256,8 @@ async function killProcessOnPort(port: number): Promise<boolean> {
 /**
  * Kill all tracked workers (called on shutdown).
  */
-export async function killAllTrackedWorkers(): Promise<string[]> {
-  const store = await readPidStore();
+export async function killAllTrackedWorkers(deps?: PidTrackerDeps): Promise<string[]> {
+  const store = await readPidStore(deps);
   const killed: string[] = [];
 
   // Only kill workers spawned by this process
@@ -249,7 +272,7 @@ export async function killAllTrackedWorkers(): Promise<string[]> {
 
   // Remove our workers from the store
   store.entries = store.entries.filter((e) => e.parentPid !== process.pid);
-  await writePidStore(store);
+  await writePidStore(store, deps);
 
   return killed;
 }
@@ -257,14 +280,14 @@ export async function killAllTrackedWorkers(): Promise<string[]> {
 /**
  * Get all currently tracked workers.
  */
-export async function getTrackedWorkers(): Promise<PidEntry[]> {
-  const store = await readPidStore();
+export async function getTrackedWorkers(deps?: PidTrackerDeps): Promise<PidEntry[]> {
+  const store = await readPidStore(deps);
   return store.entries;
 }
 
 /**
  * Clear all PID tracking (for testing or manual cleanup).
  */
-export async function clearPidTracking(): Promise<void> {
-  await writePidStore({ entries: [], updatedAt: Date.now() });
+export async function clearPidTracking(deps?: PidTrackerDeps): Promise<void> {
+  await writePidStore({ entries: [], updatedAt: Date.now() }, deps);
 }

@@ -103,7 +103,11 @@ export const createCommunication: Factory<CommunicationConfig, CommunicationDeps
       abortController?.abort();
       abortController = undefined;
       if (streamTask) {
-        await streamTask.catch(() => {});
+        try {
+          await streamTask;
+        } catch {
+          // ignore stream errors
+        }
         streamTask = undefined;
       }
       emitter.removeAllListeners();

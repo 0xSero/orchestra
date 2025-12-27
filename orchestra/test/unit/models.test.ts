@@ -140,11 +140,19 @@ describe("model helpers", () => {
   });
 
   test("filters configured providers", () => {
-    const filtered = filterProviders(providers, "configured");
+    const withApiKey: Provider[] = [
+      ...providers,
+      { id: "api-keyed", source: "api", key: "token", models: { "api-fast": { id: "api-fast" } } },
+    ];
+    const filtered = filterProviders(withApiKey, "configured");
     const ids = filtered.map((p) => p.id);
     expect(ids).toContain("opencode");
     expect(ids).toContain("fast-provider");
+    expect(ids).toContain("api-keyed");
     expect(ids).not.toContain("api-provider");
+
+    const all = filterProviders(withApiKey, "all");
+    expect(all.length).toBe(withApiKey.length);
   });
 
   test("resolves models via aliases, auto tags, and errors", () => {
@@ -192,8 +200,46 @@ describe("model helpers", () => {
     const autoCheap = resolveModel("auto:cheap", { providers, defaults });
     expect("error" in autoCheap).toBe(false);
 
+    const nodeAuto = resolveModel("node", { providers, defaults });
+    expect("error" in nodeAuto).toBe(false);
+
+    const nodeFast = resolveModel("node:fast", { providers, defaults });
+    expect("error" in nodeFast).toBe(false);
+
+    const reasoning = resolveModel("auto:reasoning", { providers, defaults });
+    expect("error" in reasoning).toBe(false);
+
     const modelMatches = resolveModel("gpt-5-nano", { providers, selection: { preferredProviders: ["opencode"] } });
     expect("error" in modelMatches).toBe(false);
+  });
+
+  test("prefers selected provider when exact matches collide", () => {
+    const duplicated: Provider[] = [
+      {
+        id: "primary",
+        source: "config",
+        models: {
+          shared: { id: "shared", name: "Shared", capabilities: { input: { text: true } } },
+        },
+      },
+      {
+        id: "secondary",
+        source: "config",
+        models: {
+          shared: { id: "shared", name: "Shared", capabilities: { input: { text: true } } },
+        },
+      },
+    ];
+
+    const result = resolveModel("shared", {
+      providers: duplicated,
+      selection: { preferredProviders: ["secondary"] },
+    });
+
+    expect("error" in result).toBe(false);
+    if (!("error" in result)) {
+      expect(result.providerID).toBe("secondary");
+    }
   });
 
   test("reports auto tag errors with suggestions", () => {
@@ -239,6 +285,15 @@ describe("model helpers", () => {
     const ref = resolveModelRef("missing-model", providers);
     expect("error" in ref).toBe(true);
   });
+
+  test("resolveModelRef returns parsed ids when valid", () => {
+    const ref = resolveModelRef("opencode/gpt-5-nano", providers);
+    expect("error" in ref).toBe(false);
+    if (!("error" in ref)) {
+      expect(ref.providerID).toBe("opencode");
+      expect(ref.modelID).toBe("gpt-5-nano");
+    }
+  });
 });
 
 describe("catalog fetch helpers", () => {
@@ -261,6 +316,20 @@ describe("catalog fetch helpers", () => {
     const providerRes = await fetchProviders(client, "/tmp");
     expect(providerRes.providers.length).toBeGreaterThan(0);
     expect(providerRes.defaults.opencode).toBe("gpt-5-nano");
+  });
+
+  test("fetchOpencodeConfig returns undefined when request fails", async () => {
+    const client = {
+      config: {
+        get: async () => {
+          throw new Error("fail");
+        },
+        providers: async () => ({ data: {} }),
+      },
+    };
+
+    const cfg = await fetchOpencodeConfig(client, "/tmp");
+    expect(cfg).toBeUndefined();
   });
 });
 

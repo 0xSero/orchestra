@@ -173,17 +173,195 @@ describe("db router extra coverage", () => {
       expect(workerConfigChanged).toBe("worker-1");
     });
   });
+
+  test("deletes preferences and worker configs directly", async () => {
+    const now = new Date();
+    const prefs = new Map<string, string | null>([["flag", "on"]]);
+    let prefDeleted: string | undefined;
+    let workerDeleted: string | undefined;
+
+    const db = {
+      getDbPath: () => "/tmp/opencode.db",
+      getUser: () => ({ id: "user-1", onboarded: false, createdAt: now, updatedAt: now, onboardedAt: null }),
+      getAllPreferences: () => Object.fromEntries(prefs),
+      getAllWorkerConfigs: () => [],
+      setPreference: () => {},
+      deletePreference: (key: string) => {
+        prefDeleted = key;
+        prefs.delete(key);
+      },
+      getWorkerConfig: () => undefined,
+      setWorkerConfig: () => {},
+      clearWorkerConfig: (workerId: string) => {
+        workerDeleted = workerId;
+      },
+      markOnboarded: () => ({ id: "user-1", onboarded: true, createdAt: now, updatedAt: now, onboardedAt: now }),
+    };
+
+    const handler = createDbRouter({
+      db: db as never,
+      onPreferencesChanged: (key) => {
+        prefDeleted = key;
+      },
+      onWorkerConfigChanged: (key) => {
+        workerDeleted = key;
+      },
+    });
+
+    const deletePrefReq = createMockReq({ url: "/api/db/preferences/flag", method: "DELETE" });
+    const deletePrefRes = createMockRes();
+    await handler(deletePrefReq, deletePrefRes);
+    expect(deletePrefRes.statusCode).toBe(200);
+    expect(prefDeleted).toBe("flag");
+
+    const deleteWorkerReq = createMockReq({ url: "/api/db/worker-config/worker-9", method: "DELETE" });
+    const deleteWorkerRes = createMockRes();
+    await handler(deleteWorkerReq, deleteWorkerRes);
+    expect(deleteWorkerRes.statusCode).toBe(200);
+    expect(workerDeleted).toBe("worker-9");
+  });
+
+  test("handles worker config CRUD and broadcasts snapshots", async () => {
+    const now = new Date();
+    const workerConfigs = new Map<string, { id: string; userId: string; workerId: string; model: string | null; temperature: number | null; maxTokens: number | null; enabled: boolean; updatedAt: Date }>();
+    workerConfigs.set("worker-1", {
+      id: "cfg-1",
+      userId: "user-1",
+      workerId: "worker-1",
+      model: "model-a",
+      temperature: null,
+      maxTokens: null,
+      enabled: true,
+      updatedAt: now,
+    });
+
+    let workerConfigChanged: string | undefined;
+
+    const db = {
+      getDbPath: () => "/tmp/opencode.db",
+      getUser: () => ({ id: "user-1", onboarded: false, createdAt: now, updatedAt: now, onboardedAt: null }),
+      getAllPreferences: () => ({}),
+      getAllWorkerConfigs: () => Array.from(workerConfigs.values()),
+      setPreference: () => {},
+      deletePreference: () => {},
+      getWorkerConfig: (id: string) => workerConfigs.get(id),
+      setWorkerConfig: (id: string, updates: { model?: string | null; temperature?: number | null; maxTokens?: number | null; enabled?: boolean }) => {
+        const current =
+          workerConfigs.get(id) ??
+          ({
+            id: `cfg-${id}`,
+            userId: "user-1",
+            workerId: id,
+            model: null,
+            temperature: null,
+            maxTokens: null,
+            enabled: true,
+            updatedAt: now,
+          } as const);
+        workerConfigs.set(id, { ...current, ...updates, updatedAt: new Date() });
+      },
+      clearWorkerConfig: (id: string) => {
+        workerConfigs.delete(id);
+      },
+      markOnboarded: () => ({ id: "user-1", onboarded: true, createdAt: now, updatedAt: now, onboardedAt: now }),
+    };
+
+    const handler = createDbRouter({
+      db: db as never,
+      onWorkerConfigChanged: (id) => {
+        workerConfigChanged = id;
+      },
+    });
+
+    const eventsReq = createMockReq({ method: "GET", url: "/api/db/events" });
+    const eventsRes = createMockRes();
+    await handler(eventsReq, eventsRes);
+
+    const getReq = createMockReq({ method: "GET", url: "/api/db/worker-config/worker-1" });
+    const getRes = createMockRes();
+    await handler(getReq, getRes);
+    expect(getRes.statusCode).toBe(200);
+
+    const updateReq = createMockReq({
+      method: "PUT",
+      url: "/api/db/worker-config/worker-1",
+      body: JSON.stringify({ maxTokens: 2048, enabled: false }),
+    });
+    const updateRes = createMockRes();
+    await handler(updateReq, updateRes);
+    expect(updateRes.statusCode).toBe(200);
+    expect(workerConfigChanged).toBe("worker-1");
+    expect(eventsRes.writes.join("")).toContain("db.snapshot");
+
+    const deleteReq = createMockReq({ method: "DELETE", url: "/api/db/worker-config/worker-1" });
+    const deleteRes = createMockRes();
+    await handler(deleteReq, deleteRes);
+    expect(deleteRes.statusCode).toBe(200);
+  });
+
+  test("covers delete preference and missing worker config branches", async () => {
+    const now = new Date();
+    let deletedPreference: string | undefined;
+    let clearedWorker: string | undefined;
+    const db = {
+      getDbPath: () => "/tmp/opencode.db",
+      getUser: () => ({ id: "user-1", onboarded: false, createdAt: now, updatedAt: now, onboardedAt: null }),
+      getAllPreferences: () => ({ theme: "dark" }),
+      getAllWorkerConfigs: () => [],
+      setPreference: () => {},
+      deletePreference: (key: string) => {
+        deletedPreference = key;
+      },
+      getWorkerConfig: () => undefined,
+      setWorkerConfig: () => {},
+      clearWorkerConfig: (workerId: string) => {
+        clearedWorker = workerId;
+      },
+      markOnboarded: () => ({ id: "user-1", onboarded: true, createdAt: now, updatedAt: now, onboardedAt: now }),
+    };
+
+    const handler = createDbRouter({
+      db: db as never,
+      onPreferencesChanged: (key) => {
+        deletedPreference = key;
+      },
+      onWorkerConfigChanged: (workerId) => {
+        clearedWorker = workerId;
+      },
+    });
+
+    const deletePrefReq = createMockReq({ method: "DELETE", url: "/api/db/preferences/theme" });
+    const deletePrefRes = createMockRes();
+    await handler(deletePrefReq, deletePrefRes);
+    expect(deletePrefRes.statusCode).toBe(200);
+    expect(deletedPreference).toBe("theme");
+
+    const missingWorkerReq = createMockReq({ method: "GET", url: "/api/db/worker-config/missing" });
+    const missingWorkerRes = createMockRes();
+    await handler(missingWorkerReq, missingWorkerRes);
+    expect(missingWorkerRes.statusCode).toBe(404);
+
+    const deleteWorkerReq = createMockReq({ method: "DELETE", url: "/api/db/worker-config/worker-1" });
+    const deleteWorkerRes = createMockRes();
+    await handler(deleteWorkerReq, deleteWorkerRes);
+    expect(deleteWorkerRes.statusCode).toBe(200);
+    expect(clearedWorker).toBe("worker-1");
+  });
 });
 
 describe("skills router extra coverage", () => {
   test("covers error branches and missing dependencies", async () => {
     const events = createSkillsEvents();
+    let throwOnGet = false;
     const skills = {
       events,
       list: async () => {
         throw new Error("list failed");
       },
-      get: async () => undefined,
+      get: async () => {
+        if (throwOnGet) throw new Error("get failed");
+        return undefined;
+      },
       create: async () => {
         throw new Error("create failed");
       },
@@ -215,8 +393,23 @@ describe("skills router extra coverage", () => {
       const listRes = await fetch(`${baseUrl}/api/skills`);
       expect(listRes.status).toBe(500);
 
+      const createRes = await fetch(`${baseUrl}/api/skills`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input: { id: "oops", frontmatter: { description: "desc", model: "auto" } },
+          scope: "project",
+        }),
+      });
+      expect(createRes.status).toBe(400);
+
       const getRes = await fetch(`${baseUrl}/api/skills/missing`);
       expect(getRes.status).toBe(404);
+
+      throwOnGet = true;
+      const getError = await fetch(`${baseUrl}/api/skills/error`);
+      expect(getError.status).toBe(500);
+      throwOnGet = false;
 
       const missingId = await fetch(`${baseUrl}/api/skills`, {
         method: "PUT",
@@ -303,6 +496,94 @@ describe("skills router extra coverage", () => {
       expect(spawnRes.status).toBe(400);
     });
   });
+
+  test("handles skill lifecycle and broadcasts events", async () => {
+    const events = createSkillsEvents();
+    const store = new Map<string, Skill>();
+    const skills = {
+      events,
+      list: async () => Array.from(store.values()),
+      get: async (id: string) => store.get(id),
+      create: async (input: SkillInput, scope: SkillScope) => {
+        const skill = { id: input.id, frontmatter: input.frontmatter, systemPrompt: input.systemPrompt, scope } as Skill;
+        store.set(input.id, skill);
+        events.emit({ type: "skill.created", skill });
+        return skill;
+      },
+      update: async (id: string, updates: Partial<SkillInput>) => {
+        const current = store.get(id) ?? ({ id, frontmatter: { description: "", model: "" }, systemPrompt: "" } as Skill);
+        const next = {
+          ...current,
+          frontmatter: { ...current.frontmatter, ...(updates.frontmatter ?? {}) },
+          systemPrompt: updates.systemPrompt ?? current.systemPrompt,
+        } as Skill;
+        store.set(id, next);
+        events.emit({ type: "skill.updated", skill: next });
+        return next;
+      },
+      delete: async (id: string) => {
+        store.delete(id);
+        events.emit({ type: "skill.deleted", id, scope: "project" });
+        return true;
+      },
+      duplicate: async (id: string, newId: string) => {
+        const current = store.get(id) ?? ({ id, frontmatter: { description: "", model: "" }, systemPrompt: "" } as Skill);
+        const dup = { ...current, id: newId } as Skill;
+        store.set(newId, dup);
+        events.emit({ type: "skill.created", skill: dup });
+        return dup;
+      },
+    };
+
+    const handler = createSkillsRouter({
+      skills: skills as never,
+      workers: {
+        spawnById: async () => ({ profile: { id: "alpha", model: "m" }, status: "ready", port: 0 }),
+      } as never,
+    });
+
+    const sseReq = createMockReq({ method: "GET", url: "/api/skills/events" });
+    const sseRes = createMockRes();
+    await handler(sseReq, sseRes);
+    events.emit({ type: "skill.created", skill: { id: "alpha" } as Skill });
+    expect(sseRes.writes.join("")).toContain("skill.created");
+
+    await withServer(handler, async (baseUrl) => {
+      const created = await fetch(`${baseUrl}/api/skills`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input: {
+            id: "alpha",
+            frontmatter: { name: "alpha", description: "desc", model: "auto" },
+            systemPrompt: "Prompt",
+          },
+          scope: "project",
+        }),
+      });
+      expect(created.status).toBe(201);
+
+      const loaded = await fetch(`${baseUrl}/api/skills/alpha`);
+      expect(loaded.status).toBe(200);
+
+      const updated = await fetch(`${baseUrl}/api/skills/alpha`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ updates: { frontmatter: { description: "updated" } } }),
+      });
+      expect(updated.status).toBe(200);
+
+      const duplicated = await fetch(`${baseUrl}/api/skills/alpha/duplicate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newId: "alpha-copy" }),
+      });
+      expect(duplicated.status).toBe(201);
+
+      const deleted = await fetch(`${baseUrl}/api/skills/alpha-copy`, { method: "DELETE" });
+      expect(deleted.status).toBe(200);
+    });
+  });
 });
 
 describe("sessions router extra coverage", () => {
@@ -336,6 +617,7 @@ describe("sessions router extra coverage", () => {
     let throwOnMode = false;
     let throwOnWorker = false;
     let throwOnSession = false;
+    let throwOnStop = false;
 
     const sessionManager = {
       getSummary: () => {
@@ -375,7 +657,10 @@ describe("sessions router extra coverage", () => {
 
     let stopWorkerSuccess = false;
     const workers = {
-      stopWorker: async () => stopWorkerSuccess,
+      stopWorker: async () => {
+        if (throwOnStop) throw new Error("stop failed");
+        return stopWorkerSuccess;
+      },
     } as unknown as WorkerManager;
 
     const handler = createSessionsRouter({ sessionManager, workers });
@@ -431,6 +716,11 @@ describe("sessions router extra coverage", () => {
 
       const deleteRes = await fetch(`${baseUrl}/api/sessions/session-1`, { method: "DELETE" });
       expect(deleteRes.status).toBe(500);
+
+      throwOnStop = true;
+      const deleteError = await fetch(`${baseUrl}/api/sessions/session-1`, { method: "DELETE" });
+      expect(deleteError.status).toBe(500);
+      throwOnStop = false;
 
       const missingActivity = await fetch(`${baseUrl}/api/sessions/unknown/activity`);
       expect(missingActivity.status).toBe(404);
@@ -598,8 +888,51 @@ describe("skills API server extra coverage", () => {
     const dbRes = await fetch(`${baseUrl}/api/db`);
     expect(dbRes.status).toBe(200);
 
+    const skillsRes = await fetch(`${baseUrl}/api/skills`);
+    expect(skillsRes.status).toBe(200);
+
     await api.stop();
     await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  test("returns 501 for missing deps and skips disabled start", async () => {
+    const events = createSkillsEvents();
+    const skills = {
+      events,
+      list: async () => [],
+      get: async () => undefined,
+      create: async (input: SkillInput, scope: SkillScope) => ({
+        id: input.id,
+        frontmatter: { ...input.frontmatter, name: input.frontmatter.name ?? input.id },
+        systemPrompt: input.systemPrompt ?? "",
+        source: { type: scope },
+        filePath: "/tmp/SKILL.md",
+        hasScripts: false,
+        hasReferences: false,
+        hasAssets: false,
+      }),
+      update: async () => undefined as never,
+      delete: async () => true,
+      duplicate: async () => undefined as never,
+    };
+
+    const api = createSkillsApiServer({ config: { port: 0 }, deps: { skills } });
+    await api.start();
+    const baseUrl = api.url!;
+
+    const dbRes = await fetch(`${baseUrl}/api/db`);
+    expect(dbRes.status).toBe(501);
+
+    const sessionsRes = await fetch(`${baseUrl}/api/sessions`);
+    expect(sessionsRes.status).toBe(501);
+
+    const health = await api.health();
+    expect(health.ok).toBe(true);
+    await api.stop();
+
+    const disabled = createSkillsApiServer({ config: { enabled: false }, deps: { skills } });
+    await disabled.start();
+    expect(disabled.url).toBeUndefined();
   });
 
   test("handles startup errors gracefully", async () => {

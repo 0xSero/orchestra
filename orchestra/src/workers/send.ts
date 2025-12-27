@@ -1,3 +1,4 @@
+import type { CommunicationService } from "../communication";
 import type { WorkerInstance } from "../types";
 import { prepareWorkerAttachments } from "./attachments";
 import type { WorkerAttachment } from "./prompt";
@@ -9,6 +10,8 @@ export type WorkerSendOptions = {
   timeoutMs?: number;
   jobId?: string;
   from?: string;
+  /** Optional communication service to emit streaming events */
+  communication?: CommunicationService;
 };
 
 export type WorkerSendResult = {
@@ -151,18 +154,43 @@ export async function sendWorkerMessage(input: {
       throwOnError: false,
     };
 
+    const communication = input.options?.communication;
+    const emitStreamChunk = (chunk: string, final = false) => {
+      if (!communication) return;
+      communication.emit(
+        "orchestra.worker.stream",
+        {
+          chunk: {
+            workerId: input.workerId,
+            jobId: input.options?.jobId,
+            chunk,
+            timestamp: Date.now(),
+            final,
+          },
+        },
+        { source: "worker", workerId: input.workerId, jobId: input.options?.jobId },
+      );
+    };
+
+    // Emit start event
+    emitStreamChunk("", false);
+
     const result = await withTimeout(instance.client.session.prompt(promptArgs), timeoutMs, abort);
 
     const sdkError = extractSdkError(result);
     if (sdkError) {
       const msg = extractSdkErrorMessage(sdkError);
       instance.warning = `Last request failed: ${msg}`;
+      emitStreamChunk(`Error: ${msg}`, true);
       throw new Error(msg);
     }
 
     const promptData = extractSdkData(result);
     const extracted = extractTextFromPromptResponse(promptData);
     const responseText = extracted.text.trim();
+
+    // Emit the full response as a stream chunk (SDK doesn't support true streaming yet)
+    emitStreamChunk(responseText, true);
 
     instance.lastResult = {
       at: new Date(),

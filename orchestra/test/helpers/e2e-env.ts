@@ -51,7 +51,7 @@ async function copyOpenCodeConfig(sourceConfigHome: string | undefined, targetCo
   }
 }
 
-export async function setupE2eEnv(): Promise<E2eEnv> {
+export async function setupE2eEnv(options?: { sourceConfigHome?: string }): Promise<E2eEnv> {
   const snapshot: EnvSnapshot = {
     XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
     XDG_DATA_HOME: process.env.XDG_DATA_HOME,
@@ -82,7 +82,7 @@ export async function setupE2eEnv(): Promise<E2eEnv> {
   process.env.XDG_CACHE_HOME = cacheDir;
   process.env.OPENCODE_ORCH_PROJECT_DIR = process.cwd();
 
-  await copyOpenCodeConfig(snapshot.XDG_CONFIG_HOME, configDir);
+  await copyOpenCodeConfig(options?.sourceConfigHome ?? snapshot.XDG_CONFIG_HOME, configDir);
 
   return {
     root,

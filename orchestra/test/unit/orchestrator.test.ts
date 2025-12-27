@@ -36,6 +36,18 @@ describe("orchestrator service", () => {
     const existing = await orchestrator.ensureWorker({ workerId: "alpha", reason: "on-demand" });
     expect(existing).toBe(instance);
 
+    const spawnedWorkers = {
+      ...workers,
+      getWorker: () => undefined,
+      spawnById: async () => instance,
+    } as unknown as WorkerManager;
+    const spawnOrchestrator = createOrchestrator({
+      config,
+      deps: { api: {} as never, workers: spawnedWorkers },
+    });
+    const spawned = await spawnOrchestrator.ensureWorker({ workerId: "alpha", reason: "on-demand" });
+    expect(spawned.profile.id).toBe("alpha");
+
     await expect(orchestrator.ensureWorker({ workerId: "alpha", reason: "manual" })).rejects.toThrow("disabled");
 
     const emptyOrchestrator = createOrchestrator({
@@ -59,6 +71,20 @@ describe("orchestrator service", () => {
     );
 
     await expect(failingOrchestrator.delegateTask({ task: "do work" })).rejects.toThrow("fail");
+
+    const successWorkers = {
+      ...workers,
+      getWorker: () => instance,
+    } as unknown as WorkerManager;
+    const successOrchestrator = createOrchestrator({
+      config: { profiles: { alpha: profiles.alpha }, spawn: [], autoSpawn: false },
+      deps: { api: {} as never, workers: successWorkers },
+    });
+    const delegated = await successOrchestrator.delegateTask({ task: "do work", autoSpawn: false });
+    expect(delegated.response).toBe("ok");
+
+    const health = await successOrchestrator.health();
+    expect(health.ok).toBe(true);
 
     await orchestrator.start();
   });
@@ -84,9 +110,21 @@ describe("orchestrator service", () => {
     ).rejects.toThrow("Workflows are not enabled");
 
     const workflows = {
-      run: async (_input: unknown, deps: { resolveWorker: (id: string, autoSpawn: boolean) => Promise<string>; sendToWorker: (id: string, message: string, options: { attachments?: unknown[]; timeoutMs: number }) => Promise<{ success: boolean; response?: string }> }) => {
+      run: async (
+        _input: unknown,
+        deps: {
+          resolveWorker: (id: string, autoSpawn: boolean) => Promise<string>;
+          sendToWorker: (
+            id: string,
+            message: string,
+            options: { attachments?: unknown[]; timeoutMs: number },
+          ) => Promise<{ success: boolean; response?: string }>;
+        },
+      ) => {
         const resolved = await deps.resolveWorker("alpha", true);
         await deps.sendToWorker(resolved, "task", { timeoutMs: 1 });
+        const manual = await deps.resolveWorker("alpha", false);
+        await deps.sendToWorker(manual, "task", { timeoutMs: 1 });
         return { steps: [], result: "ok" };
       },
     } as unknown as WorkflowEngine;
@@ -126,5 +164,34 @@ describe("orchestrator service", () => {
     expect(spawnCalls).toEqual(["alpha"]);
 
     await orchestrator.stop();
+  });
+
+  test("auto-spawn ignores spawn failures", async () => {
+    const spawnCalls: string[] = [];
+    const config: OrchestratorConfig = {
+      profiles,
+      spawn: ["alpha"],
+      autoSpawn: true,
+    };
+
+    const workers = {
+      getWorker: () => undefined,
+      spawnById: async (id: string) => {
+        spawnCalls.push(id);
+        throw new Error("spawn failed");
+      },
+      send: async () => ({ success: true, response: "ok" }),
+      listWorkers: () => [],
+      stopWorker: async () => true,
+    } as unknown as WorkerManager;
+
+    const orchestrator = createOrchestrator({
+      config,
+      deps: { api: {} as never, workers },
+    });
+
+    await orchestrator.start();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(spawnCalls).toEqual(["alpha"]);
   });
 });

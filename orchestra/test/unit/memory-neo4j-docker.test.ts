@@ -10,6 +10,8 @@ let spawnCalls = 0;
 let startCalls = 0;
 let forceStartError = false;
 let commands: string[] = [];
+let spawnSyncThrowsFor: "ps-a" | "ps" | undefined;
+let driverThrows = false;
 const snapshotEnv = () => ({
   HOME: process.env.HOME,
   USERPROFILE: process.env.USERPROFILE,
@@ -56,6 +58,8 @@ describe("neo4j docker helper", () => {
     startCalls = 0;
     forceStartError = false;
     commands = [];
+    spawnSyncThrowsFor = undefined;
+    driverThrows = false;
     setNeo4jIntegrationsConfig(undefined);
   };
 
@@ -109,6 +113,12 @@ describe("neo4j docker helper", () => {
       }),
       spawnSync: (command: string, args?: string[]) => {
         const argList = Array.isArray(args) ? args : [];
+        if (spawnSyncThrowsFor === "ps-a" && command === "docker" && argList[0] === "ps" && argList[1] === "-a") {
+          throw new Error("spawnSync failed");
+        }
+        if (spawnSyncThrowsFor === "ps" && command === "docker" && argList[0] === "ps" && argList[1] !== "-a") {
+          throw new Error("spawnSync failed");
+        }
         commands.push(formatCommand(command, argList));
         if (command === "docker" && argList[0] === "ps" && argList[1] === "-a") {
           return { pid: 0, status: 0, stdout: containerExists ? "opencode-neo4j" : "", stderr: "" };
@@ -130,7 +140,9 @@ describe("neo4j docker helper", () => {
     mock.module("neo4j-driver", () => ({
       default: {
         auth: { basic: () => "auth" },
-        driver: () => ({
+        driver: () => {
+          if (driverThrows) throw new Error("driver failed");
+          return ({
           session: () => ({
             run: async () => {
               const outcome = runOutcomes.length > 0 ? runOutcomes.shift() : defaultRunSuccess;
@@ -139,10 +151,13 @@ describe("neo4j docker helper", () => {
             close: async () => {},
           }),
           close: async () => {},
-        }),
+          });
+        },
       },
       auth: { basic: () => "auth" },
-      driver: () => ({
+      driver: () => {
+        if (driverThrows) throw new Error("driver failed");
+        return ({
         session: () => ({
           run: async () => {
             const outcome = runOutcomes.length > 0 ? runOutcomes.shift() : defaultRunSuccess;
@@ -151,7 +166,8 @@ describe("neo4j docker helper", () => {
           close: async () => {},
         }),
         close: async () => {},
-      }),
+        });
+      },
     }));
   });
 
@@ -228,6 +244,50 @@ describe("neo4j docker helper", () => {
 
     const result = await ensureNeo4jRunning({ enabled: true, autoStart: true, image: "neo4j:latest", uri: "bolt://localhost:7687" });
     expect(result.status).toBe("failed");
+  });
+
+  test("handles spawnSync failures and invalid configs", async () => {
+    const { ensureNeo4jRunning } = await import("../../src/memory/neo4j-docker");
+
+    setEnvConfig();
+    runOutcomes = [false, true];
+    spawnSyncThrowsFor = "ps-a";
+    const psAResult = await ensureNeo4jRunning({ image: "neo4j:latest" });
+    expect(psAResult.status).toBe("created");
+
+    spawnSyncThrowsFor = "ps";
+    containerExists = true;
+    runOutcomes = [false, true];
+    const psResult = await ensureNeo4jRunning({ image: "neo4j:latest" });
+    expect(psResult.status).toBe("started");
+
+    spawnSyncThrowsFor = undefined;
+    containerExists = false;
+    containerRunning = false;
+    runOutcomes = [false];
+    const badImage = await ensureNeo4jRunning({ image: "bad;image", uri: "bolt://localhost:7687" });
+    expect(badImage.status).toBe("failed");
+
+    runOutcomes = [false];
+    const badPort = await ensureNeo4jRunning({ image: "neo4j:latest", uri: "bolt://localhost:bad" });
+    expect(badPort.status).toBe("failed");
+  });
+
+  test("waits through driver and session failures", async () => {
+    const { ensureNeo4jRunning } = await import("../../src/memory/neo4j-docker");
+
+    setEnvConfig();
+    containerExists = true;
+    containerRunning = false;
+    runOutcomes = [false, false, true];
+    const recovered = await ensureNeo4jRunning({ image: "neo4j:latest" });
+    expect(recovered.status).toBe("started");
+
+    driverThrows = true;
+    runOutcomes = [false];
+    const driverFail = await withFastTimeout(() => ensureNeo4jRunning({ image: "neo4j:latest" }));
+    expect(driverFail.status).toBe("failed");
+    driverThrows = false;
   });
 });
 

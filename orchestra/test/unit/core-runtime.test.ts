@@ -21,6 +21,10 @@ describe("core runtime helper", () => {
     const runtime = await createTestCoreRuntime({ profiles, directory: dir });
     expect(runtime.workers.listProfiles().length).toBe(1);
 
+    const fakeWorker = { profile: { id: "alpha" } } as never;
+    runtime.workers.listWorkers = () => [fakeWorker];
+    runtime.workers.stopWorker = async () => true;
+
     await runtime.stop();
     await rm(dir, { recursive: true, force: true });
   });

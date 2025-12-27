@@ -32,6 +32,34 @@ describe("spawn server helpers", () => {
     else process.env.OPENCODE_WORKER_PLUGIN_PATH = originalPlugin;
   });
 
+  test("startWorkerServer clears env vars when they were unset", async () => {
+    const originalWorker = process.env.OPENCODE_ORCHESTRATOR_WORKER;
+    const originalPlugin = process.env.OPENCODE_WORKER_PLUGIN_PATH;
+    delete process.env.OPENCODE_ORCHESTRATOR_WORKER;
+    delete process.env.OPENCODE_WORKER_PLUGIN_PATH;
+
+    const api = {
+      createServer: async () => ({ client: {}, server: { url: "http://127.0.0.1:9999", close: () => {} } }),
+    };
+
+    await startWorkerServer({
+      api: api as never,
+      hostname: "127.0.0.1",
+      port: 0,
+      timeoutMs: 10,
+      config: {},
+    });
+
+    expect(process.env.OPENCODE_ORCHESTRATOR_WORKER).toBeUndefined();
+    expect(process.env.OPENCODE_WORKER_PLUGIN_PATH).toBeUndefined();
+
+    if (originalWorker === undefined) delete process.env.OPENCODE_ORCHESTRATOR_WORKER;
+    else process.env.OPENCODE_ORCHESTRATOR_WORKER = originalWorker;
+
+    if (originalPlugin === undefined) delete process.env.OPENCODE_WORKER_PLUGIN_PATH;
+    else process.env.OPENCODE_WORKER_PLUGIN_PATH = originalPlugin;
+  });
+
   test("createWorkerSession returns error payload on failures", async () => {
     const client = {
       session: {
@@ -51,7 +79,26 @@ describe("spawn server helpers", () => {
     expect(result).toHaveProperty("error");
   });
 
-  test("applyServerBundleToInstance updates instance metadata", () => {
+  test("createWorkerSession returns session response on success", async () => {
+    const payload = { data: { id: "session-1" } };
+    const client = {
+      session: {
+        create: async () => payload,
+      },
+    };
+
+    const result = await createWorkerSession({
+      client: client as never,
+      directory: process.cwd(),
+      timeoutMs: 10,
+      title: "Worker",
+    });
+
+    expect(result).toEqual(payload);
+  });
+
+  test("applyServerBundleToInstance updates instance metadata", async () => {
+    let closed = false;
     const instance: WorkerInstance = {
       profile: { id: "alpha", name: "Alpha", model: "model-a", purpose: "", whenToUse: "" },
       status: "ready",
@@ -60,9 +107,11 @@ describe("spawn server helpers", () => {
 
     applyServerBundleToInstance(instance, {
       client: {},
-      server: { url: "http://127.0.0.1:1234", close: () => {} },
+      server: { url: "http://127.0.0.1:1234", close: () => { closed = true; } },
     } as never);
     expect(instance.port).toBe(1234);
+    await instance.shutdown?.();
+    expect(closed).toBe(true);
 
     applyServerBundleToInstance(instance, {
       client: {},

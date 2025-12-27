@@ -86,9 +86,7 @@ export function createTestFixtures(deps: TestFixturesDeps = {}): TestFixtures {
           },
         };
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-          throw new Error(`Config fixture not found: ${name}`);
-        }
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new Error(`Config fixture not found: ${name}`);
         throw error;
       }
     },

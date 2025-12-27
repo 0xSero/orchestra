@@ -57,6 +57,28 @@ describe("send worker message", () => {
     expect(result.error).toContain("did not become ready");
   });
 
+  test("waits for readiness and emits stream updates", async () => {
+    const instance = buildInstance({ status: "starting" });
+    const events: Array<{ type: string; payload: { chunk: { final?: boolean } } }> = [];
+    const communication = {
+      emit: (type: string, data: { chunk: { final?: boolean } }) => {
+        events.push({ type, payload: data });
+      },
+    };
+
+    const result = await sendWorkerMessage({
+      registry: buildRegistry(instance, true),
+      workerId: "alpha",
+      message: "hi",
+      options: { communication: communication as never },
+    });
+
+    expect(result.success).toBe(true);
+    expect(events.length).toBeGreaterThan(0);
+    expect(events[0]?.type).toBe("orchestra.worker.stream");
+    expect(events[events.length - 1]?.payload.chunk.final).toBe(true);
+  });
+
   test("returns error when worker is not initialized", async () => {
     const instance = buildInstance({ client: undefined, sessionId: undefined });
     const result = await sendWorkerMessage({

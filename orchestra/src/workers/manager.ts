@@ -206,6 +206,7 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
         timeoutMs: options?.timeout,
         jobId: options?.jobId,
         from: options?.from,
+        communication,
       };
       const instance = registry.get(workerId);
       const memory = deps.memory;

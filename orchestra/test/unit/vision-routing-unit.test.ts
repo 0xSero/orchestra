@@ -95,6 +95,36 @@ describe("vision routing", () => {
     expect(output.parts[0]?.text).toContain("Vision result");
   });
 
+  test("emits completion and logs successful analysis", async () => {
+    const state = createVisionRoutingState();
+    const output = {
+      message: { role: "user" },
+      parts: [{ type: "image", base64: "Zm9v", mimeType: "image/png" }],
+    };
+
+    const events: string[] = [];
+    const logs: Array<Record<string, unknown>> = [];
+
+    const deps = {
+      workers: {
+        getWorker: () => undefined,
+        spawnById: async () => ({}),
+        send: async () => ({ success: true, response: "Vision ok" }),
+      },
+      profiles: { vision: { id: "vision", name: "Vision", model: "vision", purpose: "", whenToUse: "" } },
+      communication: {
+        emit: (type: string) => events.push(type),
+      },
+      logSink: async (entry: Record<string, unknown>) => {
+        logs.push(entry);
+      },
+    };
+
+    await routeVisionMessage({ role: "user", messageID: "msg-5" }, output as never, deps as never, state);
+    expect(events).toContain("orchestra.vision.completed");
+    expect(logs[0]?.status).toBe("succeeded");
+  });
+
   test("handles worker errors", async () => {
     const state = createVisionRoutingState();
     const output = {

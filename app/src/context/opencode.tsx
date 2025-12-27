@@ -26,6 +26,7 @@ export type {
   Part,
   Session,
   WorkerRuntime,
+  WorkerStreamChunk,
 } from "./opencode-types";
 
 // =============================================================================
@@ -49,6 +50,7 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     agents: [],
     events: [],
     workers: {},
+    workerStreams: {},
     modelOptions: [],
     toolIds: [],
     lastUpdate: 0,
@@ -117,6 +119,7 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     agents: () => state.agents,
     events: () => state.events,
     workers: () => Object.values(state.workers),
+    workerStreams: () => Object.values(state.workerStreams),
     activeWorkerSessionIds: () =>
       new Set(
         Object.values(state.workers)

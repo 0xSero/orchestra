@@ -1,10 +1,12 @@
-import { describe, expect, test, mock } from "bun:test";
+import { describe, expect, test } from "bun:test";
+import { recordMessageMemory } from "../../src/memory/auto";
 
 let getMemoryCalls = 0;
 
 describe("memory auto error handling", () => {
   test("recordMessageMemory tolerates summary lookup failures", async () => {
-    mock.module("../../src/memory/store", () => ({
+    getMemoryCalls = 0;
+    const deps = {
       getMemoryByKey: async () => {
         getMemoryCalls += 1;
         throw new Error("lookup failed");
@@ -13,27 +15,19 @@ describe("memory auto error handling", () => {
       trimGlobalMessageProjects: async () => {},
       trimMemoryByKeyPrefix: async () => {},
       upsertMemory: async () => ({}) as never,
-    }));
-
-    mock.module("../../src/memory/neo4j", () => ({
       loadNeo4jConfig: () => undefined,
-    }));
+    };
 
-    const { recordMessageMemory } = await import("../../src/memory/auto");
-
-    try {
-      await recordMessageMemory({
-        text: "hello",
-        scope: "project",
-        projectId: "project-1",
-        sessionId: "session-1",
-        role: "user",
-        userId: "user-1",
-        summaries: { enabled: true },
-      });
-    } finally {
-      mock.restore();
-    }
+    await recordMessageMemory({
+      text: "hello",
+      scope: "project",
+      projectId: "project-1",
+      sessionId: "session-1",
+      role: "user",
+      userId: "user-1",
+      summaries: { enabled: true },
+      deps,
+    });
 
     expect(getMemoryCalls).toBeGreaterThan(0);
   });

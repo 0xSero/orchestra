@@ -5,6 +5,7 @@ describe("vision parts utilities", () => {
   test("detects image parts and formats analysis", () => {
     expect(hasVisionParts([])).toBe(false);
     expect(hasVisionParts("nope" as never)).toBe(false);
+    expect(isImagePart(undefined as never)).toBe(false);
     expect(isImagePart({ type: "image" })).toBe(true);
     expect(isImagePart({ type: "file", mime: "image/png" })).toBe(true);
     expect(isImagePart({ type: "file", url: "data:image/png;base64,abc" })).toBe(true);
@@ -29,6 +30,9 @@ describe("vision parts utilities", () => {
       { type: "text", text: "hello" },
       { type: "file", mime: "image/png", url: "data:image/png;base64,abc" },
     ];
+
+    const passthrough = replaceImagesWithText("not-an-array" as never, "analysis");
+    expect(passthrough).toBe("not-an-array" as never);
 
     const replaced = replaceImagesWithText(parts, "analysis", { messageID: "msg-1", sessionID: "s1" });
     expect(replaced.length).toBe(1);

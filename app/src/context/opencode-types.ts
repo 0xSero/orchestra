@@ -27,6 +27,15 @@ export type WorkerRuntime = {
   warning?: string;
 };
 
+/** Streaming response from a delegated worker */
+export type WorkerStreamChunk = {
+  workerId: string;
+  jobId?: string;
+  chunk: string;
+  timestamp: number;
+  final?: boolean;
+};
+
 export type ModelOption = {
   value: string;
   label: string;
@@ -41,6 +50,8 @@ export interface OpenCodeState {
   agents: Agent[];
   events: OpenCodeEventItem[];
   workers: Record<string, WorkerRuntime>;
+  /** Active worker stream chunks (keyed by workerId) */
+  workerStreams: Record<string, WorkerStreamChunk>;
   modelOptions: ModelOption[];
   toolIds: string[];
   lastUpdate: number;
@@ -54,6 +65,8 @@ export interface OpenCodeContextValue {
   agents: Accessor<Agent[]>;
   events: Accessor<OpenCodeEventItem[]>;
   workers: Accessor<WorkerRuntime[]>;
+  /** Active worker stream chunks for live display */
+  workerStreams: Accessor<WorkerStreamChunk[]>;
   activeWorkerSessionIds: Accessor<Set<string>>;
   modelOptions: Accessor<ModelOption[]>;
   toolIds: Accessor<string[]>;

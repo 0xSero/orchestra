@@ -95,7 +95,7 @@ const createContainer = (cfg: Neo4jIntegrationConfig): void => {
   }
 
   const uri = cfg.uri ?? "bolt://localhost:7687";
-  const portMatch = uri.match(/:(\d+)$/);
+  const portMatch = uri.match(/:([^/]+)(?:\/|$)/);
   const boltPort = portMatch ? portMatch[1] : "7687";
 
   // Validate port is numeric

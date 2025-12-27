@@ -69,4 +69,34 @@ describe("repo context", () => {
     const fileCtx = await getRepoContext({ directory: filePath });
     expect(fileCtx?.structure).toEqual([]);
   });
+
+  test("handles git info failures safely", async () => {
+    const ctx = await getRepoContext({
+      directory: "/tmp/repo",
+      deps: {
+        existsSync: (path: string) => path === "/tmp/repo" || path.endsWith(".git"),
+        readdirSync: () => [],
+        statSync: () => ({ isDirectory: () => false }),
+        execSync: () => {
+          throw new Error("git fail");
+        },
+      },
+    });
+    expect(ctx?.git).toBeUndefined();
+  });
+
+  test("handles git repository check errors", async () => {
+    const ctx = await getRepoContext({
+      directory: "/tmp/repo",
+      deps: {
+        existsSync: (path: string) => {
+          if (path.endsWith(".git")) throw new Error("fs fail");
+          return path === "/tmp/repo";
+        },
+        readdirSync: () => [],
+        statSync: () => ({ isDirectory: () => false }),
+      },
+    });
+    expect(ctx?.git).toBeUndefined();
+  });
 });

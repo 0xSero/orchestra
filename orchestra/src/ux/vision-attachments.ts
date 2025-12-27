@@ -24,9 +24,25 @@ const inferMimeType = (path: string): string => {
   return mimeMap[ext ?? ""] ?? "image/png";
 };
 
-const readClipboardImage = async (): Promise<{ mimeType: string; base64: string } | undefined> => {
-  if (process.platform === "darwin") {
-    const outPath = join(tmpdir(), `opencode-clipboard-${process.pid}.png`);
+type ClipboardDeps = {
+  execFileAsync?: typeof execFileAsync;
+  readFile?: typeof readFile;
+  unlink?: typeof unlink;
+  tmpdir?: typeof tmpdir;
+  platform?: string;
+};
+
+const readClipboardImage = async (
+  deps: ClipboardDeps = {},
+): Promise<{ mimeType: string; base64: string } | undefined> => {
+  const platform = deps.platform ?? process.platform;
+  const exec = deps.execFileAsync ?? execFileAsync;
+  const read = deps.readFile ?? readFile;
+  const remove = deps.unlink ?? unlink;
+  const tempDir = deps.tmpdir ?? tmpdir;
+
+  if (platform === "darwin") {
+    const outPath = join(tempDir(), `opencode-clipboard-${process.pid}.png`);
     const script = [
       `set outPath to "${outPath.replace(/"/g, '\\"')}"`,
       `set outFile to POSIX file outPath`,
@@ -37,19 +53,19 @@ const readClipboardImage = async (): Promise<{ mimeType: string; base64: string 
       `return outPath`,
     ].join("\n");
 
-    await execFileAsync("osascript", ["-e", script], { timeout: 2000 });
+    await exec("osascript", ["-e", script], { timeout: 2000 });
     try {
-      const buf = await readFile(outPath);
+      const buf = await read(outPath);
       if (buf.length === 0) return undefined;
       return { mimeType: "image/png", base64: buf.toString("base64") };
     } finally {
-      await unlink(outPath).catch(() => {});
+      await remove(outPath).catch(() => {});
     }
   }
 
-  if (process.platform === "linux") {
+  if (platform === "linux") {
     try {
-      const { stdout } = (await execFileAsync("wl-paste", ["--no-newline", "--type", "image/png"], {
+      const { stdout } = (await exec("wl-paste", ["--no-newline", "--type", "image/png"], {
         encoding: null,
         timeout: 2000,
         maxBuffer: 20 * 1024 * 1024,
@@ -58,7 +74,7 @@ const readClipboardImage = async (): Promise<{ mimeType: string; base64: string 
       if (buf.length > 0) return { mimeType: "image/png", base64: buf.toString("base64") };
     } catch {
       try {
-        const { stdout } = (await execFileAsync("xclip", ["-selection", "clipboard", "-t", "image/png", "-o"], {
+        const { stdout } = (await exec("xclip", ["-selection", "clipboard", "-t", "image/png", "-o"], {
           encoding: null,
           timeout: 2000,
           maxBuffer: 20 * 1024 * 1024,
@@ -74,20 +90,28 @@ const readClipboardImage = async (): Promise<{ mimeType: string; base64: string 
   return undefined;
 };
 
-const extractSingleImage = async (part: VisionPart): Promise<WorkerAttachment | null> => {
+type VisionAttachmentDeps = {
+  readFile?: typeof readFile;
+  readClipboardImage?: (deps?: ClipboardDeps) => Promise<{ mimeType: string; base64: string } | undefined>;
+  clipboardDeps?: ClipboardDeps;
+};
+
+const extractSingleImage = async (part: VisionPart, deps?: VisionAttachmentDeps): Promise<WorkerAttachment | null> => {
   try {
     const partUrl = typeof part.url === "string" ? part.url : undefined;
     const mimeType =
       typeof part.mime === "string" ? part.mime : typeof part.mimeType === "string" ? part.mimeType : undefined;
+    const readFileFn = deps?.readFile ?? readFile;
+    const readClipboardImageFn = deps?.readClipboardImage ?? readClipboardImage;
 
     if (partUrl?.startsWith("file://")) {
       const path = fileURLToPath(partUrl);
-      const buf = await readFile(path);
+      const buf = await readFileFn(path);
       return { type: "image", mimeType: mimeType ?? inferMimeType(path), base64: buf.toString("base64") };
     }
 
     if (partUrl && (partUrl.startsWith("/") || /^[A-Za-z]:[\\/]/.test(partUrl))) {
-      const buf = await readFile(partUrl);
+      const buf = await readFileFn(partUrl);
       return { type: "image", mimeType: mimeType ?? inferMimeType(partUrl), base64: buf.toString("base64") };
     }
 
@@ -99,7 +123,7 @@ const extractSingleImage = async (part: VisionPart): Promise<WorkerAttachment | 
     }
 
     if (partUrl === "clipboard" || partUrl?.startsWith("clipboard:")) {
-      const clip = await readClipboardImage();
+      const clip = await readClipboardImageFn(deps?.clipboardDeps);
       if (clip) {
         return { type: "image", mimeType: clip.mimeType, base64: clip.base64 };
       }
@@ -116,10 +140,15 @@ const extractSingleImage = async (part: VisionPart): Promise<WorkerAttachment | 
 };
 
 /** Convert image parts into worker attachments that can be sent to vision models. */
-export const extractVisionAttachments = async (parts: VisionPart[]): Promise<WorkerAttachment[]> => {
+export const extractVisionAttachments = async (
+  parts: VisionPart[],
+  deps?: VisionAttachmentDeps,
+): Promise<WorkerAttachment[]> => {
   if (!Array.isArray(parts)) return [];
   const imageParts = parts.filter((part) => isImagePart(part));
   if (imageParts.length === 0) return [];
-  const results = await Promise.all(imageParts.map((part) => extractSingleImage(part)));
+  const results = await Promise.all(imageParts.map((part) => extractSingleImage(part, deps)));
   return results.filter((result): result is WorkerAttachment => Boolean(result));
 };
+
+export const __test__ = { readClipboardImage };

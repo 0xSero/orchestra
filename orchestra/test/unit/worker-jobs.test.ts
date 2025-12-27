@@ -28,6 +28,15 @@ describe("worker job registry", () => {
     expect(finished.status).toBe("succeeded");
   });
 
+  test("await returns immediately for completed jobs", async () => {
+    const registry = new WorkerJobRegistry();
+    const job = registry.create({ workerId: "coder", message: "ping" });
+    registry.setResult(job.id, { responseText: "done" });
+
+    const finished = await registry.await(job.id, { timeoutMs: 10 });
+    expect(finished.status).toBe("succeeded");
+  });
+
   test("attaches report data", () => {
     const registry = new WorkerJobRegistry();
     const job = registry.create({ workerId: "coder", message: "ping" });
@@ -44,6 +53,16 @@ describe("worker job registry", () => {
     registry.setError(job.id, { error: "boom" });
     const listed = registry.list({ workerId: "coder", limit: 1 });
     expect(listed[0]?.status).toBe("failed");
+  });
+
+  test("lists jobs without filters and sorts by recency", () => {
+    const registry = new WorkerJobRegistry();
+    const first = registry.create({ workerId: "alpha", message: "one" });
+    const second = registry.create({ workerId: "beta", message: "two" });
+
+    const listed = registry.list();
+    expect(listed[0]?.id).toBe(second.id);
+    expect(listed[1]?.id).toBe(first.id);
   });
 
   test("await rejects on timeout", async () => {

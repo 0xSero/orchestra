@@ -13,6 +13,14 @@ export type MessageMemoryInput = {
   scope: MemoryScope;
   projectId?: string;
   maxChars?: number;
+  deps?: {
+    loadNeo4jConfig?: typeof loadNeo4jConfig;
+    upsertMemory?: typeof upsertMemory;
+    linkMemory?: typeof linkMemory;
+    getMemoryByKey?: typeof getMemoryByKey;
+    trimMemoryByKeyPrefix?: typeof trimMemoryByKeyPrefix;
+    trimGlobalMessageProjects?: typeof trimGlobalMessageProjects;
+  };
   summaries?: {
     enabled?: boolean;
     sessionMaxChars?: number;
@@ -31,7 +39,15 @@ function clamp(n: number, min: number, max: number): number {
 }
 
 export async function recordMessageMemory(input: MessageMemoryInput): Promise<void> {
-  const cfg = input.cfg ?? loadNeo4jConfig();
+  const deps = input.deps ?? {};
+  const loadNeo4jConfigFn = deps.loadNeo4jConfig ?? loadNeo4jConfig;
+  const upsertMemoryFn = deps.upsertMemory ?? upsertMemory;
+  const linkMemoryFn = deps.linkMemory ?? linkMemory;
+  const getMemoryByKeyFn = deps.getMemoryByKey ?? getMemoryByKey;
+  const trimMemoryByKeyPrefixFn = deps.trimMemoryByKeyPrefix ?? trimMemoryByKeyPrefix;
+  const trimGlobalMessageProjectsFn = deps.trimGlobalMessageProjects ?? trimGlobalMessageProjects;
+
+  const cfg = input.cfg ?? loadNeo4jConfigFn();
 
   const text = input.text.trim();
   if (!text) return;
@@ -51,7 +67,7 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
   if (projectId) tags.push(`project:${projectId}`);
 
   try {
-    await upsertMemory({
+    await upsertMemoryFn({
       cfg,
       scope: input.scope,
       projectId: input.scope === "project" ? input.projectId : undefined,
@@ -66,7 +82,7 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
   const userKey = `user:${userId}`;
 
   try {
-    await upsertMemory({
+    await upsertMemoryFn({
       cfg,
       scope: input.scope,
       projectId: input.scope === "project" ? projectId : undefined,
@@ -79,7 +95,7 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
 
   // Also keep a lightweight global index of known users/projects for cross-project retrieval.
   try {
-    await upsertMemory({
+    await upsertMemoryFn({
       cfg,
       scope: "global",
       key: userKey,
@@ -91,7 +107,7 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
 
   if (projectKey) {
     try {
-      await upsertMemory({
+      await upsertMemoryFn({
         cfg,
         scope: input.scope === "project" ? "project" : "global",
         ...(input.scope === "project" ? { projectId } : {}),
@@ -103,7 +119,7 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
     }
 
     try {
-      await upsertMemory({
+      await upsertMemoryFn({
         cfg,
         scope: "global",
         key: projectKey,
@@ -115,7 +131,7 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
   }
 
   try {
-    await linkMemory({
+    await linkMemoryFn({
       cfg,
       scope: input.scope,
       projectId: input.scope === "project" ? projectId : undefined,
@@ -128,7 +144,7 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
 
   if (projectKey) {
     try {
-      await linkMemory({
+      await linkMemoryFn({
         cfg,
         scope: input.scope,
         projectId: input.scope === "project" ? projectId : undefined,
@@ -151,13 +167,13 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
     if (input.scope === "project") {
       let prev;
       try {
-        prev = await getMemoryByKey({ cfg, scope: "project", projectId, key: "summary:project" });
+        prev = await getMemoryByKeyFn({ cfg, scope: "project", projectId, key: "summary:project" });
       } catch {
         prev = undefined;
       }
       const next = appendRollingSummary(prev?.value, entry, projectMaxChars);
       try {
-        await upsertMemory({
+        await upsertMemoryFn({
           cfg,
           scope: "project",
           projectId,
@@ -172,13 +188,13 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
       const sessionKey = `summary:session:${session}`;
       let prevSession;
       try {
-        prevSession = await getMemoryByKey({ cfg, scope: "project", projectId, key: sessionKey });
+        prevSession = await getMemoryByKeyFn({ cfg, scope: "project", projectId, key: sessionKey });
       } catch {
         prevSession = undefined;
       }
       const nextSession = appendRollingSummary(prevSession?.value, entry, sessionMaxChars);
       try {
-        await upsertMemory({
+        await upsertMemoryFn({
           cfg,
           scope: "project",
           projectId,
@@ -193,13 +209,13 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
     // Always update a global per-project summary for cross-project retrieval.
     let prevGlobal;
     try {
-      prevGlobal = await getMemoryByKey({ cfg, scope: "global", key: globalProjectSummaryKey });
+      prevGlobal = await getMemoryByKeyFn({ cfg, scope: "global", key: globalProjectSummaryKey });
     } catch {
       prevGlobal = undefined;
     }
     const nextGlobal = appendRollingSummary(prevGlobal?.value, entry, projectMaxChars);
     try {
-      await upsertMemory({
+      await upsertMemoryFn({
         cfg,
         scope: "global",
         key: globalProjectSummaryKey,
@@ -224,7 +240,7 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
   if (sessionLimit !== undefined) {
     const prefix = input.scope === "global" ? `message:${projectId ?? "unknown"}:${session}:` : `message:${session}:`;
     try {
-      await trimMemoryByKeyPrefix({
+      await trimMemoryByKeyPrefixFn({
         cfg,
         scope: input.scope,
         projectId: input.scope === "project" ? projectId : undefined,
@@ -238,7 +254,7 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
   if (projectLimit !== undefined && projectId) {
     const prefix = input.scope === "global" ? `message:${projectId}:` : "message:";
     try {
-      await trimMemoryByKeyPrefix({
+      await trimMemoryByKeyPrefixFn({
         cfg,
         scope: input.scope,
         projectId: input.scope === "project" ? projectId : undefined,
@@ -251,14 +267,14 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
 
   if (input.scope === "global" && globalLimit !== undefined) {
     try {
-      await trimMemoryByKeyPrefix({ cfg, scope: "global", keyPrefix: "message:", keepLatest: globalLimit });
+      await trimMemoryByKeyPrefixFn({ cfg, scope: "global", keyPrefix: "message:", keepLatest: globalLimit });
     } catch {
     }
   }
 
   if (input.scope === "global" && projectsLimit !== undefined) {
     try {
-      await trimGlobalMessageProjects({ cfg, keepProjects: projectsLimit });
+      await trimGlobalMessageProjectsFn({ cfg, keepProjects: projectsLimit });
     } catch {
     }
   }

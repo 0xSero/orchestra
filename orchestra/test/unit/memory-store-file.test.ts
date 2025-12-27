@@ -56,6 +56,15 @@ describe("memory file store", () => {
     });
     expect(linked.ok).toBe(true);
 
+    const relinked = await linkMemory({
+      scope: "project",
+      projectId: "project one",
+      fromKey: "note:1",
+      toKey: "note:2",
+      type: "relates_to",
+    });
+    expect(relinked.ok).toBe(true);
+
     const recent = await recentMemory({ scope: "project", projectId: "project one", limit: 5 });
     expect(recent.length).toBeGreaterThan(0);
   });
@@ -87,6 +96,30 @@ describe("memory file store", () => {
 
     const droppedAll = await trimGlobalMessageProjects({ keepProjects: 0 });
     expect(droppedAll.messagesDeleted).toBeGreaterThan(0);
+
+    const noDrop = await trimGlobalMessageProjects({ keepProjects: 10 });
+    expect(noDrop.projectsDropped).toBe(0);
+    expect(noDrop.messagesDeleted).toBe(0);
+  });
+
+  test("returns empty results when memory file is missing", async () => {
+    const recent = await recentMemory({ scope: "global", limit: 5 });
+    expect(recent).toEqual([]);
+
+    const search = await searchMemory({ scope: "global", query: "anything", limit: 5 });
+    expect(search).toEqual([]);
+  });
+
+  test("searches tags and sorts recent entries", async () => {
+    await upsertMemory({ scope: "global", key: "note:1", value: "hello", tags: ["alpha"] });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await upsertMemory({ scope: "global", key: "note:2", value: "world", tags: ["beta"] });
+
+    const tagged = await searchMemory({ scope: "global", query: "beta", limit: 5 });
+    expect(tagged[0]?.key).toBe("note:2");
+
+    const recent = await recentMemory({ scope: "global", limit: 2 });
+    expect(recent.length).toBeGreaterThan(1);
   });
 
   test("handles invalid memory file JSON", async () => {
@@ -96,5 +129,9 @@ describe("memory file store", () => {
 
     const recent = await recentMemory({ scope: "global", limit: 5 });
     expect(recent.length).toBe(0);
+  });
+
+  test("throws when project scope is missing projectId", async () => {
+    await expect(getMemoryByKey({ scope: "project", key: "note:1" })).rejects.toThrow("projectId is required");
   });
 });

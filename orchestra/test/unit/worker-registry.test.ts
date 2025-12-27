@@ -42,7 +42,8 @@ describe("worker registry", () => {
 
   test("supports status queries, capabilities, and summaries", async () => {
     const registry = new WorkerRegistry();
-    registry.off("spawn", () => {});
+    const unsubscribe = registry.on("spawn", () => {});
+    unsubscribe();
 
     const vision = buildInstance("vision");
     vision.profile.supportsVision = true;
@@ -74,5 +75,10 @@ describe("worker registry", () => {
     registry.on("error", (instance) => errors.push(instance.profile.id));
     registry.updateStatus("vision", "error", "boom");
     expect(errors).toEqual(["vision"]);
+  });
+
+  test("summarizes when empty", () => {
+    const registry = new WorkerRegistry();
+    expect(registry.getSummary()).toContain("No workers currently registered");
   });
 });

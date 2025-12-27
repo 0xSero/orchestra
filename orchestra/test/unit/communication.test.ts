@@ -51,6 +51,37 @@ describe("communication service", () => {
     await comm.stop();
   });
 
+  test("swallows publish failures for forwarded events", async () => {
+    let publishCalls = 0;
+    const api = {
+      tui: {
+        publish: async () => {
+          publishCalls += 1;
+          throw new Error("publish failed");
+        },
+      },
+      event: {
+        subscribe: async () => ({
+          stream: (async function* () {})(),
+        }),
+      },
+    };
+
+    const comm = createCommunication({
+      config: { enableSdkEvents: false },
+      deps: { api: api as never },
+    });
+
+    comm.emit(
+      "orchestra.worker.spawned",
+      { worker: { profile: { id: "worker-1" } } as never },
+      { source: "orchestrator" },
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(publishCalls).toBe(1);
+  });
+
   test("handles explicit off and subscription failures", async () => {
     const api = {
       tui: { publish: async () => ({}) },
@@ -81,5 +112,32 @@ describe("communication service", () => {
     const health = await commDisabled.health();
     expect(health.ok).toBe(true);
     await commDisabled.stop();
+  });
+
+  test("start is idempotent", async () => {
+    let subscribeCalls = 0;
+    const api = {
+      tui: { publish: async () => ({}) },
+      event: {
+        subscribe: async () => {
+          subscribeCalls += 1;
+          return {
+            stream: (async function* () {
+              yield { type: "session.created", properties: {} } as OpenCodeEvent;
+            })(),
+          };
+        },
+      },
+    };
+
+    const comm = createCommunication({
+      config: { enableSdkEvents: true },
+      deps: { api: api as never },
+    });
+
+    await comm.start();
+    await comm.start();
+    await comm.stop();
+    expect(subscribeCalls).toBe(1);
   });
 });

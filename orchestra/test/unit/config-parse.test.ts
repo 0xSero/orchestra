@@ -147,6 +147,32 @@ describe("config parsing", () => {
     expect(parsed.workflows?.roocodeBoomerang?.steps?.[0]?.id).toBe("step-1");
     expect(parsed.security?.workflows?.maxSteps).toBe(3);
   });
+
+  test("parses warm pool and agent sections", () => {
+    const parsed = parseOrchestratorConfigFile({
+      warmPool: {
+        enabled: true,
+        profiles: {
+          alpha: { size: 2, idleTimeoutMs: 1000 },
+          beta: "invalid",
+        },
+      },
+      agent: {
+        enabled: true,
+        name: "Helper",
+        model: "opencode/gpt-5-nano",
+        prompt: "Assist",
+        mode: "primary",
+        color: "blue",
+        applyToBuild: true,
+      },
+    });
+
+    expect(parsed.warmPool?.enabled).toBe(true);
+    expect(parsed.warmPool?.profiles?.alpha?.size).toBe(2);
+    expect(parsed.agent?.name).toBe("Helper");
+    expect(parsed.agent?.mode).toBe("primary");
+  });
 });
 
 describe("extra config sections", () => {

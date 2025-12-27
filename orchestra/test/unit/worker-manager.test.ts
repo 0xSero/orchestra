@@ -63,6 +63,8 @@ describe("worker manager", () => {
         spawnWorker: spawnWorker as never,
       },
     });
+    const health = await manager.health();
+    expect(health.ok).toBe(true);
 
     const first = await manager.spawnById("alpha");
     const second = await manager.spawnById("alpha");
@@ -242,5 +244,38 @@ describe("worker manager", () => {
     expect(awaited.status).toBe("failed");
     expect(events).toContain("orchestra.worker.job");
     await manager.stop();
+  });
+
+  test("emits job success updates", () => {
+    const events: string[] = [];
+    const profiles: Record<string, WorkerProfile> = {
+      alpha: {
+        id: "alpha",
+        name: "Alpha",
+        model: "model-a",
+        purpose: "test",
+        whenToUse: "testing",
+      },
+    };
+
+    const manager = createWorkerManager({
+      config: {
+        basePort: 10000,
+        timeout: 1000,
+        directory: process.cwd(),
+        profiles,
+      },
+      deps: {
+        api: {} as never,
+        communication: {
+          emit: (type: string) => events.push(type),
+        } as never,
+      },
+    });
+
+    const job = manager.jobs.create({ workerId: "alpha", message: "task" });
+    manager.jobs.setResult(job.id, { responseText: "ok" });
+    expect(manager.jobs.get(job.id)?.status).toBe("succeeded");
+    expect(events).toContain("orchestra.worker.job");
   });
 });

@@ -120,6 +120,7 @@ export function createDbRouter(deps: DbRouterDeps) {
     }
 
     if (segments.length >= 3 && segments[2] === "preferences") {
+      let handled = false;
       if (segments.length === 3 && req.method === "GET") {
         sendJson(res, 200, deps.db.getAllPreferences());
         return;
@@ -160,11 +161,13 @@ export function createDbRouter(deps: DbRouterDeps) {
         deps.onPreferencesChanged?.(key);
         broadcastSnapshot();
         sendJson(res, 200, { success: true });
-        return;
+        handled = true;
       }
+      if (handled) return;
     }
 
     if (segments.length >= 3 && segments[2] === "worker-config") {
+      let handled = false;
       if (segments.length === 3 && req.method === "GET") {
         sendJson(res, 200, deps.db.getAllWorkerConfigs().map(serializeWorkerConfig));
         return;
@@ -231,8 +234,9 @@ export function createDbRouter(deps: DbRouterDeps) {
         deps.onWorkerConfigChanged?.(workerId);
         broadcastSnapshot();
         sendJson(res, 200, { success: true });
-        return;
+        handled = true;
       }
+      if (handled) return;
     }
 
     if (segments.length === 3 && segments[2] === "onboarded" && req.method === "POST") {

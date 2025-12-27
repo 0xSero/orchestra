@@ -9,6 +9,7 @@ import {
   extractOrchestraWorker,
   extractProvidersPayload,
   extractToolIdsPayload,
+  extractWorkerStreamChunk,
   toWorkerRuntime,
 } from "./opencode-helpers";
 import type { OpenCodeEventItem, OpenCodeState, Session } from "./opencode-types";
@@ -144,9 +145,35 @@ export function createOpenCodeActions({ client, state, setState }: ActionDeps) {
       }),
     );
   };
+  const handleWorkerStream = (payload: unknown) => {
+    const chunk = extractWorkerStreamChunk(payload);
+    if (!chunk) return;
+    setState(
+      produce((s) => {
+        if (chunk.final) {
+          // Store final response, then clear after a delay
+          s.workerStreams[chunk.workerId] = chunk;
+          // Schedule cleanup after 5 seconds so UI can show final state
+          setTimeout(() => {
+            setState(
+              produce((s2) => {
+                if (s2.workerStreams[chunk.workerId]?.timestamp === chunk.timestamp) {
+                  delete s2.workerStreams[chunk.workerId];
+                }
+              }),
+            );
+          }, 5000);
+        } else {
+          // Streaming in progress
+          s.workerStreams[chunk.workerId] = chunk;
+        }
+      }),
+    );
+  };
   const handleOrchestraEvent = (payload: unknown) => {
     const worker = extractOrchestraWorker(payload);
     if (worker) upsertWorker(worker);
+    handleWorkerStream(payload);
   };
   const createSession = async (): Promise<Session | null> => {
     try {

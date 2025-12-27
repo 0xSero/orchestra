@@ -40,4 +40,9 @@ You are a careful coder.`;
     expect(parsed.frontmatter.name).toBe("bom");
     expect(parsed.body).toBe("Hello");
   });
+
+  test("throws when frontmatter is not an object", () => {
+    const content = `---\n- bad\n---\n\nBody`;
+    expect(() => parseSkillFile(content)).toThrow("Skill frontmatter must be a YAML object");
+  });
 });

@@ -47,6 +47,27 @@ const buildResponseData = (query: string, variables?: Record<string, unknown>) =
     return { issue: { labels: { nodes: [{ id: "label-1" }] } } };
   }
 
+  if (query.includes("GetIssue")) {
+    if (scenario === "issue-missing") {
+      return { issue: {} };
+    }
+    return {
+      issue: {
+        id: "issue-1",
+        identifier: "ABC-1",
+        title: "Issue title",
+        description: "Issue description",
+        url: "https://linear.app/issue/1",
+        priority: 1,
+        estimate: 2,
+        state: { id: "state-1", name: "Todo", type: "unstarted" },
+        labels: { nodes: [{ id: "label-1", name: "Bug" }] },
+        assignee: { id: "user-1", name: "Test User" },
+        project: { id: "project-1", name: "Project" },
+      },
+    };
+  }
+
   if (query.includes("TeamStates")) {
     if (scenario === "no-states") {
       return { team: { states: { nodes: [] } } };
@@ -134,7 +155,7 @@ const cfg: LinearConfig = {
 describe("linear modules", () => {
   test("creates and updates issues", async () => {
     scenario = "success";
-    const { createIssue, updateIssue, addComment, getIssueLabelIds, addLabel, setEstimate } = await import(
+    const { createIssue, updateIssue, addComment, getIssue, getIssueLabelIds, addLabel, setEstimate } = await import(
       "../../src/integrations/linear-issues"
     );
 
@@ -149,6 +170,9 @@ describe("linear modules", () => {
 
     const labels = await getIssueLabelIds({ cfg, issueId: "issue-1" });
     expect(labels).toEqual(["label-1"]);
+
+    const issue = await getIssue({ cfg, issueId: "issue-1" });
+    expect(issue.identifier).toBe("ABC-1");
 
     const merged = await addLabel({ cfg, issueId: "issue-1", labelId: "label-2" });
     expect(merged.labelIds).toEqual(["label-1", "label-2"]);
@@ -175,12 +199,25 @@ describe("linear modules", () => {
     await expect(addComment({ cfg, issueId: "issue-1", body: "hi" })).rejects.toThrow("Comment not created");
   });
 
+  test("throws when issue response is missing", async () => {
+    scenario = "issue-missing";
+    const { getIssue } = await import("../../src/integrations/linear-issues");
+    await expect(getIssue({ cfg, issueId: "issue-1" })).rejects.toThrow("Issue not found");
+  });
+
   test("throws when syncTaskStatus cannot match a state", async () => {
     scenario = "no-states";
     const { syncTaskStatus } = await import("../../src/integrations/linear-issues");
     await expect(syncTaskStatus({ cfg, issueId: "issue-1", status: "Unknown" })).rejects.toThrow(
       "No matching state",
     );
+  });
+
+  test("syncs task status when a matching state is available", async () => {
+    scenario = "success";
+    const { syncTaskStatus } = await import("../../src/integrations/linear-issues");
+    const result = await syncTaskStatus({ cfg, issueId: "issue-1", status: "In Progress" });
+    expect(result).toEqual({ issueId: "issue-1", stateId: "state-2" });
   });
 
   test("loads viewer and team states", async () => {

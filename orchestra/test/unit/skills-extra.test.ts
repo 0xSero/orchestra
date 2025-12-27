@@ -6,10 +6,16 @@ import { profileToSkill, skillToProfile } from "../../src/skills/convert";
 import {
   resolveProjectDir,
   hasProjectSkillDirs,
+  getProjectSkillsDir,
   getProjectSkillsDirs,
   getGlobalSkillsDir,
+  getGlobalSubagentsDir,
+  getProjectSubagentsDirs,
   getProjectSubagentsDir,
+  getSkillDir,
+  getSkillFilePath,
   getSubagentDir,
+  getSubagentFilePath,
 } from "../../src/skills/paths";
 import { validateSkillFrontmatter, validateSkillInput } from "../../src/skills/validate";
 
@@ -93,6 +99,7 @@ describe("skills paths", () => {
     await mkdir(skillDir, { recursive: true });
     expect(hasProjectSkillDirs(dir)).toBe(true);
     expect(getProjectSkillsDirs(dir)[0]).toContain(".opencode");
+    expect(getProjectSkillsDir(dir)).toBe(skillDir);
     expect(getGlobalSkillsDir()).toContain(".opencode");
   });
 
@@ -128,9 +135,47 @@ describe("skills paths", () => {
     await mkdir(subagentDir, { recursive: true });
 
     expect(getProjectSubagentsDir(dir)).toContain("subagents");
+    expect(getProjectSubagentsDirs(dir)[0]).toContain("subagents");
     expect(() => getSubagentDir("alpha", "project")).toThrow("Project directory is required");
 
     const emptyDir = await mkdtemp(join(tmpdir(), "orch-subagent-empty-"));
     expect(getProjectSubagentsDir(emptyDir)).toBe(join(emptyDir, ".opencode", "agent", "subagents"));
+  });
+
+  test("builds global and project skill paths", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "orch-skill-globals-"));
+    const originalSkillsHome = process.env.OPENCODE_SKILLS_HOME;
+    process.env.OPENCODE_SKILLS_HOME = dir;
+
+    try {
+      expect(getGlobalSkillsDir()).toBe(join(dir, ".opencode", "skill"));
+      expect(getGlobalSubagentsDir()).toBe(join(dir, ".opencode", "agent", "subagents"));
+
+      const globalSkillDir = getSkillDir("alpha", "global");
+      expect(globalSkillDir).toContain(join(dir, ".opencode", "skill", "alpha"));
+      expect(getSkillFilePath("alpha", "global")).toContain("SKILL.md");
+
+      const projectSkillDir = getProjectSkillsDir(dir);
+      expect(projectSkillDir).toBe(join(dir, ".opencode", "skill"));
+      expect(getSubagentFilePath("alpha", "project", dir)).toContain("SKILL.md");
+    } finally {
+      if (originalSkillsHome) process.env.OPENCODE_SKILLS_HOME = originalSkillsHome;
+      else delete process.env.OPENCODE_SKILLS_HOME;
+    }
+  });
+
+  test("resolves project dir from env when no markers exist", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "orch-skill-env-"));
+    const nested = join(dir, "nested");
+    await mkdir(nested, { recursive: true });
+    const original = process.env.OPENCODE_PROJECT_DIR;
+    process.env.OPENCODE_PROJECT_DIR = nested;
+
+    try {
+      expect(resolveProjectDir()).toBe(nested);
+    } finally {
+      if (original) process.env.OPENCODE_PROJECT_DIR = original;
+      else delete process.env.OPENCODE_PROJECT_DIR;
+    }
   });
 });

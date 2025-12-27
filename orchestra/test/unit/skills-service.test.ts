@@ -27,4 +27,42 @@ describe("skills service", () => {
       await rm(projectDir, { recursive: true, force: true }).catch(() => {});
     }
   });
+
+  test("creates, updates, duplicates, and deletes skills with events", async () => {
+    const projectDir = await mkdtemp(join(tmpdir(), "orch-skill-service-events-"));
+    const service = createSkillsService(projectDir);
+    const events: string[] = [];
+    const unsubscribe = service.events.on((event) => events.push(event.type));
+
+    try {
+      const created = await service.create(
+        {
+          id: "alpha",
+          frontmatter: { name: "alpha", description: "desc", model: "auto" },
+          systemPrompt: "Prompt",
+        },
+        "project",
+      );
+      expect(created.id).toBe("alpha");
+
+      const updated = await service.update(
+        "alpha",
+        { frontmatter: { description: "updated" } },
+        "project",
+      );
+      expect(updated.frontmatter.description).toBe("updated");
+
+      const duplicate = await service.duplicate("alpha", "alpha-copy", "project");
+      expect(duplicate.id).toBe("alpha-copy");
+
+      const deleted = await service.delete("alpha-copy", "project");
+      expect(deleted).toBe(true);
+      expect(events).toContain("skill.created");
+      expect(events).toContain("skill.updated");
+      expect(events).toContain("skill.deleted");
+    } finally {
+      unsubscribe();
+      await rm(projectDir, { recursive: true, force: true }).catch(() => {});
+    }
+  });
 });

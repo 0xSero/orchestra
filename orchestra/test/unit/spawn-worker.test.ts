@@ -105,6 +105,23 @@ beforeEach(() => {
 });
 
 describe("spawn worker", () => {
+  test("marks model resolution as configured when models match", async () => {
+    resolveProfileModelResult = { profile: { ...baseProfile, model: "model-a" }, changes: [], fallbackModel: undefined };
+    createWorkerSessionResponses = [{ data: { id: "session-configured" } }];
+
+    const registry = { register: () => {}, updateStatus: () => {}, unregister: () => {} } as unknown as WorkerRegistry;
+    const instance = await spawnWorker({
+      api: {} as never,
+      registry,
+      directory: "/tmp",
+      profile: { ...baseProfile, model: "model-a" },
+      timeoutMs: 1000,
+      deps,
+    });
+
+    expect(instance.modelResolution).toBe("configured");
+  });
+
   test("spawns successfully with callbacks and restores env", async () => {
     const callbacks: string[] = [];
     const registry = { register: () => {}, updateStatus: () => {}, unregister: () => {} } as unknown as WorkerRegistry;
@@ -222,6 +239,34 @@ describe("spawn worker", () => {
 
     expect(stopEventForwardingCalls).toBeGreaterThan(0);
     expect(closeSessionCalls).toBeGreaterThan(0);
+  });
+
+  test("ignores repo context and bootstrap prompt failures", async () => {
+    resolveProfileModelResult = {
+      profile: { ...baseProfile, model: "auto", injectRepoContext: true },
+      changes: [],
+      fallbackModel: undefined,
+    };
+    createWorkerSessionResponses = [{ data: { id: "session-4" } }];
+
+    deps.getRepoContextForWorker = async () => {
+      throw new Error("repo failed");
+    };
+    deps.withTimeout = async () => {
+      throw new Error("prompt failed");
+    };
+
+    const registry = { register: () => {}, updateStatus: () => {}, unregister: () => {} } as unknown as WorkerRegistry;
+    const instance = await spawnWorker({
+      api: {} as never,
+      registry,
+      directory: "/tmp",
+      profile: { ...baseProfile, model: "auto" },
+      timeoutMs: 1000,
+      deps,
+    });
+
+    expect(instance.status).toBe("ready");
   });
 
   test("cleanupWorkerInstance closes tracked sessions", () => {

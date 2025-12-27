@@ -98,4 +98,35 @@ describe("memory injection builder", () => {
 
     expect(injection).toBeUndefined();
   });
+
+  test("returns undefined when enabled but no entries are available", async () => {
+    const injection = await buildMemoryInjection({
+      enabled: true,
+      scope: "global",
+      deps: {
+        getMemoryByKey: async () => undefined,
+        recentMemory: async () => [],
+        loadNeo4jConfig: () => undefined,
+      },
+      inject: { includeProjectSummary: false, includeSessionSummary: false, includeGlobal: false, maxEntries: 0 },
+    });
+
+    expect(injection).toBeUndefined();
+  });
+
+  test("returns undefined when recent memory lookup fails", async () => {
+    const injection = await buildMemoryInjection({
+      enabled: true,
+      scope: "global",
+      deps: {
+        getMemoryByKey: async () => undefined,
+        recentMemory: async () => {
+          throw new Error("recent failed");
+        },
+        loadNeo4jConfig: () => undefined,
+      },
+    });
+
+    expect(injection).toBeUndefined();
+  });
 });

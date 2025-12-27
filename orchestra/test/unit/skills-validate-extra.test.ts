@@ -87,4 +87,13 @@ describe("skills validate extra coverage", () => {
     });
     expect(tooLong.errors.some((err) => err.field === "id")).toBe(true);
   });
+
+  test("reports invalid systemPrompt types", () => {
+    const result = validateSkillInput({
+      id: "valid-id",
+      frontmatter: { description: "desc", model: "auto" },
+      systemPrompt: 123 as unknown as string,
+    });
+    expect(result.errors.some((err) => err.field === "systemPrompt")).toBe(true);
+  });
 });

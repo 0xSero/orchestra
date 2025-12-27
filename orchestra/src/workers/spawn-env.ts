@@ -46,7 +46,8 @@ export const resolveWorkerMcp = async (
         filtered[serverName] = parentMcp[serverName];
       }
     }
-    return Object.keys(filtered).length > 0 ? filtered : undefined;
+    const resolved = Object.keys(filtered).length > 0 ? filtered : undefined;
+    if (resolved) return resolved;
   }
 
   return undefined;

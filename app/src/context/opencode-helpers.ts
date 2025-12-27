@@ -1,5 +1,5 @@
 import type { FilePartInput, Message, Part, Provider } from "@opencode-ai/sdk/client";
-import type { ModelOption, OpenCodeEventItem, WorkerRuntime, WorkerStatus } from "./opencode-types";
+import type { ModelOption, OpenCodeEventItem, WorkerRuntime, WorkerStatus, WorkerStreamChunk } from "./opencode-types";
 
 const asRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 
@@ -111,6 +111,30 @@ export const extractOrchestraWorker = (payload: unknown): unknown | null => {
   if (asRecord(inner.data) && inner.data.worker) return inner.data.worker;
   if (inner.worker) return inner.worker;
   return null;
+};
+
+/** Extract worker stream chunk from orchestra.event payload */
+export const extractWorkerStreamChunk = (payload: unknown): WorkerStreamChunk | null => {
+  if (!asRecord(payload) || payload.type !== "orchestra.event") return null;
+  const properties = asRecord(payload.properties) ? payload.properties : undefined;
+  const inner = asRecord(payload.payload)
+    ? payload.payload
+    : asRecord(properties?.payload)
+      ? properties.payload
+      : properties;
+  if (!asRecord(inner) || inner.type !== "orchestra.worker.stream") return null;
+  const data = asRecord(inner.data) ? inner.data : undefined;
+  const chunk = asRecord(data?.chunk) ? data.chunk : undefined;
+  if (!chunk) return null;
+  const workerId = typeof chunk.workerId === "string" ? chunk.workerId : "";
+  if (!workerId) return null;
+  return {
+    workerId,
+    jobId: typeof chunk.jobId === "string" ? chunk.jobId : undefined,
+    chunk: typeof chunk.chunk === "string" ? chunk.chunk : "",
+    timestamp: typeof chunk.timestamp === "number" ? chunk.timestamp : Date.now(),
+    final: Boolean(chunk.final),
+  };
 };
 
 const fileToDataUrl = (file: File) =>

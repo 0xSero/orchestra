@@ -34,6 +34,14 @@ export type RepoContext = {
   markdown: string;
 };
 
+type RepoContextDeps = {
+  existsSync?: typeof existsSync;
+  readdirSync?: typeof readdirSync;
+  statSync?: typeof statSync;
+  readFile?: typeof readFile;
+  execSync?: typeof execSync;
+};
+
 function clampText(input: string, maxChars: number): { text: string; truncated: boolean } {
   if (input.length <= maxChars) return { text: input, truncated: false };
   return { text: `${input.slice(0, Math.max(0, maxChars))}\n\n...(truncated)\n`, truncated: true };
@@ -43,22 +51,24 @@ function clampText(input: string, maxChars: number): { text: string; truncated: 
  * Check if a directory is a git repository by looking for .git directory.
  * This is faster and safer than running git commands.
  */
-function isGitRepository(directory: string): boolean {
+function isGitRepository(directory: string, deps: RepoContextDeps): boolean {
+  const existsSyncFn = deps.existsSync ?? existsSync;
   try {
-    return existsSync(join(directory, ".git"));
+    return existsSyncFn(join(directory, ".git"));
   } catch {
     return false;
   }
 }
 
-function getGitInfo(directory: string): RepoContext["git"] | undefined {
+function getGitInfo(directory: string, deps: RepoContextDeps): RepoContext["git"] | undefined {
   // Check for .git directory first to avoid unnecessary process spawning
-  if (!isGitRepository(directory)) {
+  if (!isGitRepository(directory, deps)) {
     return undefined;
   }
 
   try {
-    const branch = execSync("git rev-parse --abbrev-ref HEAD", {
+    const execSyncFn = deps.execSync ?? execSync;
+    const branch = execSyncFn("git rev-parse --abbrev-ref HEAD", {
       cwd: directory,
       encoding: "utf8",
       stdio: ["pipe", "pipe", "pipe"],
@@ -67,7 +77,7 @@ function getGitInfo(directory: string): RepoContext["git"] | undefined {
 
     let remoteUrl: string | undefined;
     try {
-      remoteUrl = execSync("git remote get-url origin", {
+      remoteUrl = execSyncFn("git remote get-url origin", {
         cwd: directory,
         encoding: "utf8",
         stdio: ["pipe", "pipe", "pipe"],
@@ -79,7 +89,7 @@ function getGitInfo(directory: string): RepoContext["git"] | undefined {
 
     let hasUncommittedChanges = false;
     try {
-      const status = execSync("git status --porcelain", {
+      const status = execSyncFn("git status --porcelain", {
         cwd: directory,
         encoding: "utf8",
         stdio: ["pipe", "pipe", "pipe"],
@@ -96,9 +106,11 @@ function getGitInfo(directory: string): RepoContext["git"] | undefined {
   }
 }
 
-function getDirectoryStructure(directory: string, maxItems = 30): string[] {
+function getDirectoryStructure(directory: string, maxItems = 30, deps: RepoContextDeps = {}): string[] {
+  const readdirSyncFn = deps.readdirSync ?? readdirSync;
+  const statSyncFn = deps.statSync ?? statSync;
   try {
-    const entries = readdirSync(directory);
+    const entries = readdirSyncFn(directory);
     const result: string[] = [];
 
     // Prioritize important files/dirs
@@ -131,7 +143,7 @@ function getDirectoryStructure(directory: string, maxItems = 30): string[] {
       if (entry === "node_modules" || entry === "dist" || entry === "build") continue;
 
       try {
-        const stat = statSync(join(directory, entry));
+        const stat = statSyncFn(join(directory, entry));
         const suffix = stat.isDirectory() ? "/" : "";
         result.push(entry + suffix);
       } catch {
@@ -149,12 +161,16 @@ export async function getRepoContext(options: {
   directory: string;
   maxReadmeChars?: number;
   maxTotalChars?: number;
+  deps?: RepoContextDeps;
 }): Promise<RepoContext | undefined> {
   const { directory } = options;
   const maxReadmeChars = options.maxReadmeChars ?? 8000;
   const maxTotalChars = options.maxTotalChars ?? 16000;
+  const deps = options.deps ?? {};
+  const existsSyncFn = deps.existsSync ?? existsSync;
+  const readFileFn = deps.readFile ?? readFile;
 
-  if (!existsSync(directory)) return undefined;
+  if (!existsSyncFn(directory)) return undefined;
 
   let name = basename(directory);
   let description: string | undefined;
@@ -162,9 +178,9 @@ export async function getRepoContext(options: {
 
   // Try to read package.json
   const pkgPath = join(directory, "package.json");
-  if (existsSync(pkgPath)) {
+  if (existsSyncFn(pkgPath)) {
     try {
-      const raw = await readFile(pkgPath, "utf8");
+      const raw = await readFileFn(pkgPath, "utf8");
       packageJson = JSON.parse(raw);
       if (packageJson && typeof packageJson.name === "string") name = packageJson.name;
       if (packageJson && typeof packageJson.description === "string") description = packageJson.description;
@@ -179,9 +195,9 @@ export async function getRepoContext(options: {
   const readmeNames = ["README.md", "readme.md", "README", "README.txt"];
   for (const readmeName of readmeNames) {
     const readmePath = join(directory, readmeName);
-    if (existsSync(readmePath)) {
+    if (existsSyncFn(readmePath)) {
       try {
-        const raw = await readFile(readmePath, "utf8");
+        const raw = await readFileFn(readmePath, "utf8");
         const clamped = clampText(raw, maxReadmeChars);
         readme = clamped.text;
         readmeTruncated = clamped.truncated;
@@ -193,10 +209,10 @@ export async function getRepoContext(options: {
   }
 
   // Get directory structure
-  const structure = getDirectoryStructure(directory);
+  const structure = getDirectoryStructure(directory, 30, deps);
 
   // Get git info
-  const git = getGitInfo(directory);
+  const git = getGitInfo(directory, deps);
 
   // Build markdown
   const sections: string[] = [];
@@ -273,11 +289,15 @@ export async function getRepoContext(options: {
  * Get repo context formatted for worker prompt injection.
  * Returns undefined if no context can be gathered.
  */
-export async function getRepoContextForWorker(directory: string): Promise<string | undefined> {
+export async function getRepoContextForWorker(
+  directory: string,
+  deps?: RepoContextDeps,
+): Promise<string | undefined> {
   const context = await getRepoContext({
     directory,
     maxReadmeChars: 6000,
     maxTotalChars: 12000,
+    deps,
   });
 
   if (!context) return undefined;
