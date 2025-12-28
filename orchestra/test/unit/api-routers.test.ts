@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { createDbRouter } from "../../src/api/db-router";
@@ -6,11 +7,14 @@ import { createSessionsRouter } from "../../src/api/sessions-router";
 import { createSkillsRouter } from "../../src/api/skills-router";
 import { createSkillsEvents } from "../../src/skills/events";
 import type { Skill, SkillInput, SkillScope } from "../../src/types";
-import type { WorkerManager } from "../../src/workers";
-import type { SessionManagerEvent, WorkerSessionManager } from "../../src/workers";
+import type { SessionManagerEvent, WorkerManager, WorkerSessionManager } from "../../src/workers";
 
-const withServer = async <T>(handler: Parameters<typeof createServer>[0], run: (baseUrl: string) => Promise<T>) => {
-  const server = createServer((req, res) => handler(req, res));
+type RequestHandler = (req: IncomingMessage, res: ServerResponse) => void | Promise<void>;
+
+const withServer = async <T>(handler: RequestHandler, run: (baseUrl: string) => Promise<T>) => {
+  const server = createServer((req, res) => {
+    void handler(req, res);
+  });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
   const { port } = server.address() as AddressInfo;
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -40,16 +44,16 @@ describe("system router", () => {
 
     await withServer(handler, async (baseUrl) => {
       const res = await fetch(`${baseUrl}/api/system/processes`);
-      const data = await res.json();
+      const data = (await res.json()) as { count: number; processes: Array<{ type: string }> };
       expect(data.count).toBe(2);
       expect(data.processes[0].type).toBe("opencode-serve");
 
       const killRes = await fetch(`${baseUrl}/api/system/processes/123`, { method: "DELETE" });
-      const killData = await killRes.json();
+      const killData = (await killRes.json()) as { success: boolean };
       expect(killData.success).toBe(true);
 
       const killAllRes = await fetch(`${baseUrl}/api/system/processes/kill-all-serve`, { method: "POST" });
-      const killAllData = await killAllRes.json();
+      const killAllData = (await killAllRes.json()) as { killed: number };
       expect(killAllData.killed).toBe(1);
 
       const missingRes = await fetch(`${baseUrl}/api/system/missing`);
@@ -62,22 +66,31 @@ describe("skills router", () => {
   test("handles CRUD routes and events", async () => {
     const events = createSkillsEvents();
     const store = new Map<string, Skill>();
+    const buildSource = (scope: SkillScope): Skill["source"] =>
+      scope === "global"
+        ? { type: "global", path: "/tmp/opencode-skills" }
+        : { type: "project", path: "/tmp/opencode-skills" };
+    const buildSkill = (input: SkillInput, scope: SkillScope): Skill => {
+      const name = input.frontmatter.name ?? input.id;
+      const source = buildSource(scope);
+      return {
+        id: input.id,
+        frontmatter: { ...input.frontmatter, name },
+        systemPrompt: input.systemPrompt ?? "",
+        source,
+        filePath: "/tmp/SKILL.md",
+        hasScripts: false,
+        hasReferences: false,
+        hasAssets: false,
+      };
+    };
 
     const skillsService = {
       events,
       list: async () => Array.from(store.values()),
       get: async (id: string) => store.get(id),
       create: async (input: SkillInput, scope: SkillScope) => {
-        const skill: Skill = {
-          id: input.id,
-          frontmatter: { ...input.frontmatter, name: input.frontmatter.name ?? input.id },
-          systemPrompt: input.systemPrompt ?? "",
-          source: { type: scope },
-          filePath: "/tmp/SKILL.md",
-          hasScripts: false,
-          hasReferences: false,
-          hasAssets: false,
-        };
+        const skill = buildSkill(input, scope);
         store.set(skill.id, skill);
         events.emit({ type: "skill.created", skill });
         return skill;
@@ -88,7 +101,7 @@ describe("skills router", () => {
         const updated = {
           ...current,
           frontmatter: { ...current.frontmatter, ...updates.frontmatter, name: id },
-          source: { type: scope },
+          source: buildSource(scope),
           systemPrompt: updates.systemPrompt ?? current.systemPrompt,
         };
         store.set(id, updated);
@@ -99,7 +112,11 @@ describe("skills router", () => {
       duplicate: async (sourceId: string, newId: string, scope: SkillScope) => {
         const current = store.get(sourceId);
         if (!current) throw new Error("missing");
-        const clone = { ...current, id: newId, source: { type: scope } };
+        const clone = {
+          ...current,
+          id: newId,
+          source: buildSource(scope),
+        };
         store.set(newId, clone);
         events.emit({ type: "skill.created", skill: clone });
         return clone;
@@ -131,7 +148,7 @@ describe("skills router", () => {
       expect(createRes.status).toBe(201);
 
       const getRes = await fetch(`${baseUrl}/api/skills/alpha`);
-      const getData = await getRes.json();
+      const getData = (await getRes.json()) as { id: string };
       expect(getData.id).toBe("alpha");
 
       const updateRes = await fetch(`${baseUrl}/api/skills/alpha`, {

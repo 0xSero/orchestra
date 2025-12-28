@@ -9,10 +9,12 @@ const createStubClient = () => {
       calls[name] = args;
       return args;
     };
-  const recordSync = (name: string) => (args: unknown): unknown => {
-    calls[name] = args;
-    return args;
-  };
+  const recordSync =
+    (name: string) =>
+    (args: unknown): unknown => {
+      calls[name] = args;
+      return args;
+    };
 
   const client = {
     session: {

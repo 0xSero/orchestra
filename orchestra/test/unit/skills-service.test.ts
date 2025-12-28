@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createSkillsService } from "../../src/skills/service";
 import { serializeSkillFile } from "../../src/skills/parse";
+import { createSkillsService } from "../../src/skills/service";
 
 describe("skills service", () => {
   test("lists and retrieves skills", async () => {
@@ -47,7 +47,7 @@ describe("skills service", () => {
 
       const updated = await service.update(
         "alpha",
-        { frontmatter: { description: "updated" } },
+        { frontmatter: { description: "updated", model: "auto" } },
         "project",
       );
       expect(updated.frontmatter.description).toBe("updated");

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import type { Neo4jConfig } from "../../src/memory/neo4j";
 import { requireProjectId, toNode } from "../../src/memory/graph/shared";
+import type { Neo4jConfig } from "../../src/memory/neo4j";
+
+type WithSession = typeof import("../../src/memory/neo4j").withNeo4jSession;
 
 const cfg: Neo4jConfig = {
   uri: "bolt://localhost:7687",
@@ -39,8 +41,7 @@ const fakeSession = {
   },
 };
 
-const withSession = async (_cfg: Neo4jConfig, fn: (session: typeof fakeSession) => Promise<unknown>) =>
-  await fn(fakeSession);
+const withSession: WithSession = async (_cfg, fn) => await fn(fakeSession as never);
 
 describe("memory graph helpers", () => {
   test("requires project id for project scope", () => {

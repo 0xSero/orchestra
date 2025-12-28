@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { ApiService } from "../../src/api";
 
 let recorded: Array<Record<string, unknown>> = [];
 
@@ -43,8 +44,9 @@ describe("memory store", () => {
         api: {
           project: {
             current: async () => ({ data: { id: "project-1" } }),
+            list: async () => ({ data: [] }),
           },
-        },
+        } as unknown as ApiService,
         memory: memoryDeps,
       },
     });
@@ -82,8 +84,9 @@ describe("memory store", () => {
         api: {
           project: {
             current: async () => ({ data: { id: "project-1" } }),
+            list: async () => ({ data: [] }),
           },
-        },
+        } as unknown as ApiService,
         memory: memoryDeps,
       },
     });
@@ -103,7 +106,8 @@ describe("memory store", () => {
     expect(injected).toBe(false);
 
     const health = await store.health();
-    expect(health.info?.enabled).toBe(true);
+    const healthInfo = health.info as { enabled?: boolean } | undefined;
+    expect(healthInfo?.enabled).toBe(true);
     await store.stop();
   });
 });

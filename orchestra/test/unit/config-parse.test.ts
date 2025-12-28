@@ -1,8 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import type { OrchestratorConfigFile } from "../../src/types";
-import { parseIntegrationsSection, parseMemorySection, parseTelemetrySection } from "../../src/config/orchestrator/parse-extra";
 import { parseOrchestratorConfigFile } from "../../src/config/orchestrator/parse";
-import { asConfigArray, collectProfilesAndSpawn, parseSpawnPolicyEntry } from "../../src/config/orchestrator/parse-workers";
+import {
+  parseIntegrationsSection,
+  parseMemorySection,
+  parseTelemetrySection,
+} from "../../src/config/orchestrator/parse-extra";
+import {
+  asConfigArray,
+  collectProfilesAndSpawn,
+  parseSpawnPolicyEntry,
+} from "../../src/config/orchestrator/parse-workers";
+import type { OrchestratorConfigFile } from "../../src/types";
 
 describe("config parsing", () => {
   test("parses basic orchestrator config fields", () => {
@@ -125,10 +133,7 @@ describe("config parsing", () => {
           maxTaskChars: 200,
           maxCarryChars: 100,
           perStepTimeoutMs: 5000,
-          steps: [
-            { id: "step-1", title: "Step 1", workerId: "worker", prompt: "Do it", carry: true },
-            { id: 123 },
-          ],
+          steps: [{ id: "step-1", title: "Step 1", workerId: "worker", prompt: "Do it", carry: true }, { id: 123 }],
         },
       },
       security: {

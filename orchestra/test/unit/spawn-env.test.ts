@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { getDefaultSessionMode, resolveWorkerEnv, resolveWorkerMcp } from "../../src/workers/spawn-env";
 import type { WorkerProfile } from "../../src/types";
+import { getDefaultSessionMode, resolveWorkerEnv, resolveWorkerMcp } from "../../src/workers/spawn-env";
 
 describe("spawn env helpers", () => {
   test("builds worker env from explicit env and prefixes", () => {

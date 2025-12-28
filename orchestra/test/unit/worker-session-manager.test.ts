@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { WorkerSessionManager, createSessionManager } from "../../src/workers/session-manager";
+import type { TrackedSession } from "../../src/workers";
+import { createSessionManager, WorkerSessionManager } from "../../src/workers/session-manager";
 
 describe("worker session manager", () => {
   test("tracks sessions, summaries, and subscriptions", () => {
@@ -97,7 +98,7 @@ describe("worker session manager", () => {
       communication: { emit: () => {} } as never,
     });
 
-    const sessions = (manager as unknown as { sessions: Map<string, { workerId: string; sessionId: string; lastActivity: Date }> }).sessions;
+    const sessions = (manager as unknown as { sessions: Map<string, TrackedSession> }).sessions;
     const workerMap = (manager as unknown as { workerToSession: Map<string, string> }).workerToSession;
 
     const now = Date.now();

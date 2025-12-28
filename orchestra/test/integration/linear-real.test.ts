@@ -20,9 +20,9 @@ describe("linear real integration", () => {
 
   const stubFetch = () => {
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async (_url, init) => {
+    const stubbedFetch = (async (_url, init) => {
       const bodyText = typeof init?.body === "string" ? init.body : "";
-      const query = bodyText ? (JSON.parse(bodyText) as { query?: string }).query ?? "" : "";
+      const query = bodyText ? ((JSON.parse(bodyText) as { query?: string }).query ?? "") : "";
       if (query.includes("viewer")) {
         return new Response(JSON.stringify({ data: { viewer: { id: "viewer-1", name: "Test" } } }), { status: 200 });
       }
@@ -35,7 +35,13 @@ describe("linear real integration", () => {
         );
       }
       return new Response(JSON.stringify({ data: {} }), { status: 200 });
+    }) as typeof fetch;
+    stubbedFetch.preconnect = (...args: Parameters<typeof fetch.preconnect>) => {
+      if (typeof originalFetch.preconnect === "function") {
+        originalFetch.preconnect(...args);
+      }
     };
+    globalThis.fetch = stubbedFetch;
     return () => {
       globalThis.fetch = originalFetch;
     };

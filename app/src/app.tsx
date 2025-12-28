@@ -12,46 +12,8 @@ import { DbProvider, useDb } from "@/context/db";
 import { LayoutProvider } from "@/context/layout";
 import { OpenCodeProvider } from "@/context/opencode";
 import { SkillsProvider } from "@/context/skills";
+import { resolveOpenCodeBase, resolveSkillsBase } from "@/lib/opencode-base";
 import { AgentsPage, ChatPage, LogsPage, OnboardingPage, SettingsPage, SystemPage } from "@/pages";
-
-declare global {
-  interface Window {
-    __OPENCODE__?: {
-      port?: number;
-      skillsPort?: number;
-      baseUrl?: string;
-      skillsBase?: string;
-    };
-  }
-}
-
-const resolveOpenCodeBase = () => {
-  if (typeof window === "undefined") return undefined;
-  const params = new URLSearchParams(window.location.search);
-  const paramUrl = params.get("url");
-  if (paramUrl) return paramUrl;
-  if (window.__OPENCODE__?.baseUrl) {
-    return window.__OPENCODE__.baseUrl;
-  }
-  if (window.__OPENCODE__?.port) {
-    return `http://127.0.0.1:${window.__OPENCODE__.port}`;
-  }
-  return undefined;
-};
-
-const resolveSkillsBase = () => {
-  if (typeof window === "undefined") return undefined;
-  const params = new URLSearchParams(window.location.search);
-  const paramUrl = params.get("skills");
-  if (paramUrl) return paramUrl;
-  if (window.__OPENCODE__?.skillsBase) {
-    return window.__OPENCODE__.skillsBase;
-  }
-  if (window.__OPENCODE__?.skillsPort) {
-    return `http://127.0.0.1:${window.__OPENCODE__.skillsPort}`;
-  }
-  return undefined;
-};
 
 const OnboardingGate: Component = () => {
   const location = useLocation();

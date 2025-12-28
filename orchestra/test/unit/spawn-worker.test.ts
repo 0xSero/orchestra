@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { WorkerProfile } from "../../src/types";
 import type { WorkerRegistry } from "../../src/workers/registry";
-import { cleanupWorkerInstance, spawnWorker, type SpawnWorkerDeps } from "../../src/workers/spawn";
+import { cleanupWorkerInstance, type SpawnWorkerDeps, spawnWorker } from "../../src/workers/spawn";
 
 let resolveProfileModelResult: {
   profile: WorkerProfile;
@@ -20,6 +20,8 @@ let closeSessionCalls = 0;
 let startEventForwardingShouldThrow = false;
 let shutdownShouldThrow = false;
 let deps: SpawnWorkerDeps;
+type StartWorkerServer = NonNullable<SpawnWorkerDeps["startWorkerServer"]>;
+type ApplyServerBundle = NonNullable<SpawnWorkerDeps["applyServerBundleToInstance"]>;
 
 const baseProfile: WorkerProfile = {
   id: "alpha",
@@ -52,7 +54,7 @@ beforeEach(() => {
     resolveWorkerMcp: async () => workerMcp,
     getDefaultSessionMode: () => defaultSessionMode,
     loadOpenCodeConfig: async () => ({}),
-    mergeOpenCodeConfig: async (config) => config,
+    mergeOpenCodeConfig: async (override, _options) => override ?? {},
     getRepoContextForWorker: async () => "repo",
     startEventForwarding: () => {
       startEventForwardingCalls += 1;
@@ -85,28 +87,29 @@ beforeEach(() => {
           url: `http://127.0.0.1:${4000 + startWorkerServerCalls}`,
           close: () => {},
         },
-      };
+      } as unknown as Awaited<ReturnType<StartWorkerServer>>;
     },
     createWorkerSession: async () => {
       createWorkerSessionCalls += 1;
       return createWorkerSessionResponses.shift() ?? { data: { id: "session-default" } };
     },
-    applyServerBundleToInstance: (
-      instance: { shutdown?: () => Promise<void>; serverUrl?: string },
-      bundle: { server: { url: string } },
-    ) => {
+    applyServerBundleToInstance: ((instance, bundle) => {
       instance.shutdown = async () => {
         if (shutdownShouldThrow) throw new Error("shutdown failed");
       };
       instance.serverUrl = bundle.server.url;
       return bundle;
-    },
+    }) as ApplyServerBundle,
   };
 });
 
 describe("spawn worker", () => {
   test("marks model resolution as configured when models match", async () => {
-    resolveProfileModelResult = { profile: { ...baseProfile, model: "model-a" }, changes: [], fallbackModel: undefined };
+    resolveProfileModelResult = {
+      profile: { ...baseProfile, model: "model-a" },
+      changes: [],
+      fallbackModel: undefined,
+    };
     createWorkerSessionResponses = [{ data: { id: "session-configured" } }];
 
     const registry = { register: () => {}, updateStatus: () => {}, unregister: () => {} } as unknown as WorkerRegistry;
@@ -277,7 +280,12 @@ describe("spawn worker", () => {
       status: "ready",
       port: 0,
       sessionId: "session-9",
-      eventForwardingHandle: { stop: () => { stopEventForwardingCalls += 1; }, isActive: () => true },
+      eventForwardingHandle: {
+        stop: () => {
+          stopEventForwardingCalls += 1;
+        },
+        isActive: () => true,
+      },
     };
 
     cleanupWorkerInstance(instance as never, sessionManager as never);

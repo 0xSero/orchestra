@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  clearPidTracking,
   cleanupStaleWorkers,
+  clearPidTracking,
   getTrackedWorkers,
   killAllTrackedWorkers,
   killProcessOnPort,
@@ -13,6 +13,8 @@ import {
 } from "../../src/workers/pid-tracker";
 
 type EnvSnapshot = { HOME?: string; USERPROFILE?: string };
+type CleanupInput = NonNullable<Parameters<typeof cleanupStaleWorkers>[0]>;
+type PidDeps = NonNullable<CleanupInput["deps"]>;
 
 const snapshotEnv = (): EnvSnapshot => ({
   HOME: process.env.HOME,
@@ -105,12 +107,12 @@ describe("pid tracker", () => {
 
     const deps = {
       platform: "linux",
-      execSync: (command: string) => {
+      execSync: ((command: string) => {
         if (command.includes(":1234")) return "1234\n";
         if (command.includes(":4321")) return "4321\n";
         if (command.includes(":9999")) throw new Error("exec fail");
         return "";
-      },
+      }) as unknown as PidDeps["execSync"],
     };
 
     const originalKill = process.kill;
@@ -174,7 +176,7 @@ describe("pid tracker", () => {
 
     const deps = {
       platform: "linux",
-      execSync: () => "111\n222\n",
+      execSync: (() => "111\n222\n") as unknown as PidDeps["execSync"],
     };
 
     const originalKill = process.kill;
@@ -198,7 +200,7 @@ describe("pid tracker", () => {
 
     globalThis.setTimeout = ((handler: (...args: unknown[]) => void) => {
       handler();
-      return 0 as ReturnType<typeof setTimeout>;
+      return 0 as unknown as ReturnType<typeof setTimeout>;
     }) as typeof setTimeout;
 
     try {
@@ -228,16 +230,16 @@ describe("pid tracker", () => {
 
     const deps = {
       platform: "win32",
-      execSync: () =>
-        "TCP 0.0.0.0:1234 0.0.0.0:0 LISTENING 555\nTCP 0.0.0.0:1234 0.0.0.0:0 LISTENING 666",
+      execSync: (() =>
+        "TCP 0.0.0.0:1234 0.0.0.0:0 LISTENING 555\nTCP 0.0.0.0:1234 0.0.0.0:0 LISTENING 666") as unknown as PidDeps["execSync"],
     };
 
     const originalKill = process.kill;
     const originalSetTimeout = globalThis.setTimeout;
-    process.kill = (() => undefined) as typeof process.kill;
+    process.kill = (() => true) as typeof process.kill;
     globalThis.setTimeout = ((handler: (...args: unknown[]) => void) => {
       handler();
-      return 0 as ReturnType<typeof setTimeout>;
+      return 0 as unknown as ReturnType<typeof setTimeout>;
     }) as typeof setTimeout;
 
     try {
@@ -263,13 +265,13 @@ describe("pid tracker", () => {
 
     const deps = {
       platform: "linux",
-      execSync: (command: string) => {
+      execSync: ((command: string) => {
         if (command.includes(":7777")) return "111\n";
         if (command.includes(":8888")) return "";
         if (command.includes(":5555")) return "555\n";
         if (command.includes(":9999")) throw new Error("exec fail");
         return "";
-      },
+      }) as unknown as PidDeps["execSync"],
     };
 
     const originalKill = process.kill;
@@ -297,7 +299,7 @@ describe("pid tracker", () => {
 
     globalThis.setTimeout = ((handler: (...args: unknown[]) => void) => {
       handler();
-      return 0 as ReturnType<typeof setTimeout>;
+      return 0 as unknown as ReturnType<typeof setTimeout>;
     }) as typeof setTimeout;
 
     try {

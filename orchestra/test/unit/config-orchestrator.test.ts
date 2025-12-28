@@ -3,8 +3,10 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadOrchestratorConfig } from "../../src/config/orchestrator";
-import { getDefaultGlobalOrchestratorConfigPath } from "../../src/config/orchestrator/paths";
-import { getDefaultProjectOrchestratorConfigPath } from "../../src/config/orchestrator/paths";
+import {
+  getDefaultGlobalOrchestratorConfigPath,
+  getDefaultProjectOrchestratorConfigPath,
+} from "../../src/config/orchestrator/paths";
 
 describe("orchestrator config loading", () => {
   let tempDir = "";
@@ -141,5 +143,34 @@ describe("orchestrator config loading", () => {
     expect(result.config.healthCheckInterval).toBe(12345);
     expect(result.config.healthCheck?.enabled).toBe(false);
     expect(result.config.healthCheck?.maxRetries).toBe(2);
+  });
+
+  test("filters spawn list by spawn policy", async () => {
+    const projectPath = getDefaultProjectOrchestratorConfigPath(tempDir);
+    await mkdir(join(tempDir, ".opencode"), { recursive: true });
+    await writeFile(
+      projectPath,
+      JSON.stringify({
+        profiles: [
+          {
+            id: "alpha",
+            name: "Alpha",
+            model: "opencode/gpt-5-nano",
+            purpose: "Testing",
+            whenToUse: "Always",
+          },
+        ],
+        workers: ["alpha"],
+        spawnPolicy: {
+          default: {
+            autoSpawn: true,
+          },
+        },
+      }),
+      "utf8",
+    );
+
+    const result = await loadOrchestratorConfig({ directory: tempDir });
+    expect(result.config.spawn).toEqual(["alpha"]);
   });
 });

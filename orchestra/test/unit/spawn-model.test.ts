@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { resolveProfileModel } from "../../src/workers/spawn-model";
 import type { WorkerProfile } from "../../src/types";
+import { resolveProfileModel } from "../../src/workers/spawn-model";
 
 describe("spawn model resolver", () => {
   test("throws when model resolution is unavailable for auto tags", async () => {
@@ -12,9 +12,9 @@ describe("spawn model resolver", () => {
       whenToUse: "testing",
     };
 
-    await expect(
-      resolveProfileModel({ api: {} as never, directory: process.cwd(), profile }),
-    ).rejects.toThrow("model resolution is unavailable");
+    await expect(resolveProfileModel({ api: {} as never, directory: process.cwd(), profile })).rejects.toThrow(
+      "model resolution is unavailable",
+    );
   });
 
   test("returns explicit models when no client is available", async () => {

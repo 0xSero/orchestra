@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { OrchestratorService } from "../../src/orchestrator";
-import type { OrchestratorConfig } from "../../src/types";
-import type { WorkerManager } from "../../src/workers";
-import type { WorkflowEngine } from "../../src/workflows/factory";
 import { createCompactionTransform, createSystemTransform, createToolGuard } from "../../src/tools/hooks";
 import { createWorkerTools } from "../../src/tools/worker-tools";
 import { createWorkflowTools } from "../../src/tools/workflow-tools";
+import type { OrchestratorConfig } from "../../src/types";
+import type { WorkerManager } from "../../src/workers";
+import type { WorkflowEngine } from "../../src/workflows/factory";
 
 const workers = {
   listWorkers: () => [
@@ -51,31 +51,35 @@ const orchestrator = {
 describe("tool hooks", () => {
   test("guards manual and on-demand spawning", async () => {
     const config: OrchestratorConfig = {
+      basePort: 18000,
       profiles: {},
       spawn: [],
       autoSpawn: false,
       spawnPolicy: {
         default: { allowManual: false, onDemand: false },
       },
+      startupTimeout: 120_000,
+      healthCheckInterval: 10_000,
     };
 
     const guard = createToolGuard(config);
 
-    await expect(
-      guard({ tool: "spawn_worker" }, { args: { profileId: "alpha" } }),
-    ).rejects.toThrow("Spawning worker");
+    await expect(guard({ tool: "spawn_worker" }, { args: { profileId: "alpha" } })).rejects.toThrow("Spawning worker");
 
-    await expect(
-      guard({ tool: "ask_worker" }, { args: { workerId: "alpha", autoSpawn: true } }),
-    ).rejects.toThrow("On-demand spawn");
+    await expect(guard({ tool: "ask_worker" }, { args: { workerId: "alpha", autoSpawn: true } })).rejects.toThrow(
+      "On-demand spawn",
+    );
   });
 
   test("injects system context and pending vision jobs", async () => {
     const config: OrchestratorConfig = {
+      basePort: 18000,
       profiles: {},
       spawn: [],
       autoSpawn: false,
       ui: { injectSystemContext: true, systemContextMaxWorkers: 3 },
+      startupTimeout: 120_000,
+      healthCheckInterval: 10_000,
     };
 
     const systemTransform = createSystemTransform(config, workers);
@@ -94,32 +98,35 @@ describe("tool hooks", () => {
 describe("tool definitions", () => {
   test("worker tools execute and return serialized responses", async () => {
     const tools = createWorkerTools({ orchestrator, workers });
+    const ctx = {
+      sessionID: "session-1",
+      messageID: "msg-1",
+      agent: "agent-1",
+      abort: new AbortController().signal,
+    };
 
-    const spawn = await tools.spawn_worker.execute({ profileId: "alpha" });
+    const spawn = await tools.spawn_worker.execute({ profileId: "alpha" }, ctx);
     expect(spawn).toContain("alpha");
 
-    const stopped = await tools.stop_worker.execute({ workerId: "alpha" });
+    const stopped = await tools.stop_worker.execute({ workerId: "alpha" }, ctx);
     expect(stopped).toContain("Stopped");
 
-    const listed = await tools.list_workers.execute({});
+    const listed = await tools.list_workers.execute({}, ctx);
     expect(listed).toContain("alpha");
 
-    const profiles = await tools.list_profiles.execute({});
+    const profiles = await tools.list_profiles.execute({}, ctx);
     expect(profiles).toContain("Alpha");
 
-    const reply = await tools.ask_worker.execute({ workerId: "alpha", message: "ping" });
+    const reply = await tools.ask_worker.execute({ workerId: "alpha", message: "ping" }, ctx);
     expect(reply).toBe("pong");
 
-    const asyncReply = await tools.ask_worker_async.execute(
-      { workerId: "alpha", message: "ping" },
-      { sessionID: "session-1", agent: "agent-1" },
-    );
+    const asyncReply = await tools.ask_worker_async.execute({ workerId: "alpha", message: "ping" }, ctx);
     expect(asyncReply).toContain("job-1");
 
-    const awaited = await tools.await_worker_job.execute({ jobId: "job-1" });
+    const awaited = await tools.await_worker_job.execute({ jobId: "job-1" }, ctx);
     expect(awaited).toContain("job-1");
 
-    const delegated = await tools.delegate_task.execute({ task: "do it" });
+    const delegated = await tools.delegate_task.execute({ task: "do it" }, ctx);
     expect(delegated).toBe("done");
   });
 
@@ -139,7 +146,13 @@ describe("tool definitions", () => {
     } as unknown as WorkerManager;
 
     const tools = createWorkerTools({ orchestrator, workers: failingWorkers });
-    await tools.ask_worker_async.execute({ workerId: "alpha", message: "ping" });
+    const ctx = {
+      sessionID: "session-1",
+      messageID: "msg-1",
+      agent: "agent-1",
+      abort: new AbortController().signal,
+    };
+    await tools.ask_worker_async.execute({ workerId: "alpha", message: "ping" }, ctx);
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(recordedError).toContain("worker failed");
   });
@@ -150,10 +163,16 @@ describe("tool definitions", () => {
     } as unknown as WorkflowEngine;
 
     const tools = createWorkflowTools({ orchestrator, workflows });
-    const list = await tools.list_workflows.execute({});
+    const ctx = {
+      sessionID: "session-1",
+      messageID: "msg-1",
+      agent: "agent-1",
+      abort: new AbortController().signal,
+    };
+    const list = await tools.list_workflows.execute({}, ctx);
     expect(list).toContain("workflow-1");
 
-    const run = await tools.run_workflow.execute({ workflowId: "workflow-1", task: "run" });
+    const run = await tools.run_workflow.execute({ workflowId: "workflow-1", task: "run" }, ctx);
     expect(run).toContain("ok");
   });
 });

@@ -4,11 +4,11 @@ import {
   addLabel,
   createIssue,
   getIssue,
+  type LinearConfig,
   resolveLinearConfig,
   setEstimate,
   syncTaskStatus,
   updateIssue,
-  type LinearConfig,
 } from "../integrations/linear";
 import type { LinearIntegrationConfig } from "../types";
 
@@ -51,7 +51,12 @@ export function createLinearTools(deps: LinearToolsDeps): {
         priority: args.priority,
         estimate: args.estimate,
       });
-      return serialize({ id: issue.id, identifier: issue.identifier, title: issue.title, url: issue.url });
+      return serialize({
+        id: issue.issueId,
+        identifier: issue.identifier,
+        title: args.title,
+        url: issue.url,
+      });
     },
   });
 
@@ -71,7 +76,7 @@ export function createLinearTools(deps: LinearToolsDeps): {
         description: args.description,
         priority: args.priority,
       });
-      return serialize({ id: issue.id, identifier: issue.identifier, title: issue.title });
+      return serialize({ id: issue.issueId, title: issue.title ?? args.title, url: issue.url });
     },
   });
 
@@ -83,7 +88,7 @@ export function createLinearTools(deps: LinearToolsDeps): {
     },
     async execute(args) {
       const comment = await addComment({ cfg: getConfig(), issueId: args.issueId, body: args.body });
-      return serialize({ id: comment.id, issueId: args.issueId });
+      return serialize({ id: comment.commentId, issueId: args.issueId, url: comment.url });
     },
   });
 
@@ -95,7 +100,7 @@ export function createLinearTools(deps: LinearToolsDeps): {
     },
     async execute(args) {
       const issue = await addLabel({ cfg: getConfig(), issueId: args.issueId, labelId: args.labelId });
-      return serialize({ id: issue.id, identifier: issue.identifier });
+      return serialize({ id: issue.issueId, labelIds: issue.labelIds });
     },
   });
 
@@ -107,7 +112,7 @@ export function createLinearTools(deps: LinearToolsDeps): {
     },
     async execute(args) {
       const issue = await setEstimate({ cfg: getConfig(), issueId: args.issueId, estimate: args.estimate });
-      return serialize({ id: issue.id, identifier: issue.identifier, estimate: args.estimate });
+      return serialize({ id: issue.issueId, estimate: issue.estimate });
     },
   });
 
@@ -121,7 +126,7 @@ export function createLinearTools(deps: LinearToolsDeps): {
     },
     async execute(args) {
       const issue = await syncTaskStatus({ cfg: getConfig(), issueId: args.issueId, status: args.status });
-      return serialize({ id: issue.id, identifier: issue.identifier, status: args.status });
+      return serialize({ id: issue.issueId, stateId: issue.stateId, status: args.status });
     },
   });
 

@@ -103,9 +103,7 @@ export function createTestFixtures(deps: TestFixturesDeps = {}): TestFixtures {
           ...parsed,
         };
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-          throw new Error(`Profile fixture not found: ${name}`);
-        }
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new Error(`Profile fixture not found: ${name}`);
         throw error;
       }
     },

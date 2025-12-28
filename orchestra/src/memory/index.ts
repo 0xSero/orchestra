@@ -68,8 +68,7 @@ export const createMemoryStore: Factory<MemoryConfig | undefined, MemoryDeps, Me
       // SDK response type has complex conditional generics - use type assertion for data extraction
       const data = (res as { data?: { id?: string } })?.data ?? (res as { id?: string });
       if (data?.id) projectId = data.id;
-    } catch {
-    }
+    } catch {}
     return projectId;
   };
 
@@ -132,8 +131,7 @@ export const createMemoryStore: Factory<MemoryConfig | undefined, MemoryDeps, Me
           summaries: cfg.summaries,
           trim: cfg.trim,
         });
-      } catch {
-      }
+      } catch {}
     },
     start: async () => {
       if (!enabled) return;

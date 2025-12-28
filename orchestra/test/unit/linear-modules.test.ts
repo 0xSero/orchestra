@@ -126,12 +126,18 @@ const buildResponseData = (query: string, variables?: Record<string, unknown>) =
 
 const withFetchStub = () => {
   const original = globalThis.fetch;
-  globalThis.fetch = async (_input: RequestInfo | URL, init?: RequestInit) => {
+  const stubbedFetch = (async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     const body = init?.body ? JSON.parse(String(init.body)) : {};
     const query = typeof body.query === "string" ? body.query : "";
     const data = buildResponseData(query, body.variables as Record<string, unknown> | undefined);
     return new Response(JSON.stringify({ data }), { status: 200 });
+  }) as typeof fetch;
+  stubbedFetch.preconnect = (...args: Parameters<typeof fetch.preconnect>) => {
+    if (typeof original.preconnect === "function") {
+      original.preconnect(...args);
+    }
   };
+  globalThis.fetch = stubbedFetch;
   return () => {
     globalThis.fetch = original;
   };
@@ -208,9 +214,7 @@ describe("linear modules", () => {
   test("throws when syncTaskStatus cannot match a state", async () => {
     scenario = "no-states";
     const { syncTaskStatus } = await import("../../src/integrations/linear-issues");
-    await expect(syncTaskStatus({ cfg, issueId: "issue-1", status: "Unknown" })).rejects.toThrow(
-      "No matching state",
-    );
+    await expect(syncTaskStatus({ cfg, issueId: "issue-1", status: "Unknown" })).rejects.toThrow("No matching state");
   });
 
   test("syncs task status when a matching state is available", async () => {

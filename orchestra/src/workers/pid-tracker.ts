@@ -213,7 +213,12 @@ export async function cleanupStaleWorkers(options?: {
  * Kill process(es) listening on a specific port.
  */
 /** @internal */
-export async function killProcessOnPort(port: number, deps?: PidTrackerDeps): Promise<boolean> {
+export async function killProcessOnPort(
+  port: number,
+  deps?: PidTrackerDeps,
+  options?: { skipPid?: number },
+): Promise<boolean> {
+  const skipPid = options?.skipPid;
   try {
     const platform = deps?.platform ?? process.platform;
     const exec = deps?.execSync ?? execSync;
@@ -228,10 +233,13 @@ export async function killProcessOnPort(port: number, deps?: PidTrackerDeps): Pr
         const match = line.match(/\s+(\d+)\s*$/);
         if (match) pids.add(parseInt(match[1], 10));
       }
+      let killedAny = false;
       for (const pid of pids) {
+        if (skipPid && pid === skipPid) continue;
         await killProcess(pid);
+        killedAny = true;
       }
-      return pids.size > 0;
+      return killedAny;
     } else {
       // Unix: use lsof to find and kill
       const result = exec(`lsof -i :${port} -t 2>/dev/null || true`, {
@@ -243,10 +251,14 @@ export async function killProcessOnPort(port: number, deps?: PidTrackerDeps): Pr
         .split("\n")
         .filter(Boolean)
         .map((p) => parseInt(p, 10));
+      let killedAny = false;
       for (const pid of pids) {
-        if (!isNaN(pid)) await killProcess(pid);
+        if (Number.isNaN(pid)) continue;
+        if (skipPid && pid === skipPid) continue;
+        await killProcess(pid);
+        killedAny = true;
       }
-      return pids.length > 0;
+      return killedAny;
     }
   } catch {
     return false;
@@ -264,6 +276,13 @@ export async function killAllTrackedWorkers(deps?: PidTrackerDeps): Promise<stri
   const myWorkers = store.entries.filter((e) => e.parentPid === process.pid);
 
   for (const entry of myWorkers) {
+    if (entry.pid === process.pid) {
+      if (entry.port) {
+        const killedPort = await killProcessOnPort(entry.port, deps, { skipPid: process.pid });
+        if (killedPort) killed.push(entry.workerId);
+      }
+      continue;
+    }
     if (isProcessAlive(entry.pid)) {
       await killProcess(entry.pid);
       killed.push(entry.workerId);

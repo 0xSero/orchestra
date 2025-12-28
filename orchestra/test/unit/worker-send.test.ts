@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { sendWorkerMessage } from "../../src/workers/send";
 import type { WorkerInstance } from "../../src/types";
 import type { WorkerRegistry } from "../../src/workers/registry";
+import { sendWorkerMessage } from "../../src/workers/send";
 
 const buildRegistry = (instance?: WorkerInstance, readyResult = true) =>
   ({
@@ -21,6 +21,7 @@ const buildInstance = (overrides?: Partial<WorkerInstance>): WorkerInstance => (
   port: 0,
   directory: process.cwd(),
   sessionId: "session-1",
+  startedAt: new Date(),
   client: {
     session: {
       prompt: async () => ({ parts: [{ type: "text", text: "ok" }] }),
@@ -136,8 +137,15 @@ describe("send worker message", () => {
       { error: "string error", expected: "string error" },
       { error: { data: { message: "data error" } }, expected: "data error" },
       { error: { message: "message error" }, expected: "message error" },
-      { error: { code: "E" }, expected: "{\"code\":\"E\"}" },
-      { error: (() => { const obj: any = {}; obj.self = obj; return obj; })(), expected: "[object Object]" },
+      { error: { code: "E" }, expected: '{"code":"E"}' },
+      {
+        error: (() => {
+          const obj: any = {};
+          obj.self = obj;
+          return obj;
+        })(),
+        expected: "[object Object]",
+      },
     ];
 
     for (const { error, expected } of cases) {

@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { execSync } from "node:child_process";
 import { mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { execSync } from "node:child_process";
 import { getRepoContext, getRepoContextForWorker } from "../../src/ux/repo-context";
+
+type RepoDeps = NonNullable<Parameters<typeof getRepoContext>[0]["deps"]>;
+type ExistsSync = NonNullable<RepoDeps["existsSync"]>;
+type StatSync = NonNullable<RepoDeps["statSync"]>;
 
 describe("repo context", () => {
   test("returns undefined when directory is missing", async () => {
@@ -16,8 +20,8 @@ describe("repo context", () => {
 
     // Initialize a git repo so git info paths are covered.
     execSync("git init", { cwd: dir });
-    execSync("git config user.email \"test@example.com\"", { cwd: dir });
-    execSync("git config user.name \"Test\"", { cwd: dir });
+    execSync('git config user.email "test@example.com"', { cwd: dir });
+    execSync('git config user.name "Test"', { cwd: dir });
     execSync("git remote add origin https://example.com/repo.git", { cwd: dir });
 
     await writeFile(
@@ -33,7 +37,7 @@ describe("repo context", () => {
     );
     await writeFile(join(dir, "README.md"), "Hello README", "utf8");
     execSync("git add package.json README.md", { cwd: dir });
-    execSync("git commit -m \"init\"", { cwd: dir });
+    execSync('git commit -m "init"', { cwd: dir });
     await writeFile(join(dir, "temp.txt"), "change", "utf8");
 
     const ctx = await getRepoContext({ directory: dir, maxReadmeChars: 1000, maxTotalChars: 2000 });
@@ -71,12 +75,16 @@ describe("repo context", () => {
   });
 
   test("handles git info failures safely", async () => {
+    const pathToString = (path: Parameters<ExistsSync>[0]) => (typeof path === "string" ? path : path.toString());
     const ctx = await getRepoContext({
       directory: "/tmp/repo",
       deps: {
-        existsSync: (path: string) => path === "/tmp/repo" || path.endsWith(".git"),
+        existsSync: ((path: Parameters<ExistsSync>[0]) => {
+          const value = pathToString(path);
+          return value === "/tmp/repo" || value.endsWith(".git");
+        }) as ExistsSync,
         readdirSync: () => [],
-        statSync: () => ({ isDirectory: () => false }),
+        statSync: (() => ({ isDirectory: () => false })) as unknown as StatSync,
         execSync: () => {
           throw new Error("git fail");
         },
@@ -86,15 +94,17 @@ describe("repo context", () => {
   });
 
   test("handles git repository check errors", async () => {
+    const pathToString = (path: Parameters<ExistsSync>[0]) => (typeof path === "string" ? path : path.toString());
     const ctx = await getRepoContext({
       directory: "/tmp/repo",
       deps: {
-        existsSync: (path: string) => {
-          if (path.endsWith(".git")) throw new Error("fs fail");
-          return path === "/tmp/repo";
-        },
+        existsSync: ((path: Parameters<ExistsSync>[0]) => {
+          const value = pathToString(path);
+          if (value.endsWith(".git")) throw new Error("fs fail");
+          return value === "/tmp/repo";
+        }) as ExistsSync,
         readdirSync: () => [],
-        statSync: () => ({ isDirectory: () => false }),
+        statSync: (() => ({ isDirectory: () => false })) as unknown as StatSync,
       },
     });
     expect(ctx?.git).toBeUndefined();

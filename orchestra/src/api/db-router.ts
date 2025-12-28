@@ -239,12 +239,13 @@ export function createDbRouter(deps: DbRouterDeps) {
       if (handled) return;
     }
 
-    if (segments.length === 3 && segments[2] === "onboarded" && req.method === "POST") {
+    const handleOnboarded = () => {
       const user = deps.db.markOnboarded();
       broadcastSnapshot();
       sendJson(res, 200, serializeUser(user));
-      return;
-    }
+    };
+
+    if (segments.length === 3 && segments[2] === "onboarded" && req.method === "POST") return handleOnboarded();
 
     sendJson(res, 404, { error: "Not found" });
   };

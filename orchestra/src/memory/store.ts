@@ -13,10 +13,7 @@ type MemoryStoreDeps = {
   fileStore?: typeof fileStore;
 };
 
-function resolveBackend(
-  cfg?: Neo4jConfig,
-  deps?: MemoryStoreDeps,
-): { backend: MemoryBackend; cfg?: Neo4jConfig } {
+function resolveBackend(cfg?: Neo4jConfig, deps?: MemoryStoreDeps): { backend: MemoryBackend; cfg?: Neo4jConfig } {
   const resolved = cfg ?? (deps?.loadNeo4jConfig ?? loadNeo4jConfig)();
   if (resolved) return { backend: "neo4j", cfg: resolved };
   return { backend: "file" };

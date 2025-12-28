@@ -59,17 +59,33 @@ describe("worker registry", () => {
     expect(registry.list().length).toBe(2);
     expect(registry.getWorkersByStatus("ready").length).toBe(1);
     expect(registry.getWorkersByCapability("vision")[0]?.profile.id).toBe("vision");
+    expect(registry.getWorkersByCapability("web")[0]?.profile.id).toBe("web");
+    expect(registry.getWorkersByCapability("unknown")).toEqual([]);
     expect(registry.getVisionWorkers()[0]?.profile.id).toBe("vision");
     expect(registry.getActiveWorkers().length).toBe(2);
 
     const summary = registry.getSummary({ maxWorkers: 1 });
     expect(summary).toContain("showing 1 of 2");
 
-    const json = registry.toJSON();
+    const json = registry.toJSON() as Array<{ lastResult?: { at?: string } }>;
     expect(json[0]?.lastResult?.at).toBeTruthy();
 
-    const timedOut = await registry.waitForStatus("unknown", "ready", 1);
-    expect(timedOut).toBe(false);
+    const originalSetTimeout = globalThis.setTimeout;
+    let captured: (() => void) | undefined;
+    globalThis.setTimeout = ((cb: (...args: any[]) => void) => {
+      captured = cb as () => void;
+      return 0 as unknown as NodeJS.Timeout;
+    }) as typeof setTimeout;
+
+    try {
+      const promise = registry.waitForStatus("unknown", "ready", 1);
+      if (!captured) throw new Error("Expected timeout callback to be scheduled");
+      captured();
+      const timedOut = await promise;
+      expect(timedOut).toBe(false);
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+    }
 
     const errors: string[] = [];
     registry.on("error", (instance) => errors.push(instance.profile.id));

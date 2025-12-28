@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile, unlink } from "node:fs/promises";
+import { mkdtemp, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -26,18 +26,22 @@ describe("writeJsonAtomic", () => {
     const filePath = join(cleanupDir, "fallback.json");
 
     try {
-      await writeJsonAtomic(filePath, { ok: false }, {
-        fs: {
-          rename: async () => {
-            throw new Error("rename failed");
+      await writeJsonAtomic(
+        filePath,
+        { ok: false },
+        {
+          fs: {
+            rename: async () => {
+              throw new Error("rename failed");
+            },
+            writeFile: async (...args: Parameters<typeof writeFile>) => {
+              writeCount += 1;
+              return await writeFile(...args);
+            },
+            unlink,
           },
-          writeFile: async (...args: Parameters<typeof writeFile>) => {
-            writeCount += 1;
-            return await writeFile(...args);
-          },
-          unlink,
         },
-      });
+      );
       expect(writeCount).toBeGreaterThan(0);
     } finally {
       await rm(cleanupDir, { recursive: true, force: true }).catch(() => {});
@@ -50,20 +54,24 @@ describe("writeJsonAtomic", () => {
     const filePath = join(cleanupDir, "errors.json");
 
     try {
-      await writeJsonAtomic(filePath, { ok: "errors" }, {
-        fs: {
-          mkdir: async () => {
-            throw new Error("mkdir failed");
+      await writeJsonAtomic(
+        filePath,
+        { ok: "errors" },
+        {
+          fs: {
+            mkdir: async () => {
+              throw new Error("mkdir failed");
+            },
+            rename: async () => {
+              throw new Error("rename failed");
+            },
+            unlink: async () => {
+              throw new Error("unlink failed");
+            },
+            writeFile,
           },
-          rename: async () => {
-            throw new Error("rename failed");
-          },
-          unlink: async () => {
-            throw new Error("unlink failed");
-          },
-          writeFile,
         },
-      });
+      );
       const raw = await readFile(filePath, "utf8");
       expect(JSON.parse(raw)).toEqual({ ok: "errors" });
     } finally {

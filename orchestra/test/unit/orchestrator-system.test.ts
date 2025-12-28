@@ -4,7 +4,14 @@ import type { OrchestratorConfig, WorkerProfile } from "../../src/types";
 
 describe("orchestrator system prompt", () => {
   test("includes profiles, running workers, and memory protocol", () => {
-    const config = { profiles: {}, spawn: [], autoSpawn: false } as OrchestratorConfig;
+    const config: OrchestratorConfig = {
+      basePort: 18000,
+      profiles: {},
+      spawn: [],
+      autoSpawn: false,
+      startupTimeout: 120_000,
+      healthCheckInterval: 10_000,
+    };
     const profiles: WorkerProfile[] = [
       {
         id: "vision",
@@ -42,7 +49,14 @@ describe("orchestrator system prompt", () => {
   });
 
   test("renders empty running workers section", () => {
-    const config = { profiles: {}, spawn: [], autoSpawn: false } as OrchestratorConfig;
+    const config: OrchestratorConfig = {
+      basePort: 18000,
+      profiles: {},
+      spawn: [],
+      autoSpawn: false,
+      startupTimeout: 120_000,
+      healthCheckInterval: 10_000,
+    };
     const prompt = buildOrchestratorSystemPrompt({
       config,
       profiles: [],

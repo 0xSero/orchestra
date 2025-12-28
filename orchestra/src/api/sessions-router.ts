@@ -228,9 +228,7 @@ export function createSessionsRouter(deps: SessionsRouterDeps) {
       return;
     }
 
-    // DELETE /api/sessions/:sessionId - Close a session
-    if (segments.length === 3 && req.method === "DELETE") {
-      const sessionId = segments[2];
+    const handleCloseSession = async (sessionId: string) => {
       try {
         const session = deps.sessionManager.getSession(sessionId);
         if (!session) {
@@ -250,8 +248,10 @@ export function createSessionsRouter(deps: SessionsRouterDeps) {
       } catch (err) {
         sendJson(res, 500, { error: err instanceof Error ? err.message : "Failed to close session" });
       }
-      return;
-    }
+    };
+
+    // DELETE /api/sessions/:sessionId - Close a session
+    if (segments.length === 3 && req.method === "DELETE") return await handleCloseSession(segments[2]);
 
     sendJson(res, 404, { error: "Not found" });
   };

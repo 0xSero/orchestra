@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { startEventForwarding } from "../../src/workers/event-forwarding";
 import type { WorkerInstance } from "../../src/types";
 import type { WorkerSessionManager } from "../../src/workers";
+import { startEventForwarding } from "../../src/workers/event-forwarding";
 
 describe("worker event forwarding", () => {
   test("records tool, message, error, progress, and completion events", async () => {
@@ -32,6 +32,7 @@ describe("worker event forwarding", () => {
       port: 0,
       directory: process.cwd(),
       sessionId: "session-1",
+      startedAt: new Date(),
       toolCount: 0,
       messageCount: 0,
       client: {
@@ -69,6 +70,7 @@ describe("worker event forwarding", () => {
       port: 0,
       directory: process.cwd(),
       sessionId: "session-1",
+      startedAt: new Date(),
       toolCount: 0,
       messageCount: 0,
       client: {
@@ -99,6 +101,7 @@ describe("worker event forwarding", () => {
       port: 0,
       directory: process.cwd(),
       sessionId: "session-empty",
+      startedAt: new Date(),
       toolCount: 0,
       messageCount: 0,
       client: {
@@ -125,6 +128,7 @@ describe("worker event forwarding", () => {
       port: 0,
       directory: process.cwd(),
       sessionId: "session-terminal",
+      startedAt: new Date(),
       toolCount: 0,
       messageCount: 0,
       client: {
@@ -153,6 +157,7 @@ describe("worker event forwarding", () => {
       port: 0,
       directory: process.cwd(),
       sessionId: "session-errors",
+      startedAt: new Date(),
       toolCount: 0,
       messageCount: 0,
       client: {
@@ -169,7 +174,7 @@ describe("worker event forwarding", () => {
     const queue: Array<() => Promise<void>> = [];
     globalThis.setTimeout = ((handler: (...args: unknown[]) => void) => {
       queue.push(() => Promise.resolve(handler()));
-      return 0 as ReturnType<typeof setTimeout>;
+      return 0 as unknown as ReturnType<typeof setTimeout>;
     }) as typeof setTimeout;
     globalThis.clearTimeout = (() => {}) as typeof clearTimeout;
 

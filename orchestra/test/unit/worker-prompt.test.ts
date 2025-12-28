@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { buildPromptParts, extractTextFromPromptResponse, normalizeBase64Image } from "../../src/workers/prompt";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { buildPromptParts, extractTextFromPromptResponse, normalizeBase64Image } from "../../src/workers/prompt";
 
 describe("worker prompt", () => {
   test("builds prompt parts with base64 attachments", async () => {

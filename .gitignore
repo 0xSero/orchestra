@@ -9,3 +9,4 @@ node_modules
 work
 *.log
 *.local
+coverage

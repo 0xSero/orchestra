@@ -9,6 +9,7 @@ export const createIssue = async (input: {
   description?: string;
   projectId?: string;
   priority?: number;
+  estimate?: number;
 }): Promise<{ issueId: string; identifier?: string; url?: string }> => {
   const data = await linearRequest<{
     issueCreate: { success: boolean; issue?: LinearIssue };
@@ -27,6 +28,7 @@ export const createIssue = async (input: {
         teamId: input.cfg.teamId,
         projectId: input.projectId,
         priority: input.priority,
+        estimate: input.estimate,
       },
     },
   );
@@ -109,10 +111,7 @@ export const addComment = async (input: {
 };
 
 /** Fetch a Linear issue by ID. */
-export const getIssue = async (input: {
-  cfg: LinearConfig;
-  issueId: string;
-}): Promise<LinearIssue> => {
+export const getIssue = async (input: { cfg: LinearConfig; issueId: string }): Promise<LinearIssue> => {
   const data = await linearRequest<{ issue: LinearIssue }>(
     input.cfg,
     `query GetIssue($id: String!) {

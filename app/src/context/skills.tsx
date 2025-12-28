@@ -7,6 +7,7 @@ import {
   type ParentComponent,
   useContext,
 } from "solid-js";
+import { getSkillsApiBase } from "@/lib/opencode-base";
 import type { Skill, SkillEvent, SkillInput, SkillScope } from "@/types/skill";
 
 interface SkillsContextValue {
@@ -31,7 +32,7 @@ interface SkillsContextValue {
 const SkillsContext = createContext<SkillsContextValue>();
 
 export const SkillsProvider: ParentComponent<{ baseUrl?: string }> = (props) => {
-  const apiBase = (props.baseUrl ?? import.meta.env.VITE_SKILLS_API_BASE ?? "http://localhost:4097").replace(/\/$/, "");
+  const apiBase = getSkillsApiBase(props.baseUrl);
 
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const [createOpen, setCreateOpen] = createSignal(false);

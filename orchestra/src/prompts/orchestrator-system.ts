@@ -19,7 +19,8 @@ export function buildOrchestratorSystemPrompt(input: OrchestratorPromptInput): s
   const sections: string[] = [];
 
   // Core orchestrator identity
-  sections.push(`
+  sections.push(
+    `
 <orchestrator-role>
 You are the OpenCode Orchestrator - a coordination layer that manages specialized AI workers.
 Your role is to understand tasks, select appropriate workers, and ensure work is completed effectively.
@@ -30,7 +31,8 @@ IMPORTANT PRINCIPLES:
 3. Use workers for specialized capabilities you lack (vision, specific models, domain expertise).
 4. Track work across multiple workers and synthesize results.
 </orchestrator-role>
-`.trim());
+`.trim(),
+  );
 
   // Available workers section
   if (profiles.length > 0) {
@@ -45,7 +47,8 @@ IMPORTANT PRINCIPLES:
       })
       .join("\n\n");
 
-    sections.push(`
+    sections.push(
+      `
 <available-workers>
 The following worker profiles are available. They are NOT running until you spawn them:
 
@@ -61,29 +64,35 @@ SPAWN GUIDELINES:
 - Reuse already-running workers (check running workers below)
 - Stop workers when done with a long task sequence: stop_worker({ workerId: "<id>" })
 </available-workers>
-`.trim());
+`.trim(),
+    );
   }
 
   // Running workers
   if (runningWorkers.length > 0) {
     const workerLines = runningWorkers.map((w) => `  - ${w.id} (${w.name}) — ${w.status}`).join("\n");
-    sections.push(`
+    sections.push(
+      `
 <running-workers>
 Currently running workers (reuse these before spawning new ones):
 ${workerLines}
 </running-workers>
-`.trim());
+`.trim(),
+    );
   } else {
-    sections.push(`
+    sections.push(
+      `
 <running-workers>
 No workers are currently running. Spawn workers on-demand as needed.
 </running-workers>
-`.trim());
+`.trim(),
+    );
   }
 
   // Memory graph protocol
   if (memoryEnabled) {
-    sections.push(`
+    sections.push(
+      `
 <memory-protocol>
 MEMORY GRAPH INTEGRATION:
 
@@ -119,11 +128,13 @@ memory_record({
 })
 \`\`\`
 </memory-protocol>
-`.trim());
+`.trim(),
+    );
   }
 
   // Vision/image handling convention
-  sections.push(`
+  sections.push(
+    `
 <vision-convention>
 IMAGE HANDLING:
 When you see content wrapped in <pasted_image>...</pasted_image> tags, this is a TEXT DESCRIPTION of an image that was already analyzed by a vision worker.
@@ -139,10 +150,12 @@ You respond: "The button is red."
 
 NOT: "I cannot view images" or "Let me analyze this image"
 </vision-convention>
-`.trim());
+`.trim(),
+  );
 
   // Tool usage guidelines
-  sections.push(`
+  sections.push(
+    `
 <tool-guidelines>
 WORKER TOOLS:
 - spawn_worker({ profileId }) - Start a worker (if not already running)
@@ -163,7 +176,8 @@ DECISION FRAMEWORK:
 3. Is the task complex with subtasks? → Consider delegate_task or workflow
 4. Am I learning something reusable? → Record to memory
 </tool-guidelines>
-`.trim());
+`.trim(),
+  );
 
   return sections.join("\n\n");
 }

@@ -14,6 +14,7 @@ describe("workflow factory", () => {
     const wf: WorkflowDefinition = {
       id: "wf",
       name: "Workflow",
+      description: "Basic workflow for validation tests.",
       steps: [{ id: "s1", title: "Step", workerId: "alpha", prompt: "{task}" }],
     };
     engine.register(wf);
@@ -57,6 +58,7 @@ describe("workflow factory", () => {
     const wf: WorkflowDefinition = {
       id: "wf",
       name: "Workflow",
+      description: "Workflow that carries context between steps.",
       steps: [
         { id: "s1", title: "Step 1", workerId: "alpha", prompt: "{task}", carry: true },
         { id: "s2", title: "Step 2", workerId: "alpha", prompt: "{carry}", carry: true },

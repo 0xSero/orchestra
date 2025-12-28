@@ -1,3 +1,4 @@
+// @jsxImportSource solid-js
 import { render, waitFor } from "@solidjs/testing-library";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { SkillsProvider, useSkills } from "@/context/skills";

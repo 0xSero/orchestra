@@ -20,13 +20,15 @@ export type VisionRoutingState = {
 };
 
 export type VisionRoutingDeps = {
-  workers: Pick<WorkerManager, "getWorker" | "spawnById" | "send" | "jobs">;
+  workers: Pick<WorkerManager, "getWorker" | "spawnById" | "send" | "jobs" | "stopWorker">;
   ensureWorker?: (input: { workerId: string; reason: "manual" | "on-demand" }) => Promise<WorkerInstance>;
   profiles: Record<string, { id: string; name?: string; model?: string; supportsVision?: boolean }>;
   communication?: Pick<CommunicationService, "emit">;
   timeoutMs?: number;
   prompt?: string;
   logSink?: (entry: Record<string, unknown>) => Promise<void> | void;
+  /** If true, stop the vision worker after successful analysis. Default: true */
+  autoStopVisionWorker?: boolean;
 };
 
 export type VisionChatInput = {

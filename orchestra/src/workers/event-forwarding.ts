@@ -8,6 +8,8 @@ import type { WorkerSessionManager } from "./session-manager";
 export interface EventForwardingHandle {
   stop: () => void;
   isActive: () => boolean;
+  /** Enable turbo mode for faster polling during active tasks */
+  setTurboMode: (enabled: boolean) => void;
 }
 
 /**
@@ -23,6 +25,8 @@ export interface EventForwardingConfig {
 }
 
 const DEFAULT_POLL_INTERVAL_MS = 1000;
+/** Fast polling interval for active tasks */
+const TURBO_POLL_INTERVAL_MS = 150;
 const DEFAULT_MAX_EVENTS_PER_POLL = 20;
 /** Maximum consecutive errors before stopping polling */
 const MAX_CONSECUTIVE_ERRORS = 5;
@@ -65,10 +69,13 @@ export function startEventForwarding(
   const maxEventsPerPoll = config?.maxEventsPerPoll ?? DEFAULT_MAX_EVENTS_PER_POLL;
 
   let active = true;
+  let turboMode = false;
   let lastMessageId: string | undefined;
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
   let consecutiveErrors = 0;
   let currentBackoff = pollIntervalMs;
+
+  const getEffectivePollInterval = () => (turboMode ? TURBO_POLL_INTERVAL_MS : pollIntervalMs);
 
   const poll = async () => {
     if (!active || !instance.client || !instance.sessionId) return;
@@ -84,12 +91,12 @@ export function startEventForwarding(
 
       // Reset backoff on successful poll
       consecutiveErrors = 0;
-      currentBackoff = pollIntervalMs;
+      currentBackoff = getEffectivePollInterval();
 
       if (messages.length === 0) {
         // Schedule next poll if still active
         if (active) {
-          pollTimer = setTimeout(poll, pollIntervalMs);
+          pollTimer = setTimeout(poll, getEffectivePollInterval());
         }
         return;
       }
@@ -154,7 +161,7 @@ export function startEventForwarding(
       }
 
       // Apply exponential backoff: base * 2^(errors-1), capped at max
-      currentBackoff = Math.min(BASE_BACKOFF_MS * Math.pow(2, consecutiveErrors - 1), MAX_BACKOFF_MS);
+      currentBackoff = Math.min(BASE_BACKOFF_MS * 2 ** (consecutiveErrors - 1), MAX_BACKOFF_MS);
 
       // Record transient error but continue with backoff
       if (instance.sessionId && consecutiveErrors === 1) {
@@ -181,6 +188,14 @@ export function startEventForwarding(
       }
     },
     isActive: () => active,
+    setTurboMode: (enabled: boolean) => {
+      turboMode = enabled;
+      // If enabling turbo mode and we have a pending poll, reschedule it faster
+      if (enabled && active && pollTimer) {
+        clearTimeout(pollTimer);
+        pollTimer = setTimeout(poll, TURBO_POLL_INTERVAL_MS);
+      }
+    },
   };
 }
 

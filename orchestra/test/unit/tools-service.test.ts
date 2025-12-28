@@ -1,15 +1,18 @@
 import { describe, expect, test } from "bun:test";
+import type { OrchestratorService } from "../../src/orchestrator";
 import { createTools } from "../../src/tools";
 import type { OrchestratorConfig } from "../../src/types";
-import type { OrchestratorService } from "../../src/orchestrator";
 import type { WorkerManager } from "../../src/workers";
 
 describe("tools service", () => {
   test("creates tool registry and transforms", async () => {
     const config: OrchestratorConfig = {
+      basePort: 18000,
       profiles: {},
       spawn: [],
       autoSpawn: false,
+      startupTimeout: 120_000,
+      healthCheckInterval: 10_000,
       ui: { injectSystemContext: false },
     };
 

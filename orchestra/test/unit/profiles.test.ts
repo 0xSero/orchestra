@@ -3,7 +3,7 @@ import type { Skill } from "../../src/types";
 
 const baseSkill: Skill = {
   id: "base",
-  source: { type: "project" },
+  source: { type: "project", path: "/tmp/base" },
   frontmatter: { name: "Base", description: "Base profile", model: "model-a" },
   systemPrompt: "",
   filePath: "/tmp/base/SKILL.md",
@@ -23,16 +23,20 @@ describe("profile helpers", () => {
 
   test("applies overrides and inheritance", async () => {
     const { getAllProfiles } = await import("../../src/workers/profiles");
-    const profiles = await getAllProfiles(undefined, [
-      {
-        id: "child",
-        name: "Child",
-        model: "model-b",
-        purpose: "child purpose",
-        whenToUse: "child use",
-        extends: "base",
-      },
-    ], { loadAllSkills });
+    const profiles = await getAllProfiles(
+      undefined,
+      [
+        {
+          id: "child",
+          name: "Child",
+          model: "model-b",
+          purpose: "child purpose",
+          whenToUse: "child use",
+          extends: "base",
+        },
+      ],
+      { loadAllSkills },
+    );
 
     expect(profiles.child).toBeDefined();
     expect(profiles.child?.name).toBe("Child");

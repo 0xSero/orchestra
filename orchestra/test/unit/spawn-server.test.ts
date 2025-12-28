@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { applyServerBundleToInstance, createWorkerSession, startWorkerServer } from "../../src/workers/spawn-server";
 import type { WorkerInstance } from "../../src/types";
+import { applyServerBundleToInstance, createWorkerSession, startWorkerServer } from "../../src/workers/spawn-server";
 
 describe("spawn server helpers", () => {
   test("startWorkerServer toggles env vars and restores them", async () => {
@@ -103,11 +103,17 @@ describe("spawn server helpers", () => {
       profile: { id: "alpha", name: "Alpha", model: "model-a", purpose: "", whenToUse: "" },
       status: "ready",
       port: 0,
+      startedAt: new Date(),
     };
 
     applyServerBundleToInstance(instance, {
       client: {},
-      server: { url: "http://127.0.0.1:1234", close: () => { closed = true; } },
+      server: {
+        url: "http://127.0.0.1:1234",
+        close: () => {
+          closed = true;
+        },
+      },
     } as never);
     expect(instance.port).toBe(1234);
     await instance.shutdown?.();

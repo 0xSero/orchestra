@@ -36,7 +36,7 @@ export async function writeJsonAtomic(path: string, data: unknown, options?: Wri
   try {
     await fs.writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
     await fs.rename(tmp, path);
-  } catch (renameError) {
+  } catch (_renameError) {
     // Clean up temp file if it exists
     await fs.unlink(tmp).catch(() => {});
 

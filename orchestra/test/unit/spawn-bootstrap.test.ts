@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { buildBootstrapPromptArgs } from "../../src/workers/spawn-bootstrap";
 import type { WorkerProfile } from "../../src/types";
+import { buildBootstrapPromptArgs } from "../../src/workers/spawn-bootstrap";
 
 describe("spawn bootstrap", () => {
   test("builds prompt with system context, repo context, and permissions", () => {
@@ -24,12 +24,12 @@ describe("spawn bootstrap", () => {
     });
 
     expect(args.path.id).toBe("session-1");
-    const text = args.body?.parts?.[0]?.text ?? "";
+    const text = (args.body?.parts?.[0] as { text?: string } | undefined)?.text ?? "";
     expect(text).toContain("<system-context>");
     expect(text).toContain("Repo context");
     expect(text).toContain("<worker-permissions>");
-    expect(text).toContain("\"vision\":true");
-    expect(text).toContain("\"web\":false");
+    expect(text).toContain('"vision":true');
+    expect(text).toContain('"web":false');
   });
 
   test("builds prompt without optional sections", () => {
@@ -47,9 +47,9 @@ describe("spawn bootstrap", () => {
       profile,
     });
 
-    const text = args.body?.parts?.[0]?.text ?? "";
+    const text = (args.body?.parts?.[0] as { text?: string } | undefined)?.text ?? "";
     expect(text).not.toContain("<system-context>");
     expect(text).not.toContain("<worker-permissions>");
-    expect(text).toContain("worker \"beta\"");
+    expect(text).toContain('worker "beta"');
   });
 });

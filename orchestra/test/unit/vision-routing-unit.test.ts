@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import {
-  createVisionRoutingState,
-  routeVisionMessage,
-  syncVisionProcessedMessages,
-} from "../../src/ux/vision-routing";
+import { createVisionRoutingState, routeVisionMessage, syncVisionProcessedMessages } from "../../src/ux/vision-routing";
+import type { VisionPart } from "../../src/ux/vision-types";
 
 describe("vision routing", () => {
   test("skips non-user or already processed messages", async () => {
@@ -13,19 +10,29 @@ describe("vision routing", () => {
         getWorker: () => undefined,
         spawnById: async () => ({}),
         send: async () => ({ success: true, response: "ok" }),
+        stopWorker: async () => true,
       },
       profiles: { vision: { id: "vision", name: "Vision", model: "vision", purpose: "", whenToUse: "" } },
     };
 
-    const output = { message: { role: "assistant" }, parts: [] as unknown[] };
-    const res = await routeVisionMessage({ role: "assistant" }, output, deps as never, state);
+    const output = { message: { role: "assistant" }, parts: [] as VisionPart[] };
+    const res = await routeVisionMessage({ role: "assistant", sessionID: "session-1" }, output, deps as never, state);
     expect(res).toBeUndefined();
 
     const roleFromInput = { message: {}, parts: [{ type: "file", url: "data:image/png;base64,abc" }] };
-    expect(await routeVisionMessage({ role: "assistant" }, roleFromInput as never, deps as never, state)).toBeUndefined();
+    expect(
+      await routeVisionMessage(
+        { role: "assistant", sessionID: "session-1" },
+        roleFromInput as never,
+        deps as never,
+        state,
+      ),
+    ).toBeUndefined();
 
     const noVision = { message: { role: "user" }, parts: [{ type: "text", text: "hello" }] };
-    expect(await routeVisionMessage({ role: "user" }, noVision as never, deps as never, state)).toBeUndefined();
+    expect(
+      await routeVisionMessage({ role: "user", sessionID: "session-1" }, noVision as never, deps as never, state),
+    ).toBeUndefined();
 
     state.processedMessageIds.add("msg-1");
     const already = {
@@ -33,7 +40,12 @@ describe("vision routing", () => {
       parts: [{ type: "file", url: "data:image/png;base64,abc" }],
     };
     expect(
-      await routeVisionMessage({ role: "user", messageID: "msg-1" }, already as never, deps as never, state),
+      await routeVisionMessage(
+        { role: "user", messageID: "msg-1", sessionID: "session-1" },
+        already as never,
+        deps as never,
+        state,
+      ),
     ).toBeUndefined();
 
     const visionAgent = {
@@ -41,7 +53,12 @@ describe("vision routing", () => {
       parts: [{ type: "file", url: "data:image/png;base64,abc" }],
     };
     expect(
-      await routeVisionMessage({ role: "user", agent: "vision" }, visionAgent as never, deps as never, state),
+      await routeVisionMessage(
+        { role: "user", agent: "vision", sessionID: "session-1" },
+        visionAgent as never,
+        deps as never,
+        state,
+      ),
     ).toBeUndefined();
   });
 
@@ -57,6 +74,7 @@ describe("vision routing", () => {
         getWorker: () => ({}),
         spawnById: async () => ({}),
         send: async () => ({ success: true, response: "ok" }),
+        stopWorker: async () => true,
       },
       profiles: { vision: { id: "vision", name: "Vision", model: "vision", purpose: "", whenToUse: "" } },
       ensureWorker: async () => {},
@@ -65,9 +83,15 @@ describe("vision routing", () => {
       },
     };
 
-    await routeVisionMessage({ role: "user", messageID: "msg-2" }, output as never, deps as never, state);
-    expect(output.parts[0]?.text).toContain("<pasted_image>");
-    expect(output.parts[0]?.text).toContain("No valid image attachments found");
+    await routeVisionMessage(
+      { role: "user", messageID: "msg-2", sessionID: "session-2" },
+      output as never,
+      deps as never,
+      state,
+    );
+    const missingText = output.parts[0] as { text?: string } | undefined;
+    expect(missingText?.text).toContain("<pasted_image>");
+    expect(missingText?.text).toContain("No valid image attachments found");
     expect(state.processedMessageIds.has("msg-2")).toBe(true);
   });
 
@@ -83,6 +107,7 @@ describe("vision routing", () => {
         getWorker: () => undefined,
         spawnById: async () => ({}),
         send: async () => ({ success: true, response: "Vision result" }),
+        stopWorker: async () => true,
       },
       profiles: { vision: { id: "vision", name: "Vision", model: "vision", purpose: "", whenToUse: "" } },
       logSink: async () => {
@@ -90,9 +115,15 @@ describe("vision routing", () => {
       },
     };
 
-    await routeVisionMessage({ role: "user", messageID: "msg-3" }, output as never, deps as never, state);
-    expect(output.parts[0]?.text).toContain("<pasted_image>");
-    expect(output.parts[0]?.text).toContain("Vision result");
+    await routeVisionMessage(
+      { role: "user", messageID: "msg-3", sessionID: "session-3" },
+      output as never,
+      deps as never,
+      state,
+    );
+    const resultText = output.parts[0] as { text?: string } | undefined;
+    expect(resultText?.text).toContain("<pasted_image>");
+    expect(resultText?.text).toContain("Vision result");
   });
 
   test("emits completion and logs successful analysis", async () => {
@@ -110,6 +141,7 @@ describe("vision routing", () => {
         getWorker: () => undefined,
         spawnById: async () => ({}),
         send: async () => ({ success: true, response: "Vision ok" }),
+        stopWorker: async () => true,
       },
       profiles: { vision: { id: "vision", name: "Vision", model: "vision", purpose: "", whenToUse: "" } },
       communication: {
@@ -120,7 +152,12 @@ describe("vision routing", () => {
       },
     };
 
-    await routeVisionMessage({ role: "user", messageID: "msg-5" }, output as never, deps as never, state);
+    await routeVisionMessage(
+      { role: "user", messageID: "msg-5", sessionID: "session-5" },
+      output as never,
+      deps as never,
+      state,
+    );
     expect(events).toContain("orchestra.vision.completed");
     expect(logs[0]?.status).toBe("succeeded");
   });
@@ -139,13 +176,20 @@ describe("vision routing", () => {
         send: async () => {
           throw new Error("vision down");
         },
+        stopWorker: async () => true,
       },
       profiles: { vision: { id: "vision", name: "Vision", model: "vision", purpose: "", whenToUse: "" } },
     };
 
-    await routeVisionMessage({ role: "user", messageID: "msg-4" }, output as never, deps as never, state);
-    expect(output.parts[0]?.text).toContain("<pasted_image>");
-    expect(output.parts[0]?.text).toContain("vision down");
+    await routeVisionMessage(
+      { role: "user", messageID: "msg-4", sessionID: "session-4" },
+      output as never,
+      deps as never,
+      state,
+    );
+    const errorText = output.parts[0] as { text?: string } | undefined;
+    expect(errorText?.text).toContain("<pasted_image>");
+    expect(errorText?.text).toContain("vision down");
   });
 
   test("syncs processed message ids", () => {
@@ -160,5 +204,96 @@ describe("vision routing", () => {
     };
     syncVisionProcessedMessages(output as never, state);
     expect(state.processedMessageIds.has("m1")).toBe(true);
+  });
+
+  test("auto-stops vision worker after successful analysis", async () => {
+    const state = createVisionRoutingState();
+    const output = {
+      message: { role: "user" },
+      parts: [{ type: "image", base64: "Zm9v", mimeType: "image/png" }],
+    };
+
+    let stopCalled = false;
+    const deps = {
+      workers: {
+        getWorker: () => undefined,
+        spawnById: async () => ({}),
+        send: async () => ({ success: true, response: "Vision ok" }),
+        stopWorker: async () => {
+          stopCalled = true;
+          return true;
+        },
+      },
+      profiles: { vision: { id: "vision", name: "Vision", model: "vision", purpose: "", whenToUse: "" } },
+    };
+
+    await routeVisionMessage(
+      { role: "user", messageID: "msg-stop", sessionID: "session-stop" },
+      output as never,
+      deps as never,
+      state,
+    );
+    expect(stopCalled).toBe(true);
+  });
+
+  test("does not stop vision worker when autoStopVisionWorker is false", async () => {
+    const state = createVisionRoutingState();
+    const output = {
+      message: { role: "user" },
+      parts: [{ type: "image", base64: "Zm9v", mimeType: "image/png" }],
+    };
+
+    let stopCalled = false;
+    const deps = {
+      workers: {
+        getWorker: () => undefined,
+        spawnById: async () => ({}),
+        send: async () => ({ success: true, response: "Vision ok" }),
+        stopWorker: async () => {
+          stopCalled = true;
+          return true;
+        },
+      },
+      profiles: { vision: { id: "vision", name: "Vision", model: "vision", purpose: "", whenToUse: "" } },
+      autoStopVisionWorker: false,
+    };
+
+    await routeVisionMessage(
+      { role: "user", messageID: "msg-no-stop", sessionID: "session-no-stop" },
+      output as never,
+      deps as never,
+      state,
+    );
+    expect(stopCalled).toBe(false);
+  });
+
+  test("handles stopWorker errors gracefully", async () => {
+    const state = createVisionRoutingState();
+    const output = {
+      message: { role: "user" },
+      parts: [{ type: "image", base64: "Zm9v", mimeType: "image/png" }],
+    };
+
+    const deps = {
+      workers: {
+        getWorker: () => undefined,
+        spawnById: async () => ({}),
+        send: async () => ({ success: true, response: "Vision ok" }),
+        stopWorker: async () => {
+          throw new Error("stop failed");
+        },
+      },
+      profiles: { vision: { id: "vision", name: "Vision", model: "vision", purpose: "", whenToUse: "" } },
+    };
+
+    // Should not throw even when stopWorker fails
+    await routeVisionMessage(
+      { role: "user", messageID: "msg-stop-err", sessionID: "session-stop-err" },
+      output as never,
+      deps as never,
+      state,
+    );
+    const resultText = output.parts[0] as { text?: string } | undefined;
+    expect(resultText?.text).toContain("Vision ok");
   });
 });

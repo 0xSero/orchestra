@@ -10,7 +10,7 @@ describe("spawn helpers", () => {
     expect(extractSdkErrorMessage("string")).toBe("string");
     expect(extractSdkErrorMessage({ data: { message: "nested" } })).toBe("nested");
     expect(extractSdkErrorMessage({ message: "plain" })).toBe("plain");
-    expect(extractSdkErrorMessage({ code: "E" })).toContain("\"code\"");
+    expect(extractSdkErrorMessage({ code: "E" })).toContain('"code"');
 
     const circular: any = {};
     circular.self = circular;

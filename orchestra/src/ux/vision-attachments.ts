@@ -124,9 +124,7 @@ const extractSingleImage = async (part: VisionPart, deps?: VisionAttachmentDeps)
 
     if (partUrl === "clipboard" || partUrl?.startsWith("clipboard:")) {
       const clip = await readClipboardImageFn(deps?.clipboardDeps);
-      if (clip) {
-        return { type: "image", mimeType: clip.mimeType, base64: clip.base64 };
-      }
+      if (clip) return { type: "image", mimeType: clip.mimeType, base64: clip.base64 };
     }
 
     if (part.base64 && typeof part.base64 === "string") {

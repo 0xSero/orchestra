@@ -7,13 +7,20 @@ describe("memory auto trimming", () => {
     const globalTrimCalls: Array<{ keepProjects: number }> = [];
 
     const deps = {
-      getMemoryByKey: async () => ({ value: "prev" }),
-      linkMemory: async () => ({ ok: true }),
+      getMemoryByKey: async () => ({
+        scope: "global" as const,
+        key: "summary",
+        value: "prev",
+        tags: [] as string[],
+      }),
+      linkMemory: async () => ({ ok: true }) as const,
       trimGlobalMessageProjects: async (input: { keepProjects: number }) => {
         globalTrimCalls.push(input);
+        return { projectsDropped: 0, messagesDeleted: 0 };
       },
       trimMemoryByKeyPrefix: async (input: { scope: string; keyPrefix: string; keepLatest: number }) => {
         trimCalls.push(input);
+        return { deleted: 0 };
       },
       upsertMemory: async () => ({}) as never,
       loadNeo4jConfig: () => undefined,
@@ -49,12 +56,13 @@ describe("memory auto trimming", () => {
     const deps = {
       getMemoryByKey: async (input: { key: string }) => {
         getCalls.push(input.key);
-        return { value: "prev" };
+        return { scope: "project" as const, key: input.key, value: "prev", tags: [] as string[] };
       },
-      linkMemory: async () => ({ ok: true }),
-      trimGlobalMessageProjects: async () => {},
+      linkMemory: async () => ({ ok: true }) as const,
+      trimGlobalMessageProjects: async () => ({ projectsDropped: 0, messagesDeleted: 0 }),
       trimMemoryByKeyPrefix: async (input: { scope: string; keyPrefix: string; keepLatest: number }) => {
         trimCalls.push(input);
+        return { deleted: 0 };
       },
       upsertMemory: async () => ({}) as never,
       loadNeo4jConfig: () => undefined,

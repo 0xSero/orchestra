@@ -172,7 +172,7 @@ export function createSkillsRouter(deps: SkillsRouterDeps) {
       return;
     }
 
-    if (segments.length === 4 && segments[3] === "spawn" && req.method === "POST") {
+    const handleSpawn = async () => {
       if (!deps.workers) {
         sendJson(res, 501, { error: "Worker manager not available" });
         return;
@@ -188,8 +188,9 @@ export function createSkillsRouter(deps: SkillsRouterDeps) {
       } catch (err) {
         sendJson(res, 400, { error: err instanceof Error ? err.message : "Failed to spawn worker" });
       }
-      return;
-    }
+    };
+
+    if (segments.length === 4 && segments[3] === "spawn" && req.method === "POST") return await handleSpawn();
 
     sendJson(res, 404, { error: "Not found" });
   };

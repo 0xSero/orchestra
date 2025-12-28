@@ -8,9 +8,16 @@ const cfg: LinearConfig = {
   teamId: "team-1",
 };
 
-const withFetchStub = (handler: typeof fetch) => {
+const withFetchStub = (handler: (input: Parameters<typeof fetch>[0], init?: RequestInit) => Promise<Response>) => {
   const original = globalThis.fetch;
-  globalThis.fetch = handler;
+  const stubbedFetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) =>
+    handler(input, init)) as typeof fetch;
+  stubbedFetch.preconnect = (...args: Parameters<typeof fetch.preconnect>) => {
+    if (typeof original.preconnect === "function") {
+      original.preconnect(...args);
+    }
+  };
+  globalThis.fetch = stubbedFetch;
   return () => {
     globalThis.fetch = original;
   };
@@ -56,9 +63,7 @@ describe("linearRequest", () => {
       return new Response(JSON.stringify({ errors: [{ message: "boom" }] }), { status: 200 });
     });
 
-    await expect(linearRequest(cfg, "query Viewer { viewer { id } }")).rejects.toThrow(
-      "Linear API error: boom",
-    );
+    await expect(linearRequest(cfg, "query Viewer { viewer { id } }")).rejects.toThrow("Linear API error: boom");
   });
 
   test("throws when data is missing", async () => {

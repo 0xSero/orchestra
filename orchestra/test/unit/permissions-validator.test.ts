@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { buildToolConfigFromPermissions, mergeToolPermissions, summarizePermissions } from "../../src/permissions/validator";
+import {
+  buildToolConfigFromPermissions,
+  mergeToolPermissions,
+  summarizePermissions,
+} from "../../src/permissions/validator";
 
 describe("permissions validator helpers", () => {
   test("merges tool permissions and paths", () => {

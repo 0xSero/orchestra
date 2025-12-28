@@ -11,9 +11,9 @@ describe("memory auto error handling", () => {
         getMemoryCalls += 1;
         throw new Error("lookup failed");
       },
-      linkMemory: async () => ({ ok: true }),
-      trimGlobalMessageProjects: async () => {},
-      trimMemoryByKeyPrefix: async () => {},
+      linkMemory: async () => ({ ok: true }) as const,
+      trimGlobalMessageProjects: async () => ({ projectsDropped: 0, messagesDeleted: 0 }),
+      trimMemoryByKeyPrefix: async () => ({ deleted: 0 }),
       upsertMemory: async () => ({}) as never,
       loadNeo4jConfig: () => undefined,
     };

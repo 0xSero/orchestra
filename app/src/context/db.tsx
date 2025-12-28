@@ -8,6 +8,7 @@ import {
   useContext,
 } from "solid-js";
 import { createStore } from "solid-js/store";
+import { getSkillsApiBase } from "@/lib/opencode-base";
 import type { DbSnapshot, DbUser, WorkerConfig } from "@/types/db";
 
 type DbContextValue = {
@@ -35,7 +36,7 @@ type DbContextValue = {
 const DbContext = createContext<DbContextValue>();
 
 export const DbProvider: ParentComponent<{ baseUrl?: string }> = (props) => {
-  const apiBase = (props.baseUrl ?? import.meta.env.VITE_SKILLS_API_BASE ?? "http://localhost:4097").replace(/\/$/, "");
+  const apiBase = getSkillsApiBase(props.baseUrl);
 
   const [state, setState] = createStore<DbSnapshot>({
     dbPath: "",

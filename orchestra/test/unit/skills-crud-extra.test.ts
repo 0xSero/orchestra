@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSkill, deleteSkill, duplicateSkill, listSkillOverrides, updateSkill } from "../../src/skills/crud";
@@ -9,10 +9,7 @@ import { getSkillFilePath } from "../../src/skills/paths";
 const writeSkill = async (projectDir: string, id: string) => {
   const filePath = getSkillFilePath(id, "project", projectDir);
   await mkdir(join(projectDir, ".opencode", "skill", id), { recursive: true });
-  const content = serializeSkillFile(
-    { name: id, description: `desc-${id}`, model: "auto" },
-    `Prompt for ${id}`,
-  );
+  const content = serializeSkillFile({ name: id, description: `desc-${id}`, model: "auto" }, `Prompt for ${id}`);
   await writeFile(filePath, content, "utf8");
   return filePath;
 };
@@ -35,7 +32,7 @@ describe("skills crud extra coverage", () => {
 
       const updated = await updateSkill(
         "alpha",
-        { frontmatter: { description: "updated" }, systemPrompt: "Next" },
+        { frontmatter: { description: "updated", model: "auto" }, systemPrompt: "Next" },
         "project",
         projectDir,
       );
@@ -78,7 +75,7 @@ describe("skills crud extra coverage", () => {
   });
 
   test("throws when duplicating missing skills", async () => {
-    await expect(duplicateSkill("missing", "copy", "global")).rejects.toThrow("Source skill \"missing\" not found.");
+    await expect(duplicateSkill("missing", "copy", "global")).rejects.toThrow('Source skill "missing" not found.');
   });
 
   test("lists skill overrides from project dir", async () => {

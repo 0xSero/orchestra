@@ -1,23 +1,24 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, rename } from "node:fs/promises";
+import { mkdir, mkdtemp, rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { profileToSkill, skillToProfile } from "../../src/skills/convert";
 import {
-  resolveProjectDir,
-  hasProjectSkillDirs,
-  getProjectSkillsDir,
-  getProjectSkillsDirs,
   getGlobalSkillsDir,
   getGlobalSubagentsDir,
-  getProjectSubagentsDirs,
+  getProjectSkillsDir,
+  getProjectSkillsDirs,
   getProjectSubagentsDir,
+  getProjectSubagentsDirs,
   getSkillDir,
   getSkillFilePath,
   getSubagentDir,
   getSubagentFilePath,
+  hasProjectSkillDirs,
+  resolveProjectDir,
 } from "../../src/skills/paths";
 import { validateSkillFrontmatter, validateSkillInput } from "../../src/skills/validate";
+import type { SkillFrontmatter } from "../../src/types";
 
 describe("skills convert", () => {
   test("converts profiles to skills and back", () => {
@@ -73,8 +74,8 @@ describe("skills validate", () => {
         categories: { filesystem: "bad" },
         tools: { ask: { enabled: "yes" } },
         paths: { allowed: ["ok", 1] },
-      } as unknown,
-    });
+      },
+    } as unknown as SkillFrontmatter);
     expect(result.valid).toBe(false);
     expect(result.errors.length).toBeGreaterThan(0);
   });

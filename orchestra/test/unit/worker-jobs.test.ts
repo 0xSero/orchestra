@@ -55,9 +55,10 @@ describe("worker job registry", () => {
     expect(listed[0]?.status).toBe("failed");
   });
 
-  test("lists jobs without filters and sorts by recency", () => {
+  test("lists jobs without filters and sorts by recency", async () => {
     const registry = new WorkerJobRegistry();
     const first = registry.create({ workerId: "alpha", message: "one" });
+    await new Promise((resolve) => setTimeout(resolve, 5));
     const second = registry.create({ workerId: "beta", message: "two" });
 
     const listed = registry.list();
@@ -69,6 +70,20 @@ describe("worker job registry", () => {
     const registry = new WorkerJobRegistry();
     const job = registry.create({ workerId: "coder", message: "ping" });
 
-    await expect(registry.await(job.id, { timeoutMs: 1 })).rejects.toThrow("Timed out waiting for job");
+    const originalSetTimeout = globalThis.setTimeout;
+    let captured: (() => void) | undefined;
+    globalThis.setTimeout = ((cb: (...args: any[]) => void) => {
+      captured = cb as () => void;
+      return 0 as unknown as NodeJS.Timeout;
+    }) as typeof setTimeout;
+
+    try {
+      const promise = registry.await(job.id, { timeoutMs: 1 });
+      if (!captured) throw new Error("Expected timeout callback to be scheduled");
+      captured();
+      await expect(promise).rejects.toThrow("Timed out waiting for job");
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+    }
   });
 });

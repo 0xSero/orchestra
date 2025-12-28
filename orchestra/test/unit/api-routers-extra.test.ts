@@ -1,20 +1,23 @@
 import { describe, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
+import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { createDbRouter } from "../../src/api/db-router";
 import { createSessionsRouter } from "../../src/api/sessions-router";
 import { createSkillsRouter } from "../../src/api/skills-router";
 import { createSkillsApiServer } from "../../src/api/skills-server";
 import { createSystemRouter } from "../../src/api/system-router";
 import { createSkillsEvents } from "../../src/skills/events";
-import type { SessionManagerEvent, TrackedSession, WorkerSessionManager } from "../../src/workers";
-import type { WorkerManager } from "../../src/workers";
 import type { Skill, SkillInput, SkillScope } from "../../src/types";
+import type { SessionManagerEvent, TrackedSession, WorkerManager, WorkerSessionManager } from "../../src/workers";
 
-const withServer = async <T>(handler: Parameters<typeof createServer>[0], run: (baseUrl: string) => Promise<T>) => {
-  const server = createServer((req, res) => handler(req, res));
+type RequestHandler = (req: IncomingMessage, res: ServerResponse) => void | Promise<void>;
+
+const withServer = async <T>(handler: RequestHandler, run: (baseUrl: string) => Promise<T>) => {
+  const server = createServer((req, res) => {
+    void handler(req, res);
+  });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
   const { port } = server.address() as AddressInfo;
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -45,6 +48,32 @@ const createMockReq = (input: { url?: string; method?: string; body?: string }) 
     },
     ...asyncIterable,
   } as unknown as IncomingMessage;
+};
+
+const buildSkill = (
+  input: { id: string; frontmatter?: Partial<SkillInput["frontmatter"]>; systemPrompt?: string },
+  scope: SkillScope,
+): Skill => {
+  const frontmatter = {
+    description: input.frontmatter?.description ?? "Test skill",
+    model: input.frontmatter?.model ?? "auto",
+    ...input.frontmatter,
+  };
+  const name = frontmatter.name ?? input.id;
+  const source: Skill["source"] =
+    scope === "global"
+      ? { type: "global", path: "/tmp/opencode-skills" }
+      : { type: "project", path: "/tmp/opencode-skills" };
+  return {
+    id: input.id,
+    frontmatter: { ...frontmatter, name },
+    systemPrompt: input.systemPrompt ?? "",
+    source,
+    filePath: "/tmp/SKILL.md",
+    hasScripts: false,
+    hasReferences: false,
+    hasAssets: false,
+  };
 };
 
 const createMockRes = () => {
@@ -223,7 +252,19 @@ describe("db router extra coverage", () => {
 
   test("handles worker config CRUD and broadcasts snapshots", async () => {
     const now = new Date();
-    const workerConfigs = new Map<string, { id: string; userId: string; workerId: string; model: string | null; temperature: number | null; maxTokens: number | null; enabled: boolean; updatedAt: Date }>();
+    const workerConfigs = new Map<
+      string,
+      {
+        id: string;
+        userId: string;
+        workerId: string;
+        model: string | null;
+        temperature: number | null;
+        maxTokens: number | null;
+        enabled: boolean;
+        updatedAt: Date;
+      }
+    >();
     workerConfigs.set("worker-1", {
       id: "cfg-1",
       userId: "user-1",
@@ -245,7 +286,10 @@ describe("db router extra coverage", () => {
       setPreference: () => {},
       deletePreference: () => {},
       getWorkerConfig: (id: string) => workerConfigs.get(id),
-      setWorkerConfig: (id: string, updates: { model?: string | null; temperature?: number | null; maxTokens?: number | null; enabled?: boolean }) => {
+      setWorkerConfig: (
+        id: string,
+        updates: { model?: string | null; temperature?: number | null; maxTokens?: number | null; enabled?: boolean },
+      ) => {
         const current =
           workerConfigs.get(id) ??
           ({
@@ -452,16 +496,10 @@ describe("skills router extra coverage", () => {
       list: async () => Array.from(skillsStore.values()),
       get: async (id: string) => skillsStore.get(id),
       create: async (input: SkillInput, scope: SkillScope) => {
-        const skill: Skill = {
-          id: input.id,
-          frontmatter: { ...input.frontmatter, name: input.frontmatter.name ?? input.id },
-          systemPrompt: input.systemPrompt ?? "",
-          source: { type: scope },
-          filePath: "/tmp/SKILL.md",
-          hasScripts: false,
-          hasReferences: false,
-          hasAssets: false,
-        };
+        const skill = buildSkill(
+          { id: input.id, frontmatter: input.frontmatter, systemPrompt: input.systemPrompt },
+          scope,
+        );
         skillsStore.set(skill.id, skill);
         return skill;
       },
@@ -505,18 +543,21 @@ describe("skills router extra coverage", () => {
       list: async () => Array.from(store.values()),
       get: async (id: string) => store.get(id),
       create: async (input: SkillInput, scope: SkillScope) => {
-        const skill = { id: input.id, frontmatter: input.frontmatter, systemPrompt: input.systemPrompt, scope } as Skill;
+        const skill = buildSkill(
+          { id: input.id, frontmatter: input.frontmatter, systemPrompt: input.systemPrompt },
+          scope,
+        );
         store.set(input.id, skill);
         events.emit({ type: "skill.created", skill });
         return skill;
       },
       update: async (id: string, updates: Partial<SkillInput>) => {
-        const current = store.get(id) ?? ({ id, frontmatter: { description: "", model: "" }, systemPrompt: "" } as Skill);
+        const current = store.get(id) ?? buildSkill({ id, frontmatter: { description: "", model: "auto" } }, "project");
         const next = {
           ...current,
           frontmatter: { ...current.frontmatter, ...(updates.frontmatter ?? {}) },
           systemPrompt: updates.systemPrompt ?? current.systemPrompt,
-        } as Skill;
+        };
         store.set(id, next);
         events.emit({ type: "skill.updated", skill: next });
         return next;
@@ -527,8 +568,8 @@ describe("skills router extra coverage", () => {
         return true;
       },
       duplicate: async (id: string, newId: string) => {
-        const current = store.get(id) ?? ({ id, frontmatter: { description: "", model: "" }, systemPrompt: "" } as Skill);
-        const dup = { ...current, id: newId } as Skill;
+        const current = store.get(id) ?? buildSkill({ id, frontmatter: { description: "", model: "auto" } }, "project");
+        const dup = { ...current, id: newId };
         store.set(newId, dup);
         events.emit({ type: "skill.created", skill: dup });
         return dup;
@@ -545,7 +586,7 @@ describe("skills router extra coverage", () => {
     const sseReq = createMockReq({ method: "GET", url: "/api/skills/events" });
     const sseRes = createMockRes();
     await handler(sseReq, sseRes);
-    events.emit({ type: "skill.created", skill: { id: "alpha" } as Skill });
+    events.emit({ type: "skill.created", skill: buildSkill({ id: "alpha" }, "project") });
     expect(sseRes.writes.join("")).toContain("skill.created");
 
     await withServer(handler, async (baseUrl) => {
@@ -674,11 +715,11 @@ describe("sessions router extra coverage", () => {
     const sseRes = createMockRes();
     await handler(sseReq, sseRes);
     eventListener?.({
-      type: "session.message",
+      type: "session.activity",
       session,
       activity: session.recentActivity[0],
     });
-    expect(sseRes.writes.join("")).toContain("session.message");
+    expect(sseRes.writes.join("")).toContain("session.activity");
 
     await withServer(handler, async (baseUrl) => {
       const invalidPrefix = await fetch(`${baseUrl}/api/unknown`);
@@ -770,12 +811,12 @@ describe("system router extra coverage", () => {
 
       scenario = "ps-error";
       const psError = await fetch(`${baseUrl}/api/system/processes`);
-      const psErrorData = await psError.json();
+      const psErrorData = (await psError.json()) as { count: number; processes: unknown[] };
       expect(psErrorData.count).toBe(0);
 
       scenario = "success";
       const processes = await fetch(`${baseUrl}/api/system/processes`);
-      const processData = await processes.json();
+      const processData = (await processes.json()) as { processes: Array<{ type: string }> };
       expect(processData.processes.some((p: { type: string }) => p.type === "opencode-main")).toBe(true);
       expect(processData.processes.some((p: { type: string }) => p.type === "bun")).toBe(true);
 
@@ -785,12 +826,12 @@ describe("system router extra coverage", () => {
 
       scenario = "kill-partial";
       const killAllRes = await fetch(`${baseUrl}/api/system/processes/kill-all-serve`, { method: "POST" });
-      const killAllData = await killAllRes.json();
+      const killAllData = (await killAllRes.json()) as { errors: string[] };
       expect(killAllData.errors.length).toBeGreaterThan(0);
 
       scenario = "ps-error";
       const killAllFail = await fetch(`${baseUrl}/api/system/processes/kill-all-serve`, { method: "POST" });
-      const killAllFailData = await killAllFail.json();
+      const killAllFailData = (await killAllFail.json()) as { errors: string[] };
       expect(killAllFailData.errors.length).toBe(0);
     });
 
@@ -802,7 +843,7 @@ describe("system router extra coverage", () => {
     });
     await withServer(errorHandler, async (baseUrl) => {
       const killAll = await fetch(`${baseUrl}/api/system/processes/kill-all-serve`, { method: "POST" });
-      const data = await killAll.json();
+      const data = (await killAll.json()) as { errors: string[] };
       expect(data.errors.length).toBeGreaterThan(0);
     });
   });
@@ -817,23 +858,17 @@ describe("skills API server extra coverage", () => {
       list: async () => Array.from(store.values()),
       get: async (id: string) => store.get(id),
       create: async (input: SkillInput, scope: SkillScope) => {
-        const skill: Skill = {
-          id: input.id,
-          frontmatter: { ...input.frontmatter, name: input.frontmatter.name ?? input.id },
-          systemPrompt: input.systemPrompt ?? "",
-          source: { type: scope },
-          filePath: "/tmp/SKILL.md",
-          hasScripts: false,
-          hasReferences: false,
-          hasAssets: false,
-        };
+        const skill = buildSkill(
+          { id: input.id, frontmatter: input.frontmatter, systemPrompt: input.systemPrompt },
+          scope,
+        );
         store.set(skill.id, skill);
         return skill;
       },
-      update: async (id: string) => store.get(id) as Skill,
+      update: async (id: string) => store.get(id) ?? buildSkill({ id }, "project"),
       delete: async () => true,
       duplicate: async (id: string, newId: string) => {
-        const current = store.get(id) as Skill;
+        const current = store.get(id) ?? buildSkill({ id }, "project");
         const clone = { ...current, id: newId };
         store.set(newId, clone);
         return clone;
@@ -901,16 +936,8 @@ describe("skills API server extra coverage", () => {
       events,
       list: async () => [],
       get: async () => undefined,
-      create: async (input: SkillInput, scope: SkillScope) => ({
-        id: input.id,
-        frontmatter: { ...input.frontmatter, name: input.frontmatter.name ?? input.id },
-        systemPrompt: input.systemPrompt ?? "",
-        source: { type: scope },
-        filePath: "/tmp/SKILL.md",
-        hasScripts: false,
-        hasReferences: false,
-        hasAssets: false,
-      }),
+      create: async (input: SkillInput, scope: SkillScope) =>
+        buildSkill({ id: input.id, frontmatter: input.frontmatter, systemPrompt: input.systemPrompt }, scope),
       update: async () => undefined as never,
       delete: async () => true,
       duplicate: async () => undefined as never,

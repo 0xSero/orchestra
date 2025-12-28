@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Provider } from "@opencode-ai/sdk";
-import type { OrchestratorConfig, WorkerProfile } from "../../src/types";
+import type { Model, Provider } from "@opencode-ai/sdk";
 import { normalizeAliases, resolveAlias } from "../../src/models/aliases";
 import { resolveCapabilityOverride } from "../../src/models/capability-overrides";
 import {
@@ -19,59 +18,122 @@ import {
 import { averageCostPer1kTokens, scoreCost } from "../../src/models/cost";
 import { hydrateProfileModelsFromOpencode } from "../../src/models/hydrate";
 import { resolveModel } from "../../src/models/resolver";
+import type { OrchestratorConfig, WorkerProfile } from "../../src/types";
+
+type CapabilityOverrides = Omit<Partial<Model["capabilities"]>, "input" | "output"> & {
+  input?: Partial<Model["capabilities"]["input"]>;
+  output?: Partial<Model["capabilities"]["output"]>;
+};
+
+const buildModel = (input: {
+  id: string;
+  providerID: string;
+  name: string;
+  status?: Model["status"];
+  capabilities?: CapabilityOverrides;
+  limit?: Model["limit"];
+  cost?: Model["cost"];
+}): Model => {
+  const baseInput = { text: true, audio: false, image: false, video: false, pdf: false };
+  const baseOutput = { text: true, audio: false, image: false, video: false, pdf: false };
+  const capabilities = {
+    temperature: false,
+    reasoning: false,
+    attachment: false,
+    toolcall: false,
+    ...input.capabilities,
+    input: { ...baseInput, ...input.capabilities?.input },
+    output: { ...baseOutput, ...input.capabilities?.output },
+  };
+  return {
+    id: input.id,
+    providerID: input.providerID,
+    api: { id: input.providerID, url: "https://api.example.com", npm: "@opencode-ai/sdk" },
+    name: input.name,
+    capabilities,
+    cost: input.cost ?? { input: 0, output: 0, cache: { read: 0, write: 0 } },
+    limit: input.limit ?? { context: 0, output: 0 },
+    status: input.status ?? "active",
+    options: {},
+    headers: {},
+  };
+};
+
+const buildProvider = (input: {
+  id: string;
+  source: Provider["source"];
+  models: Record<string, Model>;
+  key?: string;
+  name?: string;
+  env?: string[];
+  options?: Record<string, unknown>;
+}): Provider => ({
+  id: input.id,
+  name: input.name ?? input.id,
+  source: input.source,
+  env: input.env ?? [],
+  key: input.key,
+  options: input.options ?? {},
+  models: input.models,
+});
 
 const providers: Provider[] = [
-  {
+  buildProvider({
     id: "opencode",
     source: "config",
     models: {
-      "gpt-5-nano": {
+      "gpt-5-nano": buildModel({
         id: "gpt-5-nano",
+        providerID: "opencode",
         name: "GPT-5 Nano Vision",
         status: "active",
         capabilities: {
           attachment: true,
           toolcall: true,
           reasoning: true,
-          input: { text: true, image: true },
+          input: { text: true, audio: false, image: true, video: false, pdf: false },
         },
         limit: { context: 128000, output: 4096 },
-        cost: { input: 0.01, output: 0.02 },
-      },
-      "legacy-model": {
+        cost: { input: 0.01, output: 0.02, cache: { read: 0, write: 0 } },
+      }),
+      "legacy-model": buildModel({
         id: "legacy-model",
+        providerID: "opencode",
         name: "Legacy",
         status: "deprecated",
-        capabilities: { input: { text: true } },
+        capabilities: { input: { text: true, audio: false, image: false, video: false, pdf: false } },
         limit: { context: 16000, output: 1024 },
-      },
+        cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+      }),
     },
-  },
-  {
+  }),
+  buildProvider({
     id: "fast-provider",
     source: "env",
     key: "fast-key",
     models: {
-      "fast-mini": {
+      "fast-mini": buildModel({
         id: "fast-mini",
+        providerID: "fast-provider",
         name: "Fast Mini",
-        capabilities: { input: { text: true } },
+        capabilities: { input: { text: true, audio: false, image: false, video: false, pdf: false } },
         limit: { context: 32000, output: 2048 },
-        cost: { input: 0.001, output: 0.002 },
-      },
+        cost: { input: 0.001, output: 0.002, cache: { read: 0, write: 0 } },
+      }),
     },
-  },
-  {
+  }),
+  buildProvider({
     id: "api-provider",
     source: "api",
     models: {
-      "api-model": {
+      "api-model": buildModel({
         id: "api-model",
+        providerID: "api-provider",
         name: "API Model",
-        capabilities: { input: { text: true } },
-      },
+        capabilities: { input: { text: true, audio: false, image: false, video: false, pdf: false } },
+      }),
     },
-  },
+  }),
 ];
 
 describe("model helpers", () => {
@@ -90,9 +152,11 @@ describe("model helpers", () => {
 
   test("computes costs and scores", () => {
     expect(averageCostPer1kTokens({ inputCostPer1kTokens: 0.01, outputCostPer1kTokens: 0.03 } as never)).toBe(0.02);
-    expect(scoreCost({ inputCostPer1kTokens: 0.2, outputCostPer1kTokens: 0.2 } as never, {
-      maxCostPer1kTokens: 0.1,
-    })).toEqual({ score: -100, tooExpensive: true });
+    expect(
+      scoreCost({ inputCostPer1kTokens: 0.2, outputCostPer1kTokens: 0.2 } as never, {
+        maxCostPer1kTokens: 0.1,
+      }),
+    ).toEqual({ score: -100, tooExpensive: true });
     expect(scoreCost({} as never, { mode: "economical" })).toEqual({ score: -20, tooExpensive: false });
   });
 
@@ -142,7 +206,19 @@ describe("model helpers", () => {
   test("filters configured providers", () => {
     const withApiKey: Provider[] = [
       ...providers,
-      { id: "api-keyed", source: "api", key: "token", models: { "api-fast": { id: "api-fast" } } },
+      buildProvider({
+        id: "api-keyed",
+        source: "api",
+        key: "token",
+        models: {
+          "api-fast": buildModel({
+            id: "api-fast",
+            providerID: "api-keyed",
+            name: "API Fast",
+            capabilities: { input: { text: true, audio: false, image: false, video: false, pdf: false } },
+          }),
+        },
+      }),
     ];
     const filtered = filterProviders(withApiKey, "configured");
     const ids = filtered.map((p) => p.id);
@@ -215,20 +291,30 @@ describe("model helpers", () => {
 
   test("prefers selected provider when exact matches collide", () => {
     const duplicated: Provider[] = [
-      {
+      buildProvider({
         id: "primary",
         source: "config",
         models: {
-          shared: { id: "shared", name: "Shared", capabilities: { input: { text: true } } },
+          shared: buildModel({
+            id: "shared",
+            providerID: "primary",
+            name: "Shared",
+            capabilities: { input: { text: true, audio: false, image: false, video: false, pdf: false } },
+          }),
         },
-      },
-      {
+      }),
+      buildProvider({
         id: "secondary",
         source: "config",
         models: {
-          shared: { id: "shared", name: "Shared", capabilities: { input: { text: true } } },
+          shared: buildModel({
+            id: "shared",
+            providerID: "secondary",
+            name: "Shared",
+            capabilities: { input: { text: true, audio: false, image: false, video: false, pdf: false } },
+          }),
         },
-      },
+      }),
     ];
 
     const result = resolveModel("shared", {
@@ -244,17 +330,18 @@ describe("model helpers", () => {
 
   test("reports auto tag errors with suggestions", () => {
     const simpleProviders: Provider[] = [
-      {
+      buildProvider({
         id: "provider",
         source: "config",
         models: {
-          "basic-model": {
+          "basic-model": buildModel({
             id: "basic-model",
+            providerID: "provider",
             name: "Basic",
-            capabilities: { input: { text: true } },
-          },
+            capabilities: { input: { text: true, audio: false, image: false, video: false, pdf: false } },
+          }),
         },
-      },
+      }),
     ];
 
     const result = resolveModel("auto:docs", { providers: simpleProviders });

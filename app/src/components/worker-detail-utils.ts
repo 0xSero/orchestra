@@ -28,9 +28,7 @@ export const getMessageDisplay = (message: Message, getMessageParts: (messageId:
   const allFiles = getFileParts(parts);
 
   // Hide images if vision analysis was performed (they've been converted to text)
-  const files = hasVisionAnalysis(text)
-    ? allFiles.filter((f) => !f.mime?.startsWith("image/"))
-    : allFiles;
+  const files = hasVisionAnalysis(text) ? allFiles.filter((f) => !f.mime?.startsWith("image/")) : allFiles;
 
   return { text, files };
 };

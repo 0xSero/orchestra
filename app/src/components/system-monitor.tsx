@@ -4,6 +4,7 @@
  */
 
 import { type Component, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { getSkillsApiBase } from "@/lib/opencode-base";
 import { getTypeBadgeClass, getTypeLabel, PROCESS_FILTERS, type ProcessType } from "./system-monitor-utils";
 
 type ProcessInfo = {
@@ -22,9 +23,8 @@ type SystemStats = {
   count: number;
 };
 
-const SKILLS_API_URL = "http://127.0.0.1:4097";
-
 export const SystemMonitor: Component = () => {
+  const apiBase = getSkillsApiBase();
   const [stats, setStats] = createSignal<SystemStats | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
@@ -35,7 +35,7 @@ export const SystemMonitor: Component = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${SKILLS_API_URL}/api/system/processes`);
+      const res = await fetch(`${apiBase}/api/system/processes`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setStats(data);
@@ -49,7 +49,7 @@ export const SystemMonitor: Component = () => {
   const killProcess = async (pid: number) => {
     setKillingPid(pid);
     try {
-      const res = await fetch(`${SKILLS_API_URL}/api/system/processes/${pid}`, {
+      const res = await fetch(`${apiBase}/api/system/processes/${pid}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -65,7 +65,7 @@ export const SystemMonitor: Component = () => {
     if (!confirm("Kill all OpenCode server processes? This will terminate all background workers.")) return;
     setLoading(true);
     try {
-      const res = await fetch(`${SKILLS_API_URL}/api/system/processes/kill-all-serve`, {
+      const res = await fetch(`${apiBase}/api/system/processes/kill-all-serve`, {
         method: "POST",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -184,7 +184,7 @@ export const SystemMonitor: Component = () => {
       {/* Error state */}
       <Show when={error()}>
         <div class="flex-shrink-0 px-6 py-3 bg-destructive/5 border-b border-destructive/20">
-          <p class="text-xs text-destructive">Connection error: Could not reach Orchestra server on port 4097</p>
+          <p class="text-xs text-destructive">Connection error: Could not reach Orchestra system API at {apiBase}</p>
         </div>
       </Show>
 

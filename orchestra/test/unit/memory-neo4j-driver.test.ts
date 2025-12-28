@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test, mock } from "bun:test";
+import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { setNeo4jIntegrationsConfig } from "../../src/memory/neo4j-config";
 
 let closeCalls = 0;
@@ -34,7 +34,6 @@ describe("neo4j driver helpers", () => {
       auth: { basic: () => "auth" },
       driver: () => makeDriver(),
     }));
-
   });
 
   test("caches drivers, closes sessions, and checks accessibility", async () => {
@@ -83,11 +82,14 @@ describe("neo4j driver helpers", () => {
     } finally {
       if (envSnapshot.OPENCODE_NEO4J_URI) process.env.OPENCODE_NEO4J_URI = envSnapshot.OPENCODE_NEO4J_URI;
       else delete process.env.OPENCODE_NEO4J_URI;
-      if (envSnapshot.OPENCODE_NEO4J_USERNAME) process.env.OPENCODE_NEO4J_USERNAME = envSnapshot.OPENCODE_NEO4J_USERNAME;
+      if (envSnapshot.OPENCODE_NEO4J_USERNAME)
+        process.env.OPENCODE_NEO4J_USERNAME = envSnapshot.OPENCODE_NEO4J_USERNAME;
       else delete process.env.OPENCODE_NEO4J_USERNAME;
-      if (envSnapshot.OPENCODE_NEO4J_PASSWORD) process.env.OPENCODE_NEO4J_PASSWORD = envSnapshot.OPENCODE_NEO4J_PASSWORD;
+      if (envSnapshot.OPENCODE_NEO4J_PASSWORD)
+        process.env.OPENCODE_NEO4J_PASSWORD = envSnapshot.OPENCODE_NEO4J_PASSWORD;
       else delete process.env.OPENCODE_NEO4J_PASSWORD;
-      if (envSnapshot.OPENCODE_NEO4J_DATABASE) process.env.OPENCODE_NEO4J_DATABASE = envSnapshot.OPENCODE_NEO4J_DATABASE;
+      if (envSnapshot.OPENCODE_NEO4J_DATABASE)
+        process.env.OPENCODE_NEO4J_DATABASE = envSnapshot.OPENCODE_NEO4J_DATABASE;
       else delete process.env.OPENCODE_NEO4J_DATABASE;
       setNeo4jIntegrationsConfig(undefined);
     }

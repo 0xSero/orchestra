@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getUserConfigDir } from "../../src/helpers/format";
@@ -117,6 +117,10 @@ describe("memory file store", () => {
 
     const tagged = await searchMemory({ scope: "global", query: "beta", limit: 5 });
     expect(tagged[0]?.key).toBe("note:2");
+
+    const multi = await searchMemory({ scope: "global", query: "note", limit: 5 });
+    expect(multi[0]?.key).toBe("note:2");
+    expect(multi[1]?.key).toBe("note:1");
 
     const recent = await recentMemory({ scope: "global", limit: 2 });
     expect(recent.length).toBeGreaterThan(1);

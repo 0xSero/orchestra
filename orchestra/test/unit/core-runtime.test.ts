@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createTestCoreRuntime } from "../helpers/core-runtime";
 import type { WorkerProfile } from "../../src/types";
+import { createTestCoreRuntime } from "../helpers/core-runtime";
 
 describe("core runtime helper", () => {
   test("creates and stops the runtime", async () => {

@@ -1,3 +1,4 @@
+import type { MemoryNode } from "./graph/shared";
 import { loadNeo4jConfig, type Neo4jConfig } from "./neo4j";
 import type { MemoryScope } from "./store";
 import { getMemoryByKey, linkMemory, trimGlobalMessageProjects, trimMemoryByKeyPrefix, upsertMemory } from "./store";
@@ -75,8 +76,7 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
       value: normalizeForMemory(text, maxChars),
       tags,
     });
-  } catch {
-  }
+  } catch {}
 
   const projectKey = projectId ? `project:${projectId}` : undefined;
   const userKey = `user:${userId}`;
@@ -90,8 +90,7 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
       value: `User ${userId}`,
       tags: ["user"],
     });
-  } catch {
-  }
+  } catch {}
 
   // Also keep a lightweight global index of known users/projects for cross-project retrieval.
   try {
@@ -102,8 +101,7 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
       value: `User ${userId}`,
       tags: ["user"],
     });
-  } catch {
-  }
+  } catch {}
 
   if (projectKey) {
     try {
@@ -115,8 +113,7 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
         value: `Project ${projectId}`,
         tags: ["project"],
       });
-    } catch {
-    }
+    } catch {}
 
     try {
       await upsertMemoryFn({
@@ -126,8 +123,7 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
         value: `Project ${projectId}`,
         tags: ["project"],
       });
-    } catch {
-    }
+    } catch {}
   }
 
   try {
@@ -139,8 +135,7 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
       toKey: userKey,
       type: "belongs_to_user",
     });
-  } catch {
-  }
+  } catch {}
 
   if (projectKey) {
     try {
@@ -152,8 +147,7 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
         toKey: projectKey,
         type: "belongs_to_project",
       });
-    } catch {
-    }
+    } catch {}
   }
 
   const summariesEnabled = input.summaries?.enabled !== false;
@@ -165,7 +159,7 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
     const globalProjectSummaryKey = `summary:project:${projectId}`;
 
     if (input.scope === "project") {
-      let prev;
+      let prev: MemoryNode | undefined;
       try {
         prev = await getMemoryByKeyFn({ cfg, scope: "project", projectId, key: "summary:project" });
       } catch {
@@ -181,12 +175,11 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
           value: next,
           tags: ["summary", "project"],
         });
-      } catch {
-      }
+      } catch {}
 
       const sessionMaxChars = clamp(input.summaries?.sessionMaxChars ?? 2000, 200, 20000);
       const sessionKey = `summary:session:${session}`;
-      let prevSession;
+      let prevSession: MemoryNode | undefined;
       try {
         prevSession = await getMemoryByKeyFn({ cfg, scope: "project", projectId, key: sessionKey });
       } catch {
@@ -202,12 +195,11 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
           value: nextSession,
           tags: ["summary", "session", `session:${session}`],
         });
-      } catch {
-      }
+      } catch {}
     }
 
     // Always update a global per-project summary for cross-project retrieval.
-    let prevGlobal;
+    let prevGlobal: MemoryNode | undefined;
     try {
       prevGlobal = await getMemoryByKeyFn({ cfg, scope: "global", key: globalProjectSummaryKey });
     } catch {
@@ -222,8 +214,7 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
         value: nextGlobal,
         tags: ["summary", "project", `project:${projectId}`],
       });
-    } catch {
-    }
+    } catch {}
   }
 
   // Trimming: keep memory bounded.
@@ -247,8 +238,7 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
         keyPrefix: prefix,
         keepLatest: sessionLimit,
       });
-    } catch {
-    }
+    } catch {}
   }
 
   if (projectLimit !== undefined && projectId) {
@@ -261,21 +251,18 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
         keyPrefix: prefix,
         keepLatest: projectLimit,
       });
-    } catch {
-    }
+    } catch {}
   }
 
   if (input.scope === "global" && globalLimit !== undefined) {
     try {
       await trimMemoryByKeyPrefixFn({ cfg, scope: "global", keyPrefix: "message:", keepLatest: globalLimit });
-    } catch {
-    }
+    } catch {}
   }
 
   if (input.scope === "global" && projectsLimit !== undefined) {
     try {
       await trimGlobalMessageProjectsFn({ cfg, keepProjects: projectsLimit });
-    } catch {
-    }
+    } catch {}
   }
 }

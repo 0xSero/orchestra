@@ -48,16 +48,12 @@ export const replaceImagesWithText = (
   if (withoutImages.length === parts.length) return parts;
 
   // Find first text part and prepend image description to it
-  let foundText = false;
   for (let i = 0; i < withoutImages.length; i += 1) {
     const part = withoutImages[i];
-    if (part?.type === "text" && typeof part.text === "string") {
-      part.text = `${text}\n\n${part.text}`;
-      foundText = true;
-      break;
-    }
+    if (part?.type !== "text" || typeof part.text !== "string") continue;
+    part.text = `${text}\n\n${part.text}`;
+    return withoutImages;
   }
-  if (foundText) return withoutImages;
 
   // No text part found - create one with just the image description
   withoutImages.unshift({

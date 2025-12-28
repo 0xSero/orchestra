@@ -289,10 +289,7 @@ export async function getRepoContext(options: {
  * Get repo context formatted for worker prompt injection.
  * Returns undefined if no context can be gathered.
  */
-export async function getRepoContextForWorker(
-  directory: string,
-  deps?: RepoContextDeps,
-): Promise<string | undefined> {
+export async function getRepoContextForWorker(directory: string, deps?: RepoContextDeps): Promise<string | undefined> {
   const context = await getRepoContext({
     directory,
     maxReadmeChars: 6000,

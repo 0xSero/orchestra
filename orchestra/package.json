@@ -19,7 +19,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target bun --external @opencode-ai/sdk --external @opencode-ai/plugin --external zod && cp scripts/worker-bridge-plugin.mjs dist/worker-bridge-plugin.mjs",
+    "build": "bun build ./src/index.ts --outdir ./dist --target bun --external @opencode-ai/sdk --external @opencode-ai/plugin --external zod && if [ -f scripts/worker-bridge-plugin.mjs ]; then cp scripts/worker-bridge-plugin.mjs dist/worker-bridge-plugin.mjs; fi",
     "dev": "bun --watch src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",

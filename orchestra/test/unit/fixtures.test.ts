@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { createTestConfig, createTestProfile, createMockJobs, createMockProviders } from "../helpers/fixtures-factories";
+import {
+  createMockJobs,
+  createMockProviders,
+  createTestConfig,
+  createTestProfile,
+} from "../helpers/fixtures-factories";
 import { createTestFixtures } from "../helpers/fixtures-manager";
 
 describe("fixture factories", () => {

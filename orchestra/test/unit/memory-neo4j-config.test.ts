@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -35,7 +35,13 @@ describe("neo4j config", () => {
   beforeEach(async () => {
     const moduleUrl = new URL("../../src/memory/neo4j-config.ts", import.meta.url);
     const mod = (await import(`${moduleUrl.href}?v=${Date.now()}`)) as Neo4jConfigModule;
-    ({ getNeo4jIntegrationsConfig, loadNeo4jConfig, loadNeo4jConfigFromEnv, loadNeo4jConfigFromIntegrations, setNeo4jIntegrationsConfig } = mod);
+    ({
+      getNeo4jIntegrationsConfig,
+      loadNeo4jConfig,
+      loadNeo4jConfigFromEnv,
+      loadNeo4jConfigFromIntegrations,
+      setNeo4jIntegrationsConfig,
+    } = mod);
     envState = envSnapshot();
     tempDir = await mkdtemp(join(tmpdir(), "neo4j-config-"));
     process.env.HOME = tempDir;

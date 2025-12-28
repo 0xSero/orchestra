@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { createWorkerManager } from "../../src/workers/manager";
 import type { WorkerInstance, WorkerProfile } from "../../src/types";
+import { createWorkerManager } from "../../src/workers/manager";
 
 describe("worker manager", () => {
   test("requires api dependency", () => {
@@ -32,7 +32,10 @@ describe("worker manager", () => {
     const spawnWorker = async (input: {
       registry: { register: (instance: WorkerInstance) => void };
       profile: WorkerProfile;
-      callbacks?: { onModelResolved?: (change: { profileId: string; from: string; to: string; reason: string }) => void; onModelFallback?: (profileId: string, model: string, reason: string) => void };
+      callbacks?: {
+        onModelResolved?: (change: { profileId: string; from: string; to: string; reason: string }) => void;
+        onModelFallback?: (profileId: string, model: string, reason: string) => void;
+      };
     }) => {
       input.callbacks?.onModelResolved?.({ profileId: input.profile.id, from: "a", to: "b", reason: "test" });
       input.callbacks?.onModelFallback?.(input.profile.id, input.profile.model, "fallback");
@@ -153,7 +156,10 @@ describe("worker manager", () => {
         memory: memory as never,
         sendWorkerMessage: sendWorkerMessage as never,
         cleanupWorkerInstance: cleanupWorkerInstance as never,
-        spawnWorker: async (input: { registry: { register: (instance: WorkerInstance) => void }; profile: WorkerProfile }) => {
+        spawnWorker: async (input: {
+          registry: { register: (instance: WorkerInstance) => void };
+          profile: WorkerProfile;
+        }) => {
           const instance: WorkerInstance = {
             profile: input.profile,
             status: "ready",
@@ -210,11 +216,14 @@ describe("worker manager", () => {
         communication: {
           emit: (type: string) => events.push(type),
         } as never,
-        sendWorkerMessage: async (input: { registry: { updateStatus: (id: string, status: string, error?: string) => void } }) => {
+        sendWorkerMessage: async (input) => {
           input.registry.updateStatus("alpha", "error", "boom");
           return { success: false, error: "boom" };
         },
-        spawnWorker: async (input: { registry: { register: (instance: WorkerInstance) => void }; profile: WorkerProfile }) => {
+        spawnWorker: async (input: {
+          registry: { register: (instance: WorkerInstance) => void };
+          profile: WorkerProfile;
+        }) => {
           const instance: WorkerInstance = {
             profile: input.profile,
             status: "ready",
@@ -243,6 +252,8 @@ describe("worker manager", () => {
     const awaited = await manager.jobs.await(job.id, { timeoutMs: 10 });
     expect(awaited.status).toBe("failed");
     expect(events).toContain("orchestra.worker.job");
+    await manager.stopWorker("alpha");
+    expect(events).toContain("orchestra.worker.stopped");
     await manager.stop();
   });
 

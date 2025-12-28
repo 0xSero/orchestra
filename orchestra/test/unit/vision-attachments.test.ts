@@ -3,8 +3,10 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { VisionPart } from "../../src/ux/vision-types";
 import { __test__, extractVisionAttachments } from "../../src/ux/vision-attachments";
+import type { VisionPart } from "../../src/ux/vision-types";
+
+type ClipboardDeps = NonNullable<Parameters<typeof __test__.readClipboardImage>[0]>;
 
 describe("vision attachments", () => {
   test("extracts file, file URL, data URL, and base64 image parts", async () => {
@@ -37,12 +39,9 @@ describe("vision attachments", () => {
   });
 
   test("uses a provided clipboard reader", async () => {
-    const attachments = await extractVisionAttachments(
-      [{ type: "image", url: "clipboard" }],
-      {
-        readClipboardImage: async () => ({ mimeType: "image/png", base64: "aGVsbG8=" }),
-      },
-    );
+    const attachments = await extractVisionAttachments([{ type: "image", url: "clipboard" }], {
+      readClipboardImage: async () => ({ mimeType: "image/png", base64: "aGVsbG8=" }),
+    });
     expect(attachments[0]?.base64).toBe("aGVsbG8=");
   });
 
@@ -55,43 +54,43 @@ describe("vision attachments", () => {
     const darwin = await __test__.readClipboardImage({
       platform: "darwin",
       tmpdir: () => tmpdir(),
-      execFileAsync: async () => ({ stdout: "", stderr: "" } as { stdout: string; stderr: string }),
-      readFile: async () => Buffer.from("clip"),
-      unlink: async () => {},
+      execFileAsync: (async () => ({ stdout: "", stderr: "" })) as unknown as ClipboardDeps["execFileAsync"],
+      readFile: (async () => Buffer.from("clip")) as unknown as ClipboardDeps["readFile"],
+      unlink: (async () => {}) as unknown as ClipboardDeps["unlink"],
     });
     expect(darwin?.base64).toBe(Buffer.from("clip").toString("base64"));
 
     const darwinCleanup = await __test__.readClipboardImage({
       platform: "darwin",
       tmpdir: () => tmpdir(),
-      execFileAsync: async () => ({ stdout: "", stderr: "" } as { stdout: string; stderr: string }),
-      readFile: async () => Buffer.from("clip2"),
-      unlink: async () => {
+      execFileAsync: (async () => ({ stdout: "", stderr: "" })) as unknown as ClipboardDeps["execFileAsync"],
+      readFile: (async () => Buffer.from("clip2")) as unknown as ClipboardDeps["readFile"],
+      unlink: (async () => {
         throw new Error("unlink failed");
-      },
+      }) as unknown as ClipboardDeps["unlink"],
     });
     expect(darwinCleanup?.base64).toBe(Buffer.from("clip2").toString("base64"));
 
     const linux = await __test__.readClipboardImage({
       platform: "linux",
-      execFileAsync: async () => ({ stdout: Buffer.from("clip") } as { stdout: Buffer }),
+      execFileAsync: (async () => ({ stdout: Buffer.from("clip") })) as unknown as ClipboardDeps["execFileAsync"],
     });
     expect(linux?.base64).toBe(Buffer.from("clip").toString("base64"));
 
     const linuxFallback = await __test__.readClipboardImage({
       platform: "linux",
-      execFileAsync: async (command: string) => {
+      execFileAsync: (async (command: string) => {
         if (command === "wl-paste") throw new Error("fail");
-        return { stdout: Buffer.from("clip2") } as { stdout: Buffer };
-      },
+        return { stdout: Buffer.from("clip2") };
+      }) as unknown as ClipboardDeps["execFileAsync"],
     });
     expect(linuxFallback?.base64).toBe(Buffer.from("clip2").toString("base64"));
 
     const linuxEmpty = await __test__.readClipboardImage({
       platform: "linux",
-      execFileAsync: async () => {
+      execFileAsync: (async () => {
         throw new Error("fail");
-      },
+      }) as unknown as ClipboardDeps["execFileAsync"],
     });
     expect(linuxEmpty).toBeUndefined();
   });

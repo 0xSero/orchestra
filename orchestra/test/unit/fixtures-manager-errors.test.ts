@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { TestFixturesDeps } from "../helpers/fixtures-manager";
 
 describe("fixture manager error handling", () => {
   test("handles missing fixture directories and cleanup errors", async () => {
@@ -11,7 +12,7 @@ describe("fixture manager error handling", () => {
       const fixtures = createTestFixtures({
         existsSync: () => true,
         mkdir: async () => {},
-        mkdtemp: async () => "/tmp/test-fixture",
+        mkdtemp: (async () => "/tmp/test-fixture") as unknown as TestFixturesDeps["mkdtemp"],
         readdir: async () => {
           throw new Error("missing");
         },
@@ -35,12 +36,8 @@ describe("fixture manager error handling", () => {
       const tmpDir = await fixtures.createTempDir();
       expect(tmpDir).toBe("/tmp/test-fixture");
 
-      await expect(fixtures.loadConfig("missing")).rejects.toThrow(
-        "Config fixture not found: missing",
-      );
-      await expect(fixtures.loadProfile("missing")).rejects.toThrow(
-        "Profile fixture not found: missing",
-      );
+      await expect(fixtures.loadConfig("missing")).rejects.toThrow("Config fixture not found: missing");
+      await expect(fixtures.loadProfile("missing")).rejects.toThrow("Profile fixture not found: missing");
 
       await fixtures.cleanup();
       expect(warnings.length).toBe(1);

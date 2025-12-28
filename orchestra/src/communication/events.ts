@@ -3,7 +3,7 @@ import type { Skill, SkillScope, WorkerForwardEvent, WorkerInstance, WorkerSessi
 import type { WorkerJob } from "../workers/jobs";
 
 export type OrchestraEventMeta = {
-  source: "orchestrator" | "worker" | "sdk" | "session-manager" | "event-forwarding";
+  source: "orchestrator" | "worker" | "sdk" | "session-manager" | "event-forwarding" | "vision";
   sessionId?: string;
   workerId?: string;
   jobId?: string;
@@ -86,6 +86,8 @@ export type OrchestraEventMap = {
   "orchestra.worker.stream": { chunk: StreamChunk };
   "orchestra.worker.response": { worker: WorkerInstance; response: string; jobId?: string };
   "orchestra.worker.wakeup": { workerId: string; jobId?: string; reason: string; summary?: string };
+  "orchestra.vision.started": { sessionId: string; messageId?: string };
+  "orchestra.vision.completed": { success: boolean; error?: string; durationMs?: number };
   // Session events
   "orchestra.session.created": SessionCreatedPayload;
   "orchestra.session.activity": SessionActivityPayload;

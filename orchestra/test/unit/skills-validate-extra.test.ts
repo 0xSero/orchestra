@@ -7,7 +7,7 @@ describe("skills validate extra coverage", () => {
     const frontmatter = {
       description: "x".repeat(2000),
       model: "auto",
-    } as SkillFrontmatter;
+    } as unknown as SkillFrontmatter;
 
     const result = validateSkillFrontmatter(frontmatter);
     expect(result.valid).toBe(false);
@@ -21,7 +21,7 @@ describe("skills validate extra coverage", () => {
       description: "valid",
       model: "auto",
       permissions: "bad" as unknown,
-    } as SkillFrontmatter;
+    } as unknown as SkillFrontmatter;
     const result = validateSkillFrontmatter(frontmatter);
     expect(result.errors.some((err) => err.field === "permissions")).toBe(true);
   });
@@ -39,7 +39,7 @@ describe("skills validate extra coverage", () => {
         },
         paths: { allowed: ["src"], denied: ["dist"] },
       },
-    } as SkillFrontmatter;
+    } as unknown as SkillFrontmatter;
 
     const result = validateSkillFrontmatter(frontmatter);
     expect(result.errors.some((err) => err.field.includes("permissions.categories"))).toBe(true);
@@ -57,7 +57,7 @@ describe("skills validate extra coverage", () => {
         tools: "bad",
         paths: "bad",
       },
-    } as SkillFrontmatter;
+    } as unknown as SkillFrontmatter;
 
     const result = validateSkillFrontmatter(frontmatter);
     expect(result.errors.some((err) => err.field === "permissions.categories")).toBe(true);

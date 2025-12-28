@@ -12,6 +12,8 @@ export type WorkerSendOptions = {
   from?: string;
   /** Optional communication service to emit streaming events */
   communication?: CommunicationService;
+  /** Enable turbo polling for real-time visibility (default: true) */
+  turboPolling?: boolean;
 };
 
 export type WorkerSendResult = {
@@ -175,6 +177,12 @@ export async function sendWorkerMessage(input: {
     // Emit start event
     emitStreamChunk("", false);
 
+    // Enable turbo mode for real-time visibility during the request
+    const useTurbo = input.options?.turboPolling !== false;
+    if (useTurbo && instance.eventForwardingHandle?.setTurboMode) {
+      instance.eventForwardingHandle.setTurboMode(true);
+    }
+
     const result = await withTimeout(instance.client.session.prompt(promptArgs), timeoutMs, abort);
 
     const sdkError = extractSdkError(result);
@@ -191,6 +199,11 @@ export async function sendWorkerMessage(input: {
 
     // Emit the full response as a stream chunk (SDK doesn't support true streaming yet)
     emitStreamChunk(responseText, true);
+
+    // Disable turbo mode after completion
+    if (useTurbo && instance.eventForwardingHandle?.setTurboMode) {
+      instance.eventForwardingHandle.setTurboMode(false);
+    }
 
     instance.lastResult = {
       at: new Date(),
@@ -212,6 +225,10 @@ export async function sendWorkerMessage(input: {
     input.registry.updateStatus(input.workerId, "error", errorMsg);
     return { success: false, error: errorMsg };
   } finally {
+    // Always disable turbo mode when done
+    if (instance.eventForwardingHandle?.setTurboMode) {
+      instance.eventForwardingHandle.setTurboMode(false);
+    }
     try {
       await cleanupAttachments?.();
     } catch {

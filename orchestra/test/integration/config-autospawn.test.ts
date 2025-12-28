@@ -63,6 +63,7 @@ describe("config auto-spawn", () => {
         },
       },
       spawnPolicy: {
+        default: { autoSpawn: true, onDemand: true, warmPool: true },
         profiles: {
           vision: { autoSpawn: false, onDemand: false },
           qa: { warmPool: false },

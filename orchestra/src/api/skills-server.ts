@@ -116,11 +116,8 @@ export const createSkillsApiServer: Factory<SkillsApiConfig, SkillsApiDeps, Skil
     }
 
     const address = server.address();
-    if (address && typeof address === "object") {
-      url = `http://${address.address}:${address.port}`;
-    } else {
-      url = `http://${host}:${port}`;
-    }
+    url =
+      address && typeof address === "object" ? `http://${address.address}:${address.port}` : `http://${host}:${port}`;
   };
 
   const stop = async () => {

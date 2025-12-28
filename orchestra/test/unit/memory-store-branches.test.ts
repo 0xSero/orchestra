@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { MemoryNode } from "../../src/memory/store";
 import type { Neo4jConfig } from "../../src/memory/neo4j";
+import type { MemoryNode } from "../../src/memory/store";
 import {
   getMemoryBackend,
   getMemoryByKey,
@@ -23,7 +23,7 @@ describe("memory store backend selection", () => {
       },
       linkMemory: async (input: { fromKey: string; toKey: string }) => {
         graphCalls.push(`link:${input.fromKey}:${input.toKey}`);
-        return { ok: true };
+        return { ok: true } as const;
       },
       getMemoryByKey: async (input: { key: string }) => {
         graphCalls.push(`get:${input.key}`);
@@ -76,7 +76,7 @@ describe("memory store backend selection", () => {
       },
       linkMemory: async (input: { fromKey: string; toKey: string }) => {
         fileCalls.push(`link:${input.fromKey}:${input.toKey}`);
-        return { ok: true };
+        return { ok: true } as const;
       },
       getMemoryByKey: async (input: { key: string }) => {
         fileCalls.push(`get:${input.key}`);

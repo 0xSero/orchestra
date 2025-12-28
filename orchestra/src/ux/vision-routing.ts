@@ -117,6 +117,15 @@ export async function routeVisionMessage(
       { source: "vision" },
     );
 
+    // Auto-stop vision worker after successful analysis (default: true)
+    if (succeeded && deps.autoStopVisionWorker !== false) {
+      try {
+        await deps.workers.stopWorker("vision");
+      } catch {
+        // Ignore stop errors - worker may have already stopped
+      }
+    }
+
     try {
       await deps.logSink?.({
         status: succeeded ? "succeeded" : "failed",

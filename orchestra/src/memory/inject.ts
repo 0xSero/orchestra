@@ -74,7 +74,7 @@ export async function buildMemoryInjection(input: {
   const sessionSummaryKey = sessionId ? `summary:session:${sessionId}` : undefined;
 
   if (includeProjectSummary && projectSummaryKey) {
-    let node;
+    let node: MemoryNode | undefined;
     try {
       node = await getByKey({
         cfg,
@@ -93,7 +93,7 @@ export async function buildMemoryInjection(input: {
   }
 
   if (includeSessionSummary && scope === "project" && projectId && sessionSummaryKey) {
-    let node;
+    let node: MemoryNode | undefined;
     try {
       node = await getByKey({ cfg, scope: "project", projectId, key: sessionSummaryKey });
     } catch {
@@ -111,7 +111,7 @@ export async function buildMemoryInjection(input: {
     projectIdToRead: string | undefined,
     limit: number,
   ): Promise<MemoryNode[]> => {
-    let nodes;
+    let nodes: MemoryNode[] = [];
     try {
       nodes = await recent({ cfg, scope: scopeToRead, projectId: projectIdToRead, limit });
     } catch {

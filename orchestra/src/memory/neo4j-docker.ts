@@ -13,6 +13,14 @@ import {
 } from "./neo4j-config";
 import { isNeo4jAccessible } from "./neo4j-driver";
 
+export type Neo4jDockerDeps = {
+  execSync?: typeof execSync;
+  spawn?: typeof spawn;
+  spawnSync?: typeof spawnSync;
+  neo4j?: typeof neo4j;
+  isNeo4jAccessible?: typeof isNeo4jAccessible;
+};
+
 /**
  * Validate Docker image name to prevent command injection.
  * Allows: alphanumeric, slashes, colons, hyphens, underscores, periods, @
@@ -36,24 +44,24 @@ function sanitizeContainerName(name: string): string {
   return name.replace(/[^a-zA-Z0-9_-]/g, "");
 }
 
-const isDockerAvailable = (): boolean => {
+const isDockerAvailable = (deps?: Neo4jDockerDeps): boolean => {
   try {
-    execSync("docker --version", { stdio: "ignore" });
+    const exec = deps?.execSync ?? execSync;
+    exec("docker --version", { stdio: "ignore" });
     return true;
   } catch {
     return false;
   }
 };
 
-const containerExists = (): boolean => {
+const containerExists = (deps?: Neo4jDockerDeps): boolean => {
   try {
     const safeName = sanitizeContainerName(NEO4J_CONTAINER_NAME);
     // Use spawnSync with array args to avoid shell injection
-    const result = spawnSync("docker", [
-      "ps", "-a",
-      "--filter", `name=^${safeName}$`,
-      "--format", "{{.Names}}",
-    ], { encoding: "utf8" });
+    const spawnSyncFn = deps?.spawnSync ?? spawnSync;
+    const result = spawnSyncFn("docker", ["ps", "-a", "--filter", `name=^${safeName}$`, "--format", "{{.Names}}"], {
+      encoding: "utf8",
+    });
     if (result.error) return false;
     return result.stdout.trim() === safeName;
   } catch {
@@ -61,15 +69,14 @@ const containerExists = (): boolean => {
   }
 };
 
-const isContainerRunning = (): boolean => {
+const isContainerRunning = (deps?: Neo4jDockerDeps): boolean => {
   try {
     const safeName = sanitizeContainerName(NEO4J_CONTAINER_NAME);
     // Use spawnSync with array args to avoid shell injection
-    const result = spawnSync("docker", [
-      "ps",
-      "--filter", `name=^${safeName}$`,
-      "--format", "{{.Names}}",
-    ], { encoding: "utf8" });
+    const spawnSyncFn = deps?.spawnSync ?? spawnSync;
+    const result = spawnSyncFn("docker", ["ps", "--filter", `name=^${safeName}$`, "--format", "{{.Names}}"], {
+      encoding: "utf8",
+    });
     if (result.error) return false;
     return result.stdout.trim() === safeName;
   } catch {
@@ -77,16 +84,17 @@ const isContainerRunning = (): boolean => {
   }
 };
 
-const startContainer = (): void => {
+const startContainer = (deps?: Neo4jDockerDeps): void => {
   const safeName = sanitizeContainerName(NEO4J_CONTAINER_NAME);
   // Use spawnSync with array args to avoid shell injection
-  const result = spawnSync("docker", ["start", safeName], { stdio: "ignore" });
+  const spawnSyncFn = deps?.spawnSync ?? spawnSync;
+  const result = spawnSyncFn("docker", ["start", safeName], { stdio: "ignore" });
   if (result.error) throw result.error;
 };
 
-const createContainer = (cfg: Neo4jIntegrationConfig): void => {
+const createContainer = (cfg: Neo4jIntegrationConfig, deps?: Neo4jDockerDeps): void => {
   const username = cfg.username ?? "neo4j";
-  const password = cfg.password ?? "opencode";
+  const password = cfg.password ?? "opencode123";
   const image = cfg.image ?? NEO4J_DEFAULT_IMAGE;
 
   // Validate image name to prevent command injection
@@ -124,15 +132,21 @@ const createContainer = (cfg: Neo4jIntegrationConfig): void => {
   ];
 
   // spawn with array args is safe from shell injection
-  spawn("docker", args, { stdio: "ignore", detached: true }).unref();
+  const spawnFn = deps?.spawn ?? spawn;
+  spawnFn("docker", args, { stdio: "ignore", detached: true }).unref();
 };
 
-const waitForNeo4j = async (cfg: Neo4jConfig, timeoutMs: number = NEO4J_STARTUP_TIMEOUT_MS): Promise<boolean> => {
+const waitForNeo4j = async (
+  cfg: Neo4jConfig,
+  timeoutMs: number = NEO4J_STARTUP_TIMEOUT_MS,
+  deps?: Neo4jDockerDeps,
+): Promise<boolean> => {
   const start = Date.now();
+  const neo4jDriver = deps?.neo4j ?? neo4j;
 
   while (Date.now() - start < timeoutMs) {
     try {
-      const testDriver = neo4j.driver(cfg.uri, neo4j.auth.basic(cfg.username, cfg.password));
+      const testDriver = neo4jDriver.driver(cfg.uri, neo4jDriver.auth.basic(cfg.username, cfg.password));
       const session = testDriver.session();
       try {
         await session.run("RETURN 1");
@@ -159,7 +173,11 @@ export type EnsureNeo4jResult = {
 };
 
 /** Ensure Neo4j is running, optionally starting a Docker container. */
-export const ensureNeo4jRunning = async (integrationsCfg?: Neo4jIntegrationConfig): Promise<EnsureNeo4jResult> => {
+export const ensureNeo4jRunning = async (
+  integrationsCfg?: Neo4jIntegrationConfig,
+  deps?: Neo4jDockerDeps,
+): Promise<EnsureNeo4jResult> => {
+  const accessibleFn = deps?.isNeo4jAccessible ?? isNeo4jAccessible;
   const cfg = integrationsCfg ?? getNeo4jIntegrationsConfig();
 
   if (cfg?.enabled === false) {
@@ -175,29 +193,29 @@ export const ensureNeo4jRunning = async (integrationsCfg?: Neo4jIntegrationConfi
     return { status: "no_config", message: "No Neo4j configuration found" };
   }
 
-  if (await isNeo4jAccessible(neo4jCfg)) {
+  if (await accessibleFn(neo4jCfg)) {
     return { status: "already_running", message: "Neo4j is already running" };
   }
 
-  if (!isDockerAvailable()) {
+  if (!isDockerAvailable(deps)) {
     return { status: "no_docker", message: "Docker is not available - cannot auto-start Neo4j" };
   }
 
   try {
-    if (containerExists()) {
-      if (!isContainerRunning()) {
-        startContainer();
+    if (containerExists(deps)) {
+      if (!isContainerRunning(deps)) {
+        startContainer(deps);
       }
-      const ready = await waitForNeo4j(neo4jCfg);
+      const ready = await waitForNeo4j(neo4jCfg, NEO4J_STARTUP_TIMEOUT_MS, deps);
       if (ready) {
         return { status: "started", message: `Started existing Neo4j container '${NEO4J_CONTAINER_NAME}'` };
       }
       return { status: "failed", message: "Neo4j container started but failed to become responsive" };
     }
 
-    createContainer(cfg ?? {});
+    createContainer(cfg ?? {}, deps);
 
-    const ready = await waitForNeo4j(neo4jCfg);
+    const ready = await waitForNeo4j(neo4jCfg, NEO4J_STARTUP_TIMEOUT_MS, deps);
     if (ready) {
       return { status: "created", message: `Created and started Neo4j container '${NEO4J_CONTAINER_NAME}'` };
     }
