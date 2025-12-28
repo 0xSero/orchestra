@@ -34,7 +34,11 @@ export const createIssue = async (input: {
   );
 
   const issue = data.issueCreate.issue;
-  if (!issue?.id) throw new Error("Linear API error: Issue not created.");
+  if (!issue?.id) {
+    throw new Error(
+      "Linear API error: Issue not created. Check LINEAR_TEAM_ID, permissions, and required fields.",
+    );
+  }
   return { issueId: issue.id, identifier: issue.identifier, url: issue.url ?? undefined };
 };
 
@@ -77,7 +81,11 @@ export const updateIssue = async (input: {
   );
 
   const issue = data.issueUpdate.issue;
-  if (!issue?.id) throw new Error("Linear API error: Issue not updated.");
+  if (!issue?.id) {
+    throw new Error(
+      "Linear API error: Issue not updated. Verify the issue id and your Linear permissions.",
+    );
+  }
   return { issueId: issue.id, title: issue.title, url: issue.url ?? undefined };
 };
 
@@ -106,7 +114,11 @@ export const addComment = async (input: {
   );
 
   const comment = data.commentCreate.comment;
-  if (!comment?.id) throw new Error("Linear API error: Comment not created.");
+  if (!comment?.id) {
+    throw new Error(
+      "Linear API error: Comment not created. Verify the issue id and your Linear permissions.",
+    );
+  }
   return { commentId: comment.id, url: comment.url ?? undefined };
 };
 
@@ -132,7 +144,9 @@ export const getIssue = async (input: { cfg: LinearConfig; issueId: string }): P
     { id: input.issueId },
   );
 
-  if (!data.issue?.id) throw new Error("Linear API error: Issue not found.");
+  if (!data.issue?.id) {
+    throw new Error("Linear API error: Issue not found. Confirm the issue id and team access.");
+  }
   return data.issue;
 };
 
@@ -201,7 +215,9 @@ export const syncTaskStatus = async (input: {
   const byName = states.find((state) => normalizeStatus(state.name || "") === desired);
   const chosen = byType || byName;
   if (!chosen?.id) {
-    throw new Error(`Linear API error: No matching state for status '${input.status}'.`);
+    throw new Error(
+      `Linear API error: No matching state for status '${input.status}'. Use a status in the team's workflow.`,
+    );
   }
 
   await updateIssue({ cfg: input.cfg, issueId: input.issueId, stateId: chosen.id });

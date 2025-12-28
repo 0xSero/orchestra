@@ -18,11 +18,17 @@ export function createToolGuard(config: OrchestratorConfig) {
     // spawn_worker is only available to the orchestrator agent
     if (input.tool === "spawn_worker") {
       if (agentId !== orchestratorName) {
-        throw new Error(`Tool "spawn_worker" is only available to the orchestrator. Use "ask_worker" or "delegate_task" instead.`);
+        throw new Error(
+          `Tool "spawn_worker" is only available to the orchestrator. ` +
+            `Use "ask_worker" or "delegate_task" instead.`,
+        );
       }
       const profileId = readString(args.profileId);
       if (profileId && !canSpawnManually(config.spawnPolicy, profileId))
-        throw new Error(`Spawning worker "${profileId}" is disabled by spawnPolicy.`);
+        throw new Error(
+          `Spawning worker "${profileId}" is disabled by spawnPolicy. ` +
+            `Enable allowManual for this profile in orchestrator.json.`,
+        );
     }
 
     // Prevent workers from spawning themselves via delegation
@@ -36,7 +42,10 @@ export function createToolGuard(config: OrchestratorConfig) {
 
       const autoSpawn = args.autoSpawn !== false;
       if (autoSpawn && workerId && !canSpawnOnDemand(config.spawnPolicy, workerId))
-        throw new Error(`On-demand spawn for worker "${workerId}" is disabled by spawnPolicy.`);
+        throw new Error(
+          `On-demand spawn for worker "${workerId}" is disabled by spawnPolicy. ` +
+            `Enable onDemand for this profile in orchestrator.json.`,
+        );
     }
 
     // run_workflow is only available to the orchestrator agent

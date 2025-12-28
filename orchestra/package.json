@@ -1,10 +1,13 @@
 {
   "name": "open-orchestra",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Multi-agent orchestrator plugin for OpenCode - spawn, manage, and coordinate specialized AI workers",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "open-orchestra": "./scripts/install.mjs"
+  },
   "exports": {
     ".": {
       "import": "./dist/index.js",
@@ -16,6 +19,7 @@
   "files": [
     "dist",
     "schema",
+    "scripts/install.mjs",
     "README.md",
     "LICENSE"
   ],
@@ -25,6 +29,7 @@
     "dev": "bun --watch src/index.ts",
     "package:check": "node scripts/package-check.mjs",
     "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist && rm -rf node_modules/.cache",
     "test": "bun test",
     "test:real": "bun test test/integration/linear-real.test.ts test/integration/neo4j-real.test.ts"
   },

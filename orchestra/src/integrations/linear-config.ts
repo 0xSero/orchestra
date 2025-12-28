@@ -19,13 +19,15 @@ export const loadLinearConfigFromEnv = (): LinearConfig | undefined => {
 /** Resolve Linear config from integration settings and environment variables. */
 export const resolveLinearConfig = (input?: LinearIntegrationConfig): LinearConfig => {
   if (input?.enabled === false) {
-    throw new Error("Linear integration is disabled.");
+    throw new Error("Linear integration is disabled. Enable integrations.linear.enabled to use Linear tools.");
   }
 
   const apiKey = input?.apiKey || process.env.LINEAR_API_KEY;
   const teamId = input?.teamId || process.env.LINEAR_TEAM_ID;
   if (!apiKey || !teamId) {
-    throw new Error("Missing Linear credentials. Set LINEAR_API_KEY and LINEAR_TEAM_ID.");
+    throw new Error(
+      "Missing Linear credentials. Set LINEAR_API_KEY and LINEAR_TEAM_ID (or configure integrations.linear).",
+    );
   }
 
   return {

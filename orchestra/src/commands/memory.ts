@@ -44,7 +44,9 @@ async function resolveScope(input: {
   const projectId = input.projectId ?? (await resolveProjectId(input.api));
   if (!projectId) {
     if (input.requireProject) {
-      throw new Error("Project scope requested but project ID is unavailable.");
+      throw new Error(
+        "Project scope requested but project ID is unavailable. Run inside a project or set OPENCODE_PROJECT_DIR.",
+      );
     }
     return { scope: "global" };
   }

@@ -1,71 +1,155 @@
-# Open Orchestra (Plugin)
+# Open Orchestra
 
-Multi-agent orchestration plugin for OpenCode. This package provides the orchestrator runtime, worker lifecycle, and tool bindings.
+Multi-agent orchestration plugin for [OpenCode](https://github.com/opencode-ai/opencode). Spawn, manage, and coordinate specialized AI workers from a single conversation.
 
-## Install (pin version)
-
-OpenCode resolves plugin versions once. Pin a version explicitly:
+## Quick Install
 
 ```bash
-bun add @open-orchestra/opencode-orchestrator@0.2.3
+bun x open-orchestra
+# or: npx open-orchestra
 ```
 
-## Enable the plugin
+This zero-config setup will:
+1. Add the plugin to your project OpenCode config
+2. Create `orchestrator.json` with worker profiles
+3. Optionally create example skill files
 
-```bash
-mkdir -p .opencode/plugin
-cat > .opencode/plugin/orchestrator.js <<'EOF'
-export { OrchestratorPlugin as default } from "@open-orchestra/opencode-orchestrator";
-EOF
-```
+## Manual Installation
 
-Or via config:
+Add to your OpenCode config (`.opencode/opencode.json`, `opencode.json`, or `~/.config/opencode/opencode.json`):
 
 ```json
-// opencode.json or ~/.config/opencode/opencode.json
 {
-  "plugin": ["@open-orchestra/opencode-orchestrator"]
+  "plugin": ["open-orchestra@0.2.4"]
 }
 ```
 
-## Minimal config
+Then create `orchestrator.json` (project: `.opencode/orchestrator.json`, global: `~/.config/opencode/orchestrator.json`):
 
 ```json
-// .opencode/orchestrator.json or orchestrator.json
 {
-  "$schema": "./node_modules/@open-orchestra/opencode-orchestrator/schema/orchestrator.schema.json",
+  "$schema": "https://unpkg.com/open-orchestra@0.2.4/schema/orchestrator.schema.json",
   "autoSpawn": true,
-  "workers": ["vision", "docs", "coder"]
+  "profiles": [
+    {
+      "id": "coder",
+      "name": "Code Implementer",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "purpose": "Write and edit code"
+    },
+    {
+      "id": "docs",
+      "name": "Documentation Librarian",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "purpose": "Research docs and find examples",
+      "supportsWeb": true
+    }
+  ],
+  "workers": ["coder", "docs"]
 }
 ```
 
-## Skills → workers
+## How It Works
 
-Skills live in `.opencode/skill/<id>/SKILL.md` and map directly to worker profiles. `name` must match the folder ID.
+1. **Ask the orchestrator** - It analyzes your request and delegates to specialized workers
+2. **Workers execute** - Each worker has its own model, tools, and expertise
+3. **Results return** - Summaries flow back to the main conversation
+
+## Slash Commands
+
+Imperative, verb-first commands (recommended):
+
+```bash
+/orchestrator status [json]
+/orchestra status [json]
+/orchestrator list
+/orchestrator spawn <profileId>
+/orchestrator stop <profileId|all>
+/orchestrator onboard [council|multimodal|all]
+/vision.analyze [--path <file>] [--prompt <text>]
+/memory.record <key> <value> [--tags tag1,tag2]
+/memory.query <query> [--limit 10]
+```
+
+## Worker Profiles
+
+Define workers inline in `orchestrator.json` or as skills in `.opencode/skill/<id>/SKILL.md`:
 
 ```yaml
 ---
-name: coder
-description: Implementation specialist
-model: anthropic/claude-opus-4-5
+name: vision
+description: Analyze images and screenshots
+model: anthropic/claude-sonnet-4-20250514
+supportsVision: true
 tools:
-  Read: true
-  Write: true
-  Bash: true
+  read: true
+  write: false
 ---
 
-You are a code implementation specialist. Focus on clean, testable changes.
+You are a vision specialist. Describe images accurately and extract relevant details.
 ```
 
-## Subagent UX (3 steps)
+## Features
 
-1) Spawn: the orchestrator creates a worker session.
-2) Focus: the UI switches to the subagent view with live updates.
-3) Return: on completion, a summary is posted to the parent session.
+- **Multi-model orchestration** - Use different models for different tasks
+- **Tool isolation** - Workers can have restricted tool access
+- **Session modes** - `linked` (shared context), `child` (inherited), `isolated`
+- **Memory integration** - Optional Neo4j-backed knowledge graph
+- **Vision routing** - Automatic image analysis via vision-capable workers
 
-## Build
+## CLI Options
 
 ```bash
-bun run build
-bun run package:check
+npx open-orchestra               # Zero-config setup (defaults, no prompts)
+npx open-orchestra --yes         # Accept all defaults
+npx open-orchestra --minimal     # Minimal config only
+npx open-orchestra --interactive # Guided setup with prompts
+npx open-orchestra --full        # Zero-config + example skills
+npx open-orchestra --help       # Show help
 ```
+
+## Configuration Reference
+
+See the [full schema](./schema/orchestrator.schema.json) for all options.
+
+| Field | Description |
+|-------|-------------|
+| `autoSpawn` | Auto-start workers on demand |
+| `profiles` | Worker definitions |
+| `workers` | Workers to pre-spawn |
+| `memory.enabled` | Enable Neo4j memory graph |
+| `integrations` | Neo4j, Linear, etc. |
+
+## Environment Overrides
+
+You can override common settings with environment variables (useful for CI or temporary tweaks):
+
+```bash
+OPENCODE_ORCH_AUTO_SPAWN=true
+OPENCODE_ORCH_SPAWN_ON_DEMAND=vision,docs
+OPENCODE_ORCH_BASE_PORT=15000
+OPENCODE_ORCH_STARTUP_TIMEOUT_MS=60000
+OPENCODE_ORCH_HEALTH_INTERVAL_MS=30000
+OPENCODE_ORCH_COMMANDS=false
+OPENCODE_ORCH_COMMAND_PREFIX=orch.
+OPENCODE_ORCH_UI_TOASTS=false
+OPENCODE_ORCH_UI_WAKEUP=false
+OPENCODE_ORCH_UI_FIRST_RUN_DEMO=false
+OPENCODE_ORCH_MEMORY=false
+OPENCODE_ORCH_WORKFLOWS=false
+OPENCODE_ORCH_PRUNING=true
+OPENCODE_ORCH_TELEMETRY=true
+```
+
+## Troubleshooting
+
+- "No worker available": add profiles to `orchestrator.json`, enable `autoSpawn`, or `/orchestrator spawn <id>`.
+- "Spawning worker ... is disabled by spawnPolicy": update `spawnPolicy` to allow manual/on-demand spawning.
+- "Worker ... did not become ready": check worker logs and increase `OPENCODE_ORCH_STARTUP_TIMEOUT_MS`.
+- "Workflows are not enabled": set `workflows.enabled=true` or `OPENCODE_ORCH_WORKFLOWS=true`.
+- "Missing Linear credentials": set `LINEAR_API_KEY` and `LINEAR_TEAM_ID` or configure `integrations.linear`.
+- "projectId is required for project scope": run inside a project or set `OPENCODE_PROJECT_DIR`.
+
+## License
+
+MIT

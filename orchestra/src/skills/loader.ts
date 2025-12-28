@@ -68,13 +68,16 @@ async function loadSkillFile(location: SkillLocation): Promise<Skill> {
   } as Skill["frontmatter"];
 
   if (frontmatter.name !== location.id) {
-    throw new Error(`Skill name "${frontmatter.name}" must match directory "${location.id}".`);
+    throw new Error(
+      `Skill name "${frontmatter.name}" must match directory "${location.id}". ` +
+        "Rename the folder or update frontmatter.name.",
+    );
   }
 
   const validation = validateSkillFrontmatter(frontmatter);
   if (!validation.valid) {
     const details = validation.errors.map((err) => `${err.field}: ${err.message}`).join("; ");
-    throw new Error(`Invalid skill "${location.id}": ${details}`);
+    throw new Error(`Invalid skill "${location.id}": ${details}. Fix the fields in SKILL.md frontmatter.`);
   }
 
   const info = await stat(location.filePath);

@@ -67,7 +67,7 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
   deps,
 }) => {
   if (!deps.api) {
-    throw new Error("WorkerManager requires api dependency");
+    throw new Error("WorkerManager requires api dependency. Pass the OpenCode API client to initialize.");
   }
   const api = deps.api;
   const communication = deps.communication;
@@ -297,9 +297,11 @@ export const createWorkerManager: Factory<WorkerManagerConfig, WorkerManagerDeps
     spawn,
     spawnById: async (profileId, options) => {
       const profile = config.profiles[profileId];
-      if (!profile) throw new Error(`Unknown worker profile: ${profileId}`);
+      if (!profile) {
+        throw new Error(`Unknown worker profile: ${profileId}. Add it to orchestrator.json profiles or SKILL.md.`);
+      }
       if (profile.enabled === false) {
-        throw new Error(`Worker "${profileId}" is disabled by configuration.`);
+        throw new Error(`Worker "${profileId}" is disabled by configuration. Set enabled=true to allow spawning.`);
       }
       return await spawn(profile, options);
     },

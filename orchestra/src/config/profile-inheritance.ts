@@ -41,10 +41,17 @@ export function resolveProfileInheritance(input: {
 
   const resolve = (id: string): WorkerProfile => {
     if (resolved.has(id)) return resolved.get(id)!;
-    if (resolving.has(id)) throw new Error(`Profile inheritance cycle detected at "${id}"`);
+    if (resolving.has(id)) {
+      throw new Error(
+        `Profile inheritance cycle detected at "${id}". ` +
+          "Check profiles.compose/extends for circular references.",
+      );
+    }
 
     const def = input.definitions[id] ?? input.builtIns[id];
-    if (!def) throw new Error(`Unknown profile "${id}"`);
+    if (!def) {
+      throw new Error(`Unknown profile "${id}". Add it to profiles[] or include a SKILL.md with that id.`);
+    }
 
     resolving.add(id);
 
@@ -76,7 +83,10 @@ export function resolveProfileInheritance(input: {
       typeof finalProfile.purpose !== "string" ||
       typeof finalProfile.whenToUse !== "string"
     ) {
-      throw new Error(`Profile "${id}" is missing required fields (id, name, model, purpose, whenToUse).`);
+      throw new Error(
+        `Profile "${id}" is missing required fields (id, name, model, purpose, whenToUse). ` +
+          "Fill these in your profile definition or SKILL.md.",
+      );
     }
 
     resolved.set(id, finalProfile);

@@ -30,8 +30,8 @@ export const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, abo
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
-      abort?.abort(new Error("worker bootstrap timed out"));
-      reject(new Error("worker bootstrap timed out"));
+      abort?.abort(new Error("worker bootstrap timed out. Check worker logs or increase startup timeout."));
+      reject(new Error("worker bootstrap timed out. Check worker logs or increase startup timeout."));
     }, timeoutMs);
   });
 

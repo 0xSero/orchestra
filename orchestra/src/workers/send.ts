@@ -61,8 +61,8 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, abort?: Ab
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
-      abort?.abort(new Error("worker prompt timed out"));
-      reject(new Error("worker prompt timed out"));
+      abort?.abort(new Error("worker prompt timed out. Try again or increase the timeout."));
+      reject(new Error("worker prompt timed out. Try again or increase the timeout."));
     }, timeoutMs);
   });
 
@@ -102,10 +102,18 @@ export async function sendWorkerMessage(input: {
   beforePrompt?: (instance: WorkerInstance) => Promise<void>;
 }): Promise<WorkerSendResult> {
   const instance = input.registry.get(input.workerId);
-  if (!instance) return { success: false, error: `Worker "${input.workerId}" not found` };
+  if (!instance) {
+    return {
+      success: false,
+      error: `Worker "${input.workerId}" not found. Spawn it with /orchestrator spawn ${input.workerId}.`,
+    };
+  }
 
   if (instance.status === "error" || instance.status === "stopped") {
-    return { success: false, error: `Worker "${input.workerId}" is ${instance.status}` };
+    return {
+      success: false,
+      error: `Worker "${input.workerId}" is ${instance.status}. Restart with /orchestrator spawn ${input.workerId}.`,
+    };
   }
 
   const timeoutMs = input.options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -114,12 +122,18 @@ export async function sendWorkerMessage(input: {
     const waitMs = Math.min(timeoutMs, READY_WAIT_CAP_MS);
     const ready = await input.registry.waitForStatus(input.workerId, "ready", waitMs);
     if (!ready) {
-      return { success: false, error: `Worker "${input.workerId}" did not become ready within ${waitMs}ms` };
+      return {
+        success: false,
+        error: `Worker "${input.workerId}" did not become ready within ${waitMs}ms. Check logs or increase the timeout.`,
+      };
     }
   }
 
   if (!instance.client || !instance.sessionId) {
-    return { success: false, error: `Worker "${input.workerId}" not properly initialized` };
+    return {
+      success: false,
+      error: `Worker "${input.workerId}" not properly initialized. Try respawning the worker.`,
+    };
   }
 
   const startedAt = Date.now();
@@ -191,7 +205,7 @@ export async function sendWorkerMessage(input: {
       const msg = extractSdkErrorMessage(sdkError);
       instance.warning = `Last request failed: ${msg}`;
       emitStreamChunk(`Error: ${msg}`, true);
-      throw new Error(msg);
+      throw new Error(`${msg}. Check the worker logs or retry the request.`);
     }
 
     const promptData = extractSdkData(result);

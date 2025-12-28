@@ -2,12 +2,22 @@ import { describe, expect, test } from "bun:test";
 import { createVisionRoutingState, routeVisionMessage, syncVisionProcessedMessages } from "../../src/ux/vision-routing";
 import type { VisionPart } from "../../src/ux/vision-types";
 
+const baseJobs = {
+  create: () => ({ id: "job-1" }),
+  setResult: () => {},
+};
+
+const tick = async () => {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+};
+
 describe("vision routing", () => {
   test("skips non-user or already processed messages", async () => {
     const state = createVisionRoutingState();
     const deps = {
       workers: {
         getWorker: () => undefined,
+        jobs: baseJobs,
         spawnById: async () => ({}),
         send: async () => ({ success: true, response: "ok" }),
         stopWorker: async () => true,
@@ -72,6 +82,7 @@ describe("vision routing", () => {
     const deps = {
       workers: {
         getWorker: () => ({}),
+        jobs: baseJobs,
         spawnById: async () => ({}),
         send: async () => ({ success: true, response: "ok" }),
         stopWorker: async () => true,
@@ -105,6 +116,7 @@ describe("vision routing", () => {
     const deps = {
       workers: {
         getWorker: () => undefined,
+        jobs: baseJobs,
         spawnById: async () => ({}),
         send: async () => ({ success: true, response: "Vision result" }),
         stopWorker: async () => true,
@@ -122,8 +134,8 @@ describe("vision routing", () => {
       state,
     );
     const resultText = output.parts[0] as { text?: string } | undefined;
-    expect(resultText?.text).toContain("<pasted_image>");
-    expect(resultText?.text).toContain("Vision result");
+    expect(resultText?.text).toContain("<pasted_image job=");
+    expect(resultText?.text).toContain("[VISION ANALYSIS IN PROGRESS]");
   });
 
   test("emits completion and logs successful analysis", async () => {
@@ -139,6 +151,7 @@ describe("vision routing", () => {
     const deps = {
       workers: {
         getWorker: () => undefined,
+        jobs: baseJobs,
         spawnById: async () => ({}),
         send: async () => ({ success: true, response: "Vision ok" }),
         stopWorker: async () => true,
@@ -158,6 +171,7 @@ describe("vision routing", () => {
       deps as never,
       state,
     );
+    await tick();
     expect(events).toContain("orchestra.vision.completed");
     expect(logs[0]?.status).toBe("succeeded");
   });
@@ -172,6 +186,7 @@ describe("vision routing", () => {
     const deps = {
       workers: {
         getWorker: () => undefined,
+        jobs: baseJobs,
         spawnById: async () => ({}),
         send: async () => {
           throw new Error("vision down");
@@ -188,8 +203,8 @@ describe("vision routing", () => {
       state,
     );
     const errorText = output.parts[0] as { text?: string } | undefined;
-    expect(errorText?.text).toContain("<pasted_image>");
-    expect(errorText?.text).toContain("vision down");
+    expect(errorText?.text).toContain("<pasted_image job=");
+    expect(errorText?.text).toContain("[VISION ANALYSIS IN PROGRESS]");
   });
 
   test("syncs processed message ids", () => {
@@ -217,6 +232,7 @@ describe("vision routing", () => {
     const deps = {
       workers: {
         getWorker: () => undefined,
+        jobs: baseJobs,
         spawnById: async () => ({}),
         send: async () => ({ success: true, response: "Vision ok" }),
         stopWorker: async () => {
@@ -233,6 +249,7 @@ describe("vision routing", () => {
       deps as never,
       state,
     );
+    await tick();
     expect(stopCalled).toBe(true);
   });
 
@@ -247,6 +264,7 @@ describe("vision routing", () => {
     const deps = {
       workers: {
         getWorker: () => undefined,
+        jobs: baseJobs,
         spawnById: async () => ({}),
         send: async () => ({ success: true, response: "Vision ok" }),
         stopWorker: async () => {
@@ -277,6 +295,7 @@ describe("vision routing", () => {
     const deps = {
       workers: {
         getWorker: () => undefined,
+        jobs: baseJobs,
         spawnById: async () => ({}),
         send: async () => ({ success: true, response: "Vision ok" }),
         stopWorker: async () => {
@@ -294,6 +313,6 @@ describe("vision routing", () => {
       state,
     );
     const resultText = output.parts[0] as { text?: string } | undefined;
-    expect(resultText?.text).toContain("Vision ok");
+    expect(resultText?.text).toContain("<pasted_image job=");
   });
 });

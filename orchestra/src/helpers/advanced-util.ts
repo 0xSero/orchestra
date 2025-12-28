@@ -48,7 +48,7 @@ export const safeJsonParse = <T = unknown>(str: string, fallback: T): T => {
 export const withTimeout = <T>(
   promise: Promise<T>,
   timeoutMs: number,
-  timeoutError: Error = new Error("Operation timed out"),
+  timeoutError: Error = new Error("Operation timed out. Try again or increase the timeout."),
 ): Promise<T> => {
   return Promise.race([
     promise,

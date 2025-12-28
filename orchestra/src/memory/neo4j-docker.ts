@@ -99,7 +99,9 @@ const createContainer = (cfg: Neo4jIntegrationConfig, deps?: Neo4jDockerDeps): v
 
   // Validate image name to prevent command injection
   if (!isValidDockerImage(image)) {
-    throw new Error(`Invalid Docker image name: ${image}. Image must match Docker naming conventions.`);
+    throw new Error(
+      `Invalid Docker image name: ${image}. Use a valid image like neo4j:5 or update integrations.memory.image.`,
+    );
   }
 
   const uri = cfg.uri ?? "bolt://localhost:7687";
@@ -108,7 +110,9 @@ const createContainer = (cfg: Neo4jIntegrationConfig, deps?: Neo4jDockerDeps): v
 
   // Validate port is numeric
   if (!/^\d+$/.test(boltPort)) {
-    throw new Error(`Invalid port in URI: ${uri}`);
+    throw new Error(
+      `Invalid port in URI: ${uri}. Update integrations.memory.uri to include a numeric bolt port.`,
+    );
   }
 
   const safeName = sanitizeContainerName(NEO4J_CONTAINER_NAME);

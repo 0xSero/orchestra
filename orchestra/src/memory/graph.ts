@@ -38,7 +38,9 @@ RETURN n
       },
     );
     const rec = res.records?.[0] as Record<MemoryRecordShape> | undefined;
-    if (!rec) throw new Error("No record returned from Neo4j");
+    if (!rec) {
+      throw new Error("No record returned from Neo4j. Verify the database is reachable and the query succeeded.");
+    }
     return toNode(rec);
   });
 }

@@ -102,4 +102,3 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
 };
 
 export default OrchestratorPlugin;
-export { createCommandRouter } from "./commands";

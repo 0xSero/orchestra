@@ -294,7 +294,9 @@ export async function spawnWorker(input: {
     }
 
     if (!session?.id) {
-      const errMsg = extractSdkErrorMessageFn(sessionResult) ?? "Failed to create session";
+      const errMsg =
+        extractSdkErrorMessageFn(sessionResult) ??
+        "Failed to create session. Check OpenCode worker logs or retry with a different model.";
       throw new Error(errMsg);
     }
 

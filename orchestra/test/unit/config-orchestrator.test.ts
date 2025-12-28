@@ -12,6 +12,22 @@ import {
 describe("orchestrator config loading", () => {
   let tempDir = "";
   const originalXdg = process.env.XDG_CONFIG_HOME;
+  const envKeys = [
+    "OPENCODE_ORCH_AUTO_SPAWN",
+    "OPENCODE_ORCH_SPAWN_ON_DEMAND",
+    "OPENCODE_ORCH_BASE_PORT",
+    "OPENCODE_ORCH_STARTUP_TIMEOUT_MS",
+    "OPENCODE_ORCH_HEALTH_INTERVAL_MS",
+    "OPENCODE_ORCH_COMMANDS",
+    "OPENCODE_ORCH_COMMAND_PREFIX",
+    "OPENCODE_ORCH_UI_TOASTS",
+    "OPENCODE_ORCH_UI_WAKEUP",
+    "OPENCODE_ORCH_UI_FIRST_RUN_DEMO",
+    "OPENCODE_ORCH_MEMORY",
+    "OPENCODE_ORCH_WORKFLOWS",
+    "OPENCODE_ORCH_PRUNING",
+    "OPENCODE_ORCH_TELEMETRY",
+  ];
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "orch-config-"));
@@ -21,6 +37,9 @@ describe("orchestrator config loading", () => {
   afterEach(async () => {
     if (originalXdg) process.env.XDG_CONFIG_HOME = originalXdg;
     else delete process.env.XDG_CONFIG_HOME;
+    for (const key of envKeys) {
+      delete process.env[key];
+    }
     if (tempDir) {
       await rm(tempDir, { recursive: true, force: true }).catch(() => {});
     }
@@ -199,5 +218,34 @@ describe("orchestrator config loading", () => {
 
     const result = await loadOrchestratorConfig({ directory: tempDir });
     expect(result.config.spawn).toEqual(["alpha"]);
+  });
+
+  test("applies environment overrides", async () => {
+    process.env.OPENCODE_ORCH_AUTO_SPAWN = "true";
+    process.env.OPENCODE_ORCH_SPAWN_ON_DEMAND = "vision,docs";
+    process.env.OPENCODE_ORCH_BASE_PORT = "15000";
+    process.env.OPENCODE_ORCH_COMMANDS = "false";
+    process.env.OPENCODE_ORCH_COMMAND_PREFIX = "orch.";
+    process.env.OPENCODE_ORCH_UI_TOASTS = "false";
+    process.env.OPENCODE_ORCH_UI_WAKEUP = "false";
+    process.env.OPENCODE_ORCH_UI_FIRST_RUN_DEMO = "false";
+    process.env.OPENCODE_ORCH_MEMORY = "false";
+    process.env.OPENCODE_ORCH_WORKFLOWS = "false";
+    process.env.OPENCODE_ORCH_PRUNING = "true";
+    process.env.OPENCODE_ORCH_TELEMETRY = "true";
+
+    const result = await loadOrchestratorConfig({ directory: tempDir });
+    expect(result.config.autoSpawn).toBe(true);
+    expect(result.config.spawnOnDemand).toEqual(["vision", "docs"]);
+    expect(result.config.basePort).toBe(15000);
+    expect(result.config.commands?.enabled).toBe(false);
+    expect(result.config.commands?.prefix).toBe("orch.");
+    expect(result.config.ui?.toasts).toBe(false);
+    expect(result.config.ui?.wakeupInjection).toBe(false);
+    expect(result.config.ui?.firstRunDemo).toBe(false);
+    expect(result.config.memory?.enabled).toBe(false);
+    expect(result.config.workflows?.enabled).toBe(false);
+    expect(result.config.pruning?.enabled).toBe(true);
+    expect(result.config.telemetry?.enabled).toBe(true);
   });
 });

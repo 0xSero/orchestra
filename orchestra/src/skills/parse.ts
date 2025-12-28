@@ -9,7 +9,7 @@ export function parseSkillFile(contents: string): ParsedSkillFile {
   const normalized = contents.replace(/^\uFEFF/, "");
   const lines = normalized.split(/\r?\n/);
   if (lines.length === 0 || lines[0].trim() !== "---") {
-    throw new Error("Skill file must start with YAML frontmatter (---).");
+    throw new Error("Skill file must start with YAML frontmatter (---). Add --- as the first line.");
   }
 
   let endIndex = -1;
@@ -21,13 +21,13 @@ export function parseSkillFile(contents: string): ParsedSkillFile {
   }
 
   if (endIndex === -1) {
-    throw new Error("Skill frontmatter must be closed with ---.");
+    throw new Error("Skill frontmatter must be closed with ---. Add a closing --- line after the YAML block.");
   }
 
   const yamlText = lines.slice(1, endIndex).join("\n");
   const parsed = parseYaml(yamlText);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Skill frontmatter must be a YAML object.");
+    throw new Error("Skill frontmatter must be a YAML object. Use key/value pairs like name, description, model.");
   }
 
   const body = lines

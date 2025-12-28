@@ -135,7 +135,7 @@ opencode-boomerang/
 Additional services created in `createCore`:
 - `createDatabase` (SQLite user prefs + overrides)
 - `createSkillsService` + `createSkillsApiServer` (skills CRUD + sessions/db APIs)
-- `createCommandRouter` (slash command execution)
+- `commands` (slash command execution)
 
 ### Service Dependencies
 

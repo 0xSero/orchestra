@@ -22,7 +22,9 @@ type MemoryFile = {
 
 function requireProjectId(scope: MemoryScope, projectId: string | undefined): string | undefined {
   if (scope !== "project") return undefined;
-  if (!projectId) throw new Error("projectId is required for project scope");
+  if (!projectId) {
+    throw new Error("projectId is required for project scope. Run inside a project or set OPENCODE_PROJECT_DIR.");
+  }
   return projectId;
 }
 

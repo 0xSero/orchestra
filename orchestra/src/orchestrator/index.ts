@@ -52,7 +52,10 @@ export const createOrchestrator: Factory<OrchestratorConfig, OrchestratorDeps, O
         ? canSpawnManually(config.spawnPolicy, input.workerId)
         : canSpawnOnDemand(config.spawnPolicy, input.workerId);
     if (!allowedByPolicy) {
-      throw new Error(`Spawning worker "${input.workerId}" is disabled by spawnPolicy.`);
+      throw new Error(
+        `Spawning worker "${input.workerId}" is disabled by spawnPolicy. ` +
+          `Enable manual/on-demand spawn for this profile in orchestrator.json.`,
+      );
     }
 
     // Note: Removed redundant spawnOnDemand whitelist check.
@@ -73,7 +76,11 @@ export const createOrchestrator: Factory<OrchestratorConfig, OrchestratorDeps, O
       profiles: config.profiles,
       attachments: input.attachments,
     });
-    if (!workerId) throw new Error("No worker available for this task.");
+    if (!workerId) {
+      throw new Error(
+        "No worker available for this task. Add a profile in orchestrator.json or enable built-in profiles.",
+      );
+    }
 
     const instance =
       input.autoSpawn === false
@@ -81,7 +88,9 @@ export const createOrchestrator: Factory<OrchestratorConfig, OrchestratorDeps, O
         : await ensureWorker({ workerId, reason: "on-demand" });
 
     if (!instance) {
-      throw new Error(`Worker "${workerId}" is not running.`);
+      throw new Error(
+        `Worker "${workerId}" is not running. Try /orchestrator spawn ${workerId} or enable on-demand spawn.`,
+      );
     }
 
     const res = await deps.workers.send(workerId, input.task, {
@@ -89,7 +98,8 @@ export const createOrchestrator: Factory<OrchestratorConfig, OrchestratorDeps, O
       sessionId: input.parentSessionId,
     });
     if (!res.success || !res.response) {
-      throw new Error(res.error ?? "Worker request failed");
+      const detail = res.error ? ` ${res.error}` : "";
+      throw new Error(`Worker request failed.${detail} Check the worker logs or try again.`);
     }
 
     return { workerId, response: res.response };
@@ -101,7 +111,9 @@ export const createOrchestrator: Factory<OrchestratorConfig, OrchestratorDeps, O
     attachments?: WorkerAttachment[];
     autoSpawn?: boolean;
   }) => {
-    if (!deps.workflows) throw new Error("Workflows are not enabled.");
+    if (!deps.workflows) {
+      throw new Error("Workflows are not enabled. Set workflows.enabled=true or OPENCODE_ORCH_WORKFLOWS=true.");
+    }
     return await deps.workflows.run(
       {
         workflowId: input.workflowId,

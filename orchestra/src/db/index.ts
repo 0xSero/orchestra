@@ -77,9 +77,11 @@ export type DatabaseService = ServiceLifecycle & {
 export const createDatabase: Factory<DatabaseConfig, Record<string, never>, DatabaseService> = ({ config }) => {
   const dbPath = join(config.directory, ".opencode", config.filename ?? "user.db");
   let db: Database | null = null;
+  const notInitializedMessage =
+    "Database not initialized. Run /orchestrator onboard or ensure the .opencode directory is writable.";
 
   const ensureUser = (): string => {
-    if (!db) throw new Error("Database not initialized");
+    if (!db) throw new Error(notInitializedMessage);
 
     const existing = db.prepare("SELECT id FROM users LIMIT 1").get() as { id: string } | undefined;
     if (existing) return existing.id;
@@ -90,9 +92,9 @@ export const createDatabase: Factory<DatabaseConfig, Record<string, never>, Data
   };
 
   const getUserId = (): string => {
-    if (!db) throw new Error("Database not initialized");
+    if (!db) throw new Error(notInitializedMessage);
     const row = db.prepare("SELECT id FROM users LIMIT 1").get() as { id: string } | undefined;
-    if (!row) throw new Error("No user found");
+    if (!row) throw new Error("No user found. Run /orchestrator onboard to create a user record.");
     return row.id;
   };
 
@@ -103,14 +105,14 @@ export const createDatabase: Factory<DatabaseConfig, Record<string, never>, Data
   };
 
   const createUser = (): User => {
-    if (!db) throw new Error("Database not initialized");
+    if (!db) throw new Error(notInitializedMessage);
     const id = ensureUser();
     const row = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as UserRow;
     return rowToUser(row);
   };
 
   const markOnboarded = (): User => {
-    if (!db) throw new Error("Database not initialized");
+    if (!db) throw new Error(notInitializedMessage);
     const userId = getUserId();
     db.prepare(`
       UPDATE users
@@ -131,7 +133,7 @@ export const createDatabase: Factory<DatabaseConfig, Record<string, never>, Data
   };
 
   const setPreference = (key: string, value: string | null): void => {
-    if (!db) throw new Error("Database not initialized");
+    if (!db) throw new Error(notInitializedMessage);
     const userId = getUserId();
     db.prepare(`
       INSERT INTO preferences (id, user_id, key, value)
@@ -151,7 +153,7 @@ export const createDatabase: Factory<DatabaseConfig, Record<string, never>, Data
   };
 
   const deletePreference = (key: string): void => {
-    if (!db) throw new Error("Database not initialized");
+    if (!db) throw new Error(notInitializedMessage);
     const userId = getUserId();
     db.prepare("DELETE FROM preferences WHERE user_id = ? AND key = ?").run(userId, key);
   };
@@ -169,7 +171,7 @@ export const createDatabase: Factory<DatabaseConfig, Record<string, never>, Data
     workerId: string,
     cfg: Partial<Omit<WorkerConfig, "id" | "userId" | "workerId" | "updatedAt">>,
   ): void => {
-    if (!db) throw new Error("Database not initialized");
+    if (!db) throw new Error(notInitializedMessage);
     const userId = getUserId();
 
     const existing = db
@@ -225,7 +227,7 @@ export const createDatabase: Factory<DatabaseConfig, Record<string, never>, Data
   };
 
   const clearWorkerConfig = (workerId: string): void => {
-    if (!db) throw new Error("Database not initialized");
+    if (!db) throw new Error(notInitializedMessage);
     const userId = getUserId();
     db.prepare("DELETE FROM worker_config WHERE user_id = ? AND worker_id = ?").run(userId, workerId);
   };
@@ -259,7 +261,7 @@ export const createDatabase: Factory<DatabaseConfig, Record<string, never>, Data
     error?: string | null;
     warning?: string | null;
   }): void => {
-    if (!db) throw new Error("Database not initialized");
+    if (!db) throw new Error(notInitializedMessage);
     const userId = getUserId();
     const serializedResult = state.lastResult ? JSON.stringify(state.lastResult) : null;
     db.prepare(
@@ -339,7 +341,7 @@ export const createDatabase: Factory<DatabaseConfig, Record<string, never>, Data
   };
 
   const clearWorkerState = (workerId: string): void => {
-    if (!db) throw new Error("Database not initialized");
+    if (!db) throw new Error(notInitializedMessage);
     const userId = getUserId();
     db.prepare("DELETE FROM worker_state WHERE user_id = ? AND worker_id = ?").run(userId, workerId);
   };

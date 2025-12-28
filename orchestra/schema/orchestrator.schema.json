@@ -5,13 +5,21 @@
   "additionalProperties": false,
   "properties": {
     "$schema": { "type": "string" },
-    "basePort": { "type": "number", "default": 14096 },
-    "autoSpawn": { "type": "boolean", "default": true },
+    "basePort": {
+      "type": "number",
+      "default": 14096,
+      "description": "Override with OPENCODE_ORCH_BASE_PORT."
+    },
+    "autoSpawn": {
+      "type": "boolean",
+      "default": false,
+      "description": "Auto-spawn workers on startup. Override with OPENCODE_ORCH_AUTO_SPAWN."
+    },
     "spawnOnDemand": {
       "type": "array",
       "items": { "type": "string" },
       "default": ["vision"],
-      "description": "Worker IDs allowed to auto-spawn when needed (e.g. vision analysis)."
+      "description": "Worker IDs allowed to auto-spawn when needed (e.g. vision analysis). Override with OPENCODE_ORCH_SPAWN_ON_DEMAND."
     },
     "spawnPolicy": {
       "type": "object",
@@ -45,13 +53,25 @@
         }
       }
     },
-    "startupTimeout": { "type": "number", "default": 30000 },
-    "healthCheckInterval": { "type": "number", "default": 30000 },
+    "startupTimeout": {
+      "type": "number",
+      "default": 30000,
+      "description": "Override with OPENCODE_ORCH_STARTUP_TIMEOUT_MS."
+    },
+    "healthCheckInterval": {
+      "type": "number",
+      "default": 30000,
+      "description": "Override with OPENCODE_ORCH_HEALTH_INTERVAL_MS."
+    },
     "healthCheck": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean", "default": true },
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Override with OPENCODE_ORCH_MEMORY."
+        },
         "intervalMs": { "type": "number", "default": 30000, "minimum": 10000 },
         "timeoutMs": { "type": "number", "default": 3000 },
         "maxRetries": { "type": "number", "default": 3 }
@@ -61,7 +81,11 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean", "default": false },
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Override with OPENCODE_ORCH_TELEMETRY."
+        },
         "profiles": {
           "type": "object",
           "additionalProperties": {
@@ -92,17 +116,25 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "toasts": { "type": "boolean", "default": true },
+        "toasts": {
+          "type": "boolean",
+          "default": true,
+          "description": "Override with OPENCODE_ORCH_UI_TOASTS."
+        },
         "injectSystemContext": { "type": "boolean", "default": true },
         "systemContextMaxWorkers": { "type": "number", "default": 12 },
         "defaultListFormat": { "type": "string", "enum": ["markdown", "json"], "default": "markdown" },
         "debug": { "type": "boolean", "default": false },
         "logToConsole": { "type": "boolean", "default": false },
-        "firstRunDemo": { "type": "boolean", "default": true },
+        "firstRunDemo": {
+          "type": "boolean",
+          "default": true,
+          "description": "Override with OPENCODE_ORCH_UI_FIRST_RUN_DEMO."
+        },
         "wakeupInjection": {
           "type": "boolean",
           "default": true,
-          "description": "When async worker jobs or vision analysis complete, inject a prompt into the orchestrator session to resume it."
+          "description": "When async worker jobs or vision analysis complete, inject a prompt into the orchestrator session to resume it. Override with OPENCODE_ORCH_UI_WAKEUP."
         }
       }
     },
@@ -114,7 +146,7 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean", "default": false },
+            "enabled": { "type": "boolean", "default": true },
             "title": { "type": "string" },
             "message": { "type": "string" },
             "delayMs": { "type": "number", "default": 1500 }
@@ -139,8 +171,16 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean", "default": true },
-        "prefix": { "type": "string", "default": "orchestrator." }
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Override with OPENCODE_ORCH_COMMANDS."
+        },
+        "prefix": {
+          "type": "string",
+          "default": "orchestrator.",
+          "description": "Override with OPENCODE_ORCH_COMMAND_PREFIX."
+        }
       }
     },
     "pruning": {
@@ -148,7 +188,11 @@
       "additionalProperties": false,
       "description": "DCP-inspired context pruning (truncates large tool inputs/outputs before sending to the LLM).",
       "properties": {
-        "enabled": { "type": "boolean", "default": false },
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Override with OPENCODE_ORCH_PRUNING."
+        },
         "maxToolOutputChars": { "type": "number", "default": 12000 },
         "maxToolInputChars": { "type": "number", "default": 4000 },
         "protectedTools": {
@@ -162,7 +206,11 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean", "default": true },
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Override with OPENCODE_ORCH_WORKFLOWS."
+        },
         "roocodeBoomerang": {
           "type": "object",
           "additionalProperties": false,

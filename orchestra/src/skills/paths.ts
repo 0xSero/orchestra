@@ -101,13 +101,21 @@ export function getProjectSubagentsDirs(projectDir: string): string[] {
 
 export function getSkillDir(id: string, scope: SkillScope, projectDir?: string): string {
   if (scope === "global") return join(getGlobalSkillsDir(), id);
-  if (!projectDir) throw new Error("Project directory is required for project-scoped skills.");
+  if (!projectDir) {
+    throw new Error(
+      "Project directory is required for project-scoped skills. Set OPENCODE_PROJECT_DIR or pass projectDir.",
+    );
+  }
   return join(getProjectSkillsDir(projectDir), id);
 }
 
 export function getSubagentDir(id: string, scope: SkillScope, projectDir?: string): string {
   if (scope === "global") return join(getGlobalSubagentsDir(), id);
-  if (!projectDir) throw new Error("Project directory is required for project-scoped skills.");
+  if (!projectDir) {
+    throw new Error(
+      "Project directory is required for project-scoped skills. Set OPENCODE_PROJECT_DIR or pass projectDir.",
+    );
+  }
   return join(getProjectSubagentsDir(projectDir), id);
 }
 

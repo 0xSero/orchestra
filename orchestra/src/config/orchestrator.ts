@@ -136,5 +136,84 @@ export async function loadOrchestratorConfig(input: {
     spawn: spawnList,
   };
 
-  return { config, sources };
+  return { config: applyEnvOverrides(config), sources };
+}
+
+function parseBoolean(value: string | undefined): boolean | undefined {
+  if (!value) return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return undefined;
+}
+
+function parseNumber(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseList(value: string | undefined): string[] | undefined {
+  if (!value) return undefined;
+  const items = value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return items.length > 0 ? items : [];
+}
+
+function applyEnvOverrides(config: OrchestratorConfig): OrchestratorConfig {
+  const autoSpawn = parseBoolean(process.env.OPENCODE_ORCH_AUTO_SPAWN);
+  const spawnOnDemand = parseList(process.env.OPENCODE_ORCH_SPAWN_ON_DEMAND);
+  const basePort = parseNumber(process.env.OPENCODE_ORCH_BASE_PORT);
+  const startupTimeout = parseNumber(process.env.OPENCODE_ORCH_STARTUP_TIMEOUT_MS);
+  const healthCheckInterval = parseNumber(process.env.OPENCODE_ORCH_HEALTH_INTERVAL_MS);
+
+  const commandsEnabled = parseBoolean(process.env.OPENCODE_ORCH_COMMANDS);
+  const commandPrefix = process.env.OPENCODE_ORCH_COMMAND_PREFIX?.trim();
+
+  const uiToasts = parseBoolean(process.env.OPENCODE_ORCH_UI_TOASTS);
+  const uiWakeup = parseBoolean(process.env.OPENCODE_ORCH_UI_WAKEUP);
+  const uiFirstRunDemo = parseBoolean(process.env.OPENCODE_ORCH_UI_FIRST_RUN_DEMO);
+
+  const memoryEnabled = parseBoolean(process.env.OPENCODE_ORCH_MEMORY);
+  const workflowsEnabled = parseBoolean(process.env.OPENCODE_ORCH_WORKFLOWS);
+  const pruningEnabled = parseBoolean(process.env.OPENCODE_ORCH_PRUNING);
+  const telemetryEnabled = parseBoolean(process.env.OPENCODE_ORCH_TELEMETRY);
+
+  return {
+    ...config,
+    ...(autoSpawn !== undefined ? { autoSpawn } : {}),
+    ...(spawnOnDemand !== undefined ? { spawnOnDemand } : {}),
+    ...(basePort !== undefined ? { basePort } : {}),
+    ...(startupTimeout !== undefined ? { startupTimeout } : {}),
+    ...(healthCheckInterval !== undefined ? { healthCheckInterval } : {}),
+    ...(commandsEnabled !== undefined || commandPrefix
+      ? {
+          commands: {
+            ...config.commands,
+            ...(commandsEnabled !== undefined ? { enabled: commandsEnabled } : {}),
+            ...(commandPrefix ? { prefix: commandPrefix } : {}),
+          },
+        }
+      : {}),
+    ...(uiToasts !== undefined || uiWakeup !== undefined || uiFirstRunDemo !== undefined
+      ? {
+          ui: {
+            ...config.ui,
+            ...(uiToasts !== undefined ? { toasts: uiToasts } : {}),
+            ...(uiWakeup !== undefined ? { wakeupInjection: uiWakeup } : {}),
+            ...(uiFirstRunDemo !== undefined ? { firstRunDemo: uiFirstRunDemo } : {}),
+          },
+        }
+      : {}),
+    ...(memoryEnabled !== undefined
+      ? { memory: { ...config.memory, enabled: memoryEnabled } }
+      : {}),
+    ...(workflowsEnabled !== undefined
+      ? { workflows: { ...config.workflows, enabled: workflowsEnabled } }
+      : {}),
+    ...(pruningEnabled !== undefined ? { pruning: { ...config.pruning, enabled: pruningEnabled } } : {}),
+    ...(telemetryEnabled !== undefined ? { telemetry: { ...config.telemetry, enabled: telemetryEnabled } } : {}),
+  };
 }

@@ -47,17 +47,27 @@ async function writeSkillFile(filePath: string, input: SkillInput): Promise<void
 
 export async function createSkill(input: SkillInput, scope: SkillScope, projectDir?: string): Promise<Skill> {
   const validation = validateSkillInput(input);
-  if (!validation.valid) throw new Error(`Invalid skill input: ${toValidationMessage(validation)}`);
+  if (!validation.valid) {
+    throw new Error(
+      `Invalid skill input: ${toValidationMessage(validation)}. Update the frontmatter fields and try again.`,
+    );
+  }
 
   const resolvedProjectDir = scope === "project" ? resolveProjectDir(projectDir) : projectDir;
   const filePath = getSkillFilePath(input.id, scope, resolvedProjectDir);
   if (existsSync(filePath)) {
-    throw new Error(`Skill "${input.id}" already exists in ${scope} scope.`);
+    throw new Error(
+      `Skill "${input.id}" already exists in ${scope} scope. Choose a new id or delete the existing skill first.`,
+    );
   }
 
   await writeSkillFile(filePath, input);
   const skill = await loadSkill(input.id, projectDir);
-  if (!skill) throw new Error(`Skill "${input.id}" could not be loaded after creation.`);
+  if (!skill) {
+    throw new Error(
+      `Skill "${input.id}" could not be loaded after creation. Check SKILL.md format and filesystem permissions.`,
+    );
+  }
   return skill;
 }
 
@@ -85,11 +95,19 @@ export async function updateSkill(
   };
 
   const validation = validateSkillInput(merged);
-  if (!validation.valid) throw new Error(`Invalid skill input: ${toValidationMessage(validation)}`);
+  if (!validation.valid) {
+    throw new Error(
+      `Invalid skill input: ${toValidationMessage(validation)}. Update the frontmatter fields and try again.`,
+    );
+  }
 
   await writeSkillFile(filePath, merged);
   const skill = await loadSkill(id, projectDir);
-  if (!skill) throw new Error(`Skill "${id}" could not be loaded after update.`);
+  if (!skill) {
+    throw new Error(
+      `Skill "${id}" could not be loaded after update. Check SKILL.md format and filesystem permissions.`,
+    );
+  }
   return skill;
 }
 
@@ -108,7 +126,9 @@ export async function duplicateSkill(
   projectDir?: string,
 ): Promise<Skill> {
   const source = await loadSkill(sourceId, projectDir);
-  if (!source) throw new Error(`Source skill "${sourceId}" not found.`);
+  if (!source) {
+    throw new Error(`Source skill "${sourceId}" not found. Verify the id and scope, then try again.`);
+  }
 
   const input: SkillInput = {
     id: newId,

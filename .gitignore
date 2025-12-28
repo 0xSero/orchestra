@@ -6,7 +6,6 @@ node_modules
 .osgrep
 .claude
 .opencode
-work
 *.log
 *.local
 coverage

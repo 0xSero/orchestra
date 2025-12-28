@@ -110,7 +110,9 @@ export class WorkerJobRegistry {
 
   await(id: string, options?: { timeoutMs?: number }): Promise<WorkerJob> {
     const existing = this.jobs.get(id);
-    if (!existing) return Promise.reject(new Error(`Unknown job "${id}"`));
+    if (!existing) {
+      return Promise.reject(new Error(`Unknown job "${id}". It may have been pruned; request a new job.`));
+    }
     if (existing.status !== "running") return Promise.resolve(existing);
 
     const timeoutMs = options?.timeoutMs ?? 600_000;
@@ -118,7 +120,11 @@ export class WorkerJobRegistry {
     /* c8 ignore next */
     const timer = setTimeout(() => {
       this.offWaiter(id, onDone);
-      reject(new Error(`Timed out waiting for job "${id}" after ${timeoutMs}ms`));
+      reject(
+        new Error(
+          `Timed out waiting for job "${id}" after ${timeoutMs}ms. Check worker health or increase the timeout.`,
+        ),
+      );
     }, timeoutMs);
     const onDone = (job: WorkerJob) => {
       clearTimeout(timer);

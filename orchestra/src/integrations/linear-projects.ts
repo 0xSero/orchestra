@@ -46,7 +46,11 @@ export const createProject = async (input: {
   );
 
   const project = data.projectCreate.project;
-  if (!project?.id) throw new Error("Linear API error: Project not created.");
+  if (!project?.id) {
+    throw new Error(
+      "Linear API error: Project not created. Check LINEAR_TEAM_ID and your permissions.",
+    );
+  }
   return { projectId: project.id, name: project.name, url: project.url ?? undefined };
 };
 
@@ -71,6 +75,8 @@ export const getProjectStatus = async (input: {
     { id: input.projectId },
   );
 
-  if (!data.project?.id) throw new Error("Linear API error: Project not found.");
+  if (!data.project?.id) {
+    throw new Error("Linear API error: Project not found. Confirm the project id and team access.");
+  }
   return { project: data.project };
 };

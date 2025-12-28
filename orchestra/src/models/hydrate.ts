@@ -66,7 +66,10 @@ export async function hydrateProfileModelsFromOpencode(input: {
         reason = `fallback to default model (${modelSpec})`;
       } else {
         const suffix = resolved.suggestions?.length ? `\nSuggestions:\n- ${resolved.suggestions.join("\n- ")}` : "";
-        throw new Error(`Invalid model for profile "${profile.id}": ${resolved.error}${suffix}`);
+        throw new Error(
+          `Invalid model for profile "${profile.id}": ${resolved.error}. ` +
+            `Update the profile model or alias list in orchestrator.json.${suffix}`,
+        );
       }
     } else {
       desired = resolved.full;

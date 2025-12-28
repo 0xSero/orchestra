@@ -55,14 +55,25 @@ export const createWorkflowEngine: Factory<WorkflowEngineConfig, Record<string, 
 
   const run = async (input: WorkflowRunInput, deps: WorkflowRunDependencies): Promise<WorkflowRunResult> => {
     const workflow = get(input.workflowId);
-    if (!workflow) throw new Error(`Unknown workflow "${input.workflowId}".`);
+    if (!workflow) {
+      throw new Error(
+        `Unknown workflow "${input.workflowId}". ` +
+          "Check configured workflows or use /orchestrator status to list available workflows.",
+      );
+    }
 
     if (input.task.length > input.limits.maxTaskChars) {
-      throw new Error(`Task exceeds maxTaskChars (${input.limits.maxTaskChars}).`);
+      throw new Error(
+        `Task exceeds maxTaskChars (${input.limits.maxTaskChars}). ` +
+          "Shorten the task or increase workflows.roocodeBoomerang.maxTaskChars.",
+      );
     }
 
     if (workflow.steps.length > input.limits.maxSteps) {
-      throw new Error(`Workflow has ${workflow.steps.length} steps (maxSteps=${input.limits.maxSteps}).`);
+      throw new Error(
+        `Workflow has ${workflow.steps.length} steps (maxSteps=${input.limits.maxSteps}). ` +
+          "Reduce steps or increase workflows.roocodeBoomerang.maxSteps.",
+      );
     }
 
     const startedAt = Date.now();
