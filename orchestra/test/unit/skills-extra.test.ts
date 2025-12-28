@@ -30,7 +30,7 @@ describe("skills convert", () => {
         purpose: "Purpose",
         whenToUse: "When to use",
       },
-      { type: "builtin" },
+      { type: "global", path: "/tmp" },
     );
 
     expect(skill.frontmatter.description).toContain("When to use");
@@ -50,7 +50,7 @@ describe("skills convert", () => {
         purpose: long,
         whenToUse: long,
       },
-      { type: "builtin" },
+      { type: "global", path: "/tmp" },
     );
     expect(skill.frontmatter.description.length).toBeLessThanOrEqual(1024);
   });

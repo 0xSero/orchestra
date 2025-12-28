@@ -66,11 +66,9 @@ describe("profile helpers", () => {
     expect(ids).toContain("base");
   });
 
-  test("returns profiles and exposes deprecated helpers", async () => {
-    const { getProfile, getAllProfilesWithSkills, mergeProfile } = await import("../../src/workers/profiles");
-    const profiles = await getAllProfilesWithSkills(undefined);
+  test("returns profiles and exposes helper access", async () => {
+    const { getProfile, getAllProfiles } = await import("../../src/workers/profiles");
+    const profiles = await getAllProfiles(undefined, [], { loadAllSkills });
     expect(getProfile("missing", profiles)).toBeUndefined();
-
-    expect(() => mergeProfile("base", {})).toThrow("deprecated");
   });
 });

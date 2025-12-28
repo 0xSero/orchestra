@@ -188,7 +188,7 @@ export interface SkillFrontmatter extends SkillFrontmatterBase, ProfileExtension
 /**
  * Source location of a skill.
  */
-export type SkillSource = { type: "builtin" } | { type: "global"; path: string } | { type: "project"; path: string };
+export type SkillSource = { type: "global"; path: string } | { type: "project"; path: string };
 
 /**
  * Complete skill definition with parsed content.

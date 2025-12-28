@@ -105,10 +105,7 @@ export async function loadSkill(id: string, projectDir?: string): Promise<Skill 
       return await loadSkillFile({ id, filePath, source: root.source });
     }
   }
-
-  const { loadBuiltinSkills } = await import("./builtin");
-  const builtins = loadBuiltinSkills();
-  return builtins.get(id);
+  return undefined;
 }
 
 export async function loadSkillOverrides(projectDir?: string): Promise<Map<string, Skill>> {
@@ -129,13 +126,5 @@ export async function loadSkillOverrides(projectDir?: string): Promise<Map<strin
 }
 
 export async function loadAllSkills(projectDir?: string): Promise<Map<string, Skill>> {
-  const { loadBuiltinSkills } = await import("./builtin");
-  const skills = loadBuiltinSkills();
-  const overrides = await loadSkillOverrides(projectDir);
-
-  for (const [id, skill] of overrides) {
-    skills.set(id, skill);
-  }
-
-  return skills;
+  return await loadSkillOverrides(projectDir);
 }

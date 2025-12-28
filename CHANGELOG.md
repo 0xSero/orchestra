@@ -186,6 +186,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- Deprecated builtin skill loader and exports; skills now come only from SKILL.md sources
+- Legacy profile compatibility exports (`builtInProfiles`, `getAllProfilesWithSkills`, `mergeProfile`)
+- Unused `config/profiles.ts` re-export wrapper
+
 ### Planned
 - [ ] Worker pooling and load balancing
 - [ ] Distributed worker support

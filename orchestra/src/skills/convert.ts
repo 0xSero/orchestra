@@ -38,7 +38,7 @@ export function profileToSkill(profile: WorkerProfile, source: SkillSource): Ski
     source,
     frontmatter,
     systemPrompt: profile.systemPrompt ?? "",
-    filePath: source.type === "builtin" ? `builtin:${profile.id}` : "",
+    filePath: source.type === "project" || source.type === "global" ? source.path : "",
     hasScripts: false,
     hasReferences: false,
     hasAssets: false,

@@ -143,25 +143,4 @@ export async function listProfileIds(projectDir?: string, deps?: ProfileLoaderDe
   return Object.keys(profiles).sort();
 }
 
-// =============================================================================
-// Legacy compatibility exports (deprecated, will be removed)
-// =============================================================================
-
-/** @deprecated Use getAllProfiles() instead */
-export const builtInProfiles: Record<string, WorkerProfile> = {};
-
-/** @deprecated Use getAllProfiles() instead */
-export async function getAllProfilesWithSkills(
-  projectDir?: string,
-  _baseProfiles?: Record<string, WorkerProfile>,
-): Promise<Record<string, WorkerProfile>> {
-  return getAllProfiles(projectDir);
-}
-
-/** @deprecated Use applyProfileOverrides() instead */
-export function mergeProfile(baseId: string, _: Partial<WorkerProfile>): WorkerProfile {
-  throw new Error(
-    `mergeProfile() is deprecated. Profiles are now loaded from .opencode/skill/. ` +
-      `Create a SKILL.md file for "${baseId}" or use orchestrator.json profiles[] for overrides.`,
-  );
-}
+// Legacy compatibility exports removed.

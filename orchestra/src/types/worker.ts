@@ -80,7 +80,7 @@ export interface WorkerProfile {
   env?: Record<string, string>;
   /** Environment variable prefixes to auto-forward (e.g., ["OPENCODE_NEO4J_"]) */
   envPrefixes?: string[];
-  /** Origin of the profile definition (builtin, project, global). */
+  /** Origin of the profile definition (project or global). */
   source?: SkillSource;
 
   // === Skill Isolation Configuration ===
