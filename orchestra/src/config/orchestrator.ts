@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { canAutoSpawn, canSpawnOnDemand, canWarmPool } from "../core/spawn-policy";
 import { deepMerge } from "../helpers/format";
 import type { OrchestratorConfig, OrchestratorConfigFile } from "../types";
+import { extractIntegrationsFromOpenCodeConfig, loadOpenCodeConfig } from "./opencode";
 import { buildDefaultOrchestratorConfigFile } from "./orchestrator/defaults";
 import { collectProfilesAndSpawn, parseOrchestratorConfigFile } from "./orchestrator/parse";
 import {
@@ -11,6 +12,16 @@ import {
   getDefaultGlobalOrchestratorConfigPath,
   getDefaultProjectOrchestratorConfigPath,
 } from "./orchestrator/paths";
+
+const mergeOpenCodeIntegrations = (
+  defaults: Record<string, unknown> | undefined,
+  openCode: Record<string, unknown> | undefined,
+  orchestrator: Record<string, unknown> | undefined,
+): Record<string, unknown> => {
+  const base = defaults ?? {};
+  const mergedOpenCode = openCode ? deepMerge(base, openCode) : base;
+  return orchestrator ? deepMerge(mergedOpenCode, orchestrator) : mergedOpenCode;
+};
 
 export type LoadedOrchestratorConfig = {
   config: OrchestratorConfig;
@@ -65,10 +76,22 @@ export async function loadOrchestratorConfig(input: {
     }
   })();
 
+  const openCodeConfig = await loadOpenCodeConfig();
+  const openCodeIntegrations = extractIntegrationsFromOpenCodeConfig(openCodeConfig);
+
   const mergedFile = deepMerge(
     deepMerge(defaultsFile as unknown as Record<string, unknown>, globalPartial as unknown as Record<string, unknown>),
     projectPartial as unknown as Record<string, unknown>,
   ) as unknown as OrchestratorConfigFile;
+  const orchestratorIntegrations = deepMerge(
+    (globalPartial.integrations ?? {}) as Record<string, unknown>,
+    (projectPartial.integrations ?? {}) as Record<string, unknown>,
+  );
+  const mergedIntegrations = mergeOpenCodeIntegrations(
+    defaultsFile.integrations as Record<string, unknown> | undefined,
+    openCodeIntegrations,
+    orchestratorIntegrations,
+  );
 
   const { profiles, spawn } = collectProfilesAndSpawn(mergedFile);
   const spawnPolicy = (mergedFile.spawnPolicy ?? defaultsFile.spawnPolicy) as OrchestratorConfig["spawnPolicy"];
@@ -107,7 +130,7 @@ export async function loadOrchestratorConfig(input: {
     workflows: (mergedFile.workflows ?? defaultsFile.workflows) as OrchestratorConfig["workflows"],
     security: (mergedFile.security ?? defaultsFile.security) as OrchestratorConfig["security"],
     memory: (mergedFile.memory ?? defaultsFile.memory) as OrchestratorConfig["memory"],
-    integrations: (mergedFile.integrations ?? defaultsFile.integrations) as OrchestratorConfig["integrations"],
+    integrations: mergedIntegrations as OrchestratorConfig["integrations"],
     telemetry: (mergedFile.telemetry ?? defaultsFile.telemetry) as OrchestratorConfig["telemetry"],
     profiles,
     spawn: spawnList,

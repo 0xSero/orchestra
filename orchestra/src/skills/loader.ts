@@ -95,7 +95,8 @@ async function loadSkillFile(location: SkillLocation): Promise<Skill> {
 }
 
 export async function loadSkill(id: string, projectDir?: string): Promise<Skill | undefined> {
-  for (const root of getSkillRoots(projectDir)) {
+  const roots = getSkillRoots(projectDir).slice().reverse();
+  for (const root of roots) {
     const filePath = join(root.root, id, "SKILL.md");
     if (existsSync(filePath)) {
       return await loadSkillFile({ id, filePath, source: root.source });
@@ -109,7 +110,7 @@ export async function loadSkill(id: string, projectDir?: string): Promise<Skill 
 
 export async function loadSkillOverrides(projectDir?: string): Promise<Map<string, Skill>> {
   const skills = new Map<string, Skill>();
-  const roots = getSkillRoots(projectDir).slice().reverse();
+  const roots = getSkillRoots(projectDir);
   for (const root of roots) {
     const entries = await detectSkillDirs(root.root, root.source);
     for (const location of entries) {

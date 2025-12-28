@@ -1,5 +1,7 @@
 # Examples
 
+Config and skill templates live in `examples/` for copy/paste setup.
+
 ## 1) Screenshot Bug Debugging
 
 Use the vision worker to analyze a screenshot, then hand off to a coder.

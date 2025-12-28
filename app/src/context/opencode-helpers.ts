@@ -1,9 +1,11 @@
 import type { FilePartInput, Message, Part, Provider } from "@opencode-ai/sdk/client";
 import type { ModelOption, OpenCodeEventItem, WorkerRuntime, WorkerStatus, WorkerStreamChunk } from "./opencode-types";
 
+type WorkerLastResultReport = NonNullable<WorkerRuntime["lastResult"]>["report"];
+
 const asRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 
-const isWorkerStatus = (value: unknown): value is WorkerStatus =>
+export const isWorkerStatus = (value: unknown): value is WorkerStatus =>
   value === "starting" || value === "ready" || value === "busy" || value === "error" || value === "stopped";
 
 export const buildModelOptions = (providers: Provider[]): ModelOption[] => {
@@ -81,18 +83,34 @@ export const toWorkerRuntime = (raw: unknown): WorkerRuntime | null => {
   if (!id) return null;
   const name = typeof profile.name === "string" ? profile.name : typeof raw.name === "string" ? raw.name : id;
   const status = isWorkerStatus(raw.status) ? raw.status : "starting";
+  const uiSessionId = typeof raw.uiSessionId === "string" ? raw.uiSessionId : undefined;
+  const workerSessionId = typeof raw.sessionId === "string" ? raw.sessionId : undefined;
+  const sessionId = uiSessionId ?? workerSessionId;
+  const lastResult = asRecord(raw.lastResult) ? raw.lastResult : undefined;
 
   return {
     id,
     name,
     status,
-    sessionId: typeof raw.sessionId === "string" ? raw.sessionId : undefined,
+    sessionId,
+    workerSessionId,
+    parentSessionId: typeof raw.parentSessionId === "string" ? raw.parentSessionId : undefined,
     model: typeof profile.model === "string" ? profile.model : typeof raw.model === "string" ? raw.model : undefined,
     port: typeof raw.port === "number" ? raw.port : undefined,
     serverUrl: typeof raw.serverUrl === "string" ? raw.serverUrl : undefined,
     supportsVision: Boolean(profile.supportsVision),
     supportsWeb: Boolean(profile.supportsWeb),
     lastActivity: typeof raw.lastActivity === "string" ? raw.lastActivity : undefined,
+    currentTask: typeof raw.currentTask === "string" ? raw.currentTask : undefined,
+    lastResult: lastResult
+      ? {
+          at: typeof lastResult.at === "string" ? lastResult.at : undefined,
+          jobId: typeof lastResult.jobId === "string" ? lastResult.jobId : undefined,
+          response: typeof lastResult.response === "string" ? lastResult.response : undefined,
+          report: asRecord(lastResult.report) ? (lastResult.report as WorkerLastResultReport) : undefined,
+          durationMs: typeof lastResult.durationMs === "number" ? lastResult.durationMs : undefined,
+        }
+      : undefined,
     error: typeof raw.error === "string" ? raw.error : undefined,
     warning: typeof raw.warning === "string" ? raw.warning : undefined,
   };
@@ -111,6 +129,50 @@ export const extractOrchestraWorker = (payload: unknown): unknown | null => {
   if (asRecord(inner.data) && inner.data.worker) return inner.data.worker;
   if (inner.worker) return inner.worker;
   return null;
+};
+
+export const extractSubagentEvent = (payload: unknown): import("./opencode-types").SubagentEvent | null => {
+  if (!asRecord(payload) || payload.type !== "orchestra.event") return null;
+  const properties = asRecord(payload.properties) ? payload.properties : undefined;
+  const inner = asRecord(payload.payload)
+    ? payload.payload
+    : asRecord(properties?.payload)
+      ? properties.payload
+      : properties;
+  if (!asRecord(inner) || typeof inner.type !== "string") return null;
+  if (inner.type !== "orchestra.subagent.active" && inner.type !== "orchestra.subagent.closed") return null;
+  const data = asRecord(inner.data) ? inner.data : undefined;
+  const rawSubagent = asRecord(data?.subagent) ? data.subagent : undefined;
+  if (!rawSubagent) return null;
+  const workerId = typeof rawSubagent.workerId === "string" ? rawSubagent.workerId : "";
+  const sessionId = typeof rawSubagent.sessionId === "string" ? rawSubagent.sessionId : "";
+  if (!workerId || !sessionId) return null;
+  const profile = asRecord(rawSubagent.profile) ? rawSubagent.profile : undefined;
+  const result = asRecord(data?.result) ? data?.result : undefined;
+
+  return {
+    type: inner.type === "orchestra.subagent.active" ? "active" : "closed",
+    subagent: {
+      workerId,
+      sessionId,
+      parentSessionId: typeof rawSubagent.parentSessionId === "string" ? rawSubagent.parentSessionId : undefined,
+      profile: profile
+        ? {
+            id: typeof profile.id === "string" ? profile.id : workerId,
+            name: typeof profile.name === "string" ? profile.name : workerId,
+            model: typeof profile.model === "string" ? profile.model : undefined,
+          }
+        : undefined,
+      serverUrl: typeof rawSubagent.serverUrl === "string" ? rawSubagent.serverUrl : undefined,
+      status: typeof rawSubagent.status === "string" ? rawSubagent.status : undefined,
+    },
+    result: result
+      ? {
+          summary: typeof result.summary === "string" ? result.summary : undefined,
+          error: typeof result.error === "string" ? result.error : undefined,
+        }
+      : undefined,
+  };
 };
 
 /** Extract worker stream chunk from orchestra.event payload */

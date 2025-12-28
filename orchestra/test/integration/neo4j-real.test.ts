@@ -11,6 +11,14 @@ describe("neo4j real integration", () => {
     return;
   }
 
+  const runReal = process.env.NEO4J_REAL_MODE === "1";
+  if (!runReal) {
+    test("skips real Neo4j integration when NEO4J_REAL_MODE is not set", () => {
+      expect(true).toBe(true);
+    });
+    return;
+  }
+
   test("connects and runs a simple query", async () => {
     try {
       const result = await withNeo4jSession(cfg, async (session) => {

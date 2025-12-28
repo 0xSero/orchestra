@@ -36,4 +36,5 @@ export type IntegrationsConfig = {
   linear?: LinearIntegrationConfig;
   neo4j?: Neo4jIntegrationConfig;
   monitoring?: MonitoringIntegrationConfig;
+  [key: string]: unknown;
 };

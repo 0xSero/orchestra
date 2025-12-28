@@ -12,17 +12,47 @@ export type OpenCodeEventItem = {
 
 export type WorkerStatus = "starting" | "ready" | "busy" | "error" | "stopped";
 
+export type SubagentSession = {
+  workerId: string;
+  sessionId: string;
+  parentSessionId?: string;
+  profile?: { id: string; name: string; model?: string };
+  serverUrl?: string;
+  status?: string;
+};
+
+export type SubagentEvent = {
+  type: "active" | "closed";
+  subagent: SubagentSession;
+  result?: { summary?: string; error?: string };
+};
+
 export type WorkerRuntime = {
   id: string;
   name: string;
   status: WorkerStatus;
   sessionId?: string;
+  workerSessionId?: string;
+  parentSessionId?: string;
   model?: string;
   port?: number;
   serverUrl?: string;
   supportsVision?: boolean;
   supportsWeb?: boolean;
   lastActivity?: string;
+  currentTask?: string;
+  lastResult?: {
+    at?: string;
+    jobId?: string;
+    response?: string;
+    report?: {
+      summary?: string;
+      details?: string;
+      issues?: string[];
+      notes?: string;
+    };
+    durationMs?: number;
+  };
   error?: string;
   warning?: string;
 };
@@ -50,6 +80,8 @@ export interface OpenCodeState {
   agents: Agent[];
   events: OpenCodeEventItem[];
   workers: Record<string, WorkerRuntime>;
+  subagents: Record<string, SubagentSession>;
+  lastSubagentEvent: SubagentEvent | null;
   /** Active worker stream chunks (keyed by workerId) */
   workerStreams: Record<string, WorkerStreamChunk>;
   modelOptions: ModelOption[];
@@ -67,6 +99,9 @@ export interface OpenCodeContextValue {
   workers: Accessor<WorkerRuntime[]>;
   /** Active worker stream chunks for live display */
   workerStreams: Accessor<WorkerStreamChunk[]>;
+  subagents: Accessor<SubagentSession[]>;
+  activeSubagent: Accessor<SubagentSession | null>;
+  lastSubagentEvent: Accessor<SubagentEvent | null>;
   activeWorkerSessionIds: Accessor<Set<string>>;
   modelOptions: Accessor<ModelOption[]>;
   toolIds: Accessor<string[]>;
@@ -97,6 +132,7 @@ export interface OpenCodeContextValue {
   abortAllSessions: () => Promise<number>;
   deleteAllSessions: () => Promise<number>;
   disposeAllInstances: () => Promise<boolean>;
+  hydrateWorkers: (states: import("@/types/db").WorkerState[]) => void;
 
   client: OpencodeClient;
 }

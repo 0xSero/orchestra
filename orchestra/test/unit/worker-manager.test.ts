@@ -192,6 +192,62 @@ describe("worker manager", () => {
     expect(missingStop).toBe(false);
   });
 
+  test("emits subagent events when sending with parent session", async () => {
+    const events: string[] = [];
+    const profiles: Record<string, WorkerProfile> = {
+      alpha: {
+        id: "alpha",
+        name: "Alpha",
+        model: "model-a",
+        purpose: "test",
+        whenToUse: "testing",
+      },
+    };
+
+    const manager = createWorkerManager({
+      config: {
+        basePort: 10000,
+        timeout: 1000,
+        directory: process.cwd(),
+        profiles,
+      },
+      deps: {
+        api: {
+          session: {
+            create: async () => ({ data: { id: "ui-session-1" } }),
+            prompt: async () => ({ data: { id: "msg-1" } }),
+          },
+        } as never,
+        communication: {
+          emit: (type: string) => events.push(type),
+        } as never,
+        sendWorkerMessage: async () => ({ success: true, response: "ok" }),
+        spawnWorker: async (input: {
+          registry: { register: (instance: WorkerInstance) => void };
+          profile: WorkerProfile;
+        }) => {
+          const instance: WorkerInstance = {
+            profile: input.profile,
+            status: "ready",
+            port: 0,
+            directory: process.cwd(),
+            startedAt: new Date(),
+            sessionId: "session-1",
+          };
+          input.registry.register(instance);
+          return instance;
+        },
+      },
+    });
+
+    await manager.spawnById("alpha");
+    await manager.send("alpha", "hello", { sessionId: "parent-1" });
+
+    expect(events).toContain("orchestra.subagent.active");
+    expect(events).toContain("orchestra.subagent.closed");
+    expect(events).toContain("orchestra.worker.completed");
+  });
+
   test("emits error events and job failure updates", async () => {
     const events: string[] = [];
     const profiles: Record<string, WorkerProfile> = {

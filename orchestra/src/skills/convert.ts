@@ -27,8 +27,10 @@ export function profileToSkill(profile: WorkerProfile, source: SkillSource): Ski
     sessionMode: profile.sessionMode,
     forwardEvents: profile.forwardEvents,
     mcp: profile.mcp,
+    integrations: profile.integrations,
     env: profile.env,
     envPrefixes: profile.envPrefixes,
+    skillPermissions: profile.skillPermissions,
   };
 
   return {
@@ -45,7 +47,7 @@ export function profileToSkill(profile: WorkerProfile, source: SkillSource): Ski
 
 export function skillToProfile(skill: Skill): WorkerProfile {
   return {
-    id: skill.id,
+    id: skill.frontmatter.name ?? skill.id,
     name: skill.frontmatter.name ?? skill.id,
     model: skill.frontmatter.model ?? "auto",
     providerID: skill.frontmatter.providerID,
@@ -65,7 +67,10 @@ export function skillToProfile(skill: Skill): WorkerProfile {
     sessionMode: skill.frontmatter.sessionMode,
     forwardEvents: skill.frontmatter.forwardEvents,
     mcp: skill.frontmatter.mcp,
+    integrations: skill.frontmatter.integrations,
     env: skill.frontmatter.env,
     envPrefixes: skill.frontmatter.envPrefixes,
+    skillPermissions: skill.frontmatter.skillPermissions,
+    source: skill.source,
   };
 }

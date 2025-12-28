@@ -253,7 +253,7 @@
     },
     "integrations": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
       "properties": {
         "linear": {
           "type": "object",

@@ -29,8 +29,12 @@ export function createWorkerTools(deps: WorkerToolsDeps): Record<string, ToolDef
     args: {
       profileId: tool.schema.string().describe("Worker profile ID"),
     },
-    async execute(args) {
-      const worker = await deps.orchestrator.ensureWorker({ workerId: args.profileId, reason: "manual" });
+    async execute(args, ctx) {
+      const worker = await deps.orchestrator.ensureWorker({
+        workerId: args.profileId,
+        reason: "manual",
+        parentSessionId: ctx?.sessionID,
+      });
       return serialize({
         id: worker.profile.id,
         status: worker.status,
@@ -94,12 +98,17 @@ export function createWorkerTools(deps: WorkerToolsDeps): Record<string, ToolDef
       attachments: tool.schema.array(attachmentSchema()).optional(),
       autoSpawn: tool.schema.boolean().optional().describe("Auto-spawn missing workers (default: true)"),
     },
-    async execute(args) {
+    async execute(args, ctx) {
       if (args.autoSpawn !== false) {
-        await deps.orchestrator.ensureWorker({ workerId: args.workerId, reason: "on-demand" });
+        await deps.orchestrator.ensureWorker({
+          workerId: args.workerId,
+          reason: "on-demand",
+          parentSessionId: ctx?.sessionID,
+        });
       }
       const res = await deps.workers.send(args.workerId, args.message, {
         attachments: args.attachments as WorkerAttachment[] | undefined,
+        sessionId: ctx?.sessionID,
       });
       if (!res.success) return res.error ?? "Worker request failed";
       return res.response ?? "";
@@ -116,7 +125,11 @@ export function createWorkerTools(deps: WorkerToolsDeps): Record<string, ToolDef
     },
     async execute(args, ctx) {
       if (args.autoSpawn !== false) {
-        await deps.orchestrator.ensureWorker({ workerId: args.workerId, reason: "on-demand" });
+        await deps.orchestrator.ensureWorker({
+          workerId: args.workerId,
+          reason: "on-demand",
+          parentSessionId: ctx?.sessionID,
+        });
       }
       const job = deps.workers.jobs.create({
         workerId: args.workerId,
@@ -130,6 +143,7 @@ export function createWorkerTools(deps: WorkerToolsDeps): Record<string, ToolDef
           attachments: args.attachments as WorkerAttachment[] | undefined,
           jobId: job.id,
           from: ctx?.agent,
+          sessionId: ctx?.sessionID,
         });
         if (!res.success) {
           deps.workers.jobs.setResult(job.id, { error: res.error ?? "worker failed" });
@@ -161,11 +175,12 @@ export function createWorkerTools(deps: WorkerToolsDeps): Record<string, ToolDef
       attachments: tool.schema.array(attachmentSchema()).optional(),
       autoSpawn: tool.schema.boolean().optional().describe("Auto-spawn missing workers (default: true)"),
     },
-    async execute(args) {
+    async execute(args, ctx) {
       const res = await deps.orchestrator.delegateTask({
         task: args.task,
         attachments: args.attachments as WorkerAttachment[] | undefined,
         autoSpawn: args.autoSpawn,
+        parentSessionId: ctx?.sessionID,
       });
       return res.response;
     },

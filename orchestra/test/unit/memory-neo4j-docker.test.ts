@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import type { Neo4jDockerDeps } from "../../src/memory/neo4j-docker";
 import { setNeo4jIntegrationsConfig } from "../../src/memory/neo4j-config";
+import type { Neo4jDockerDeps } from "../../src/memory/neo4j-docker";
 
 let dockerAvailable = true;
 let containerExists = false;
@@ -52,7 +52,7 @@ const neo4jStub = {
     if (driverThrows) throw new Error("driver failed");
     return {
       session: () => ({
-        run: async () => {
+        run: async (_query?: string) => {
           const outcome = runOutcomes.length > 0 ? runOutcomes.shift() : defaultRunSuccess;
           if (!outcome) throw new Error("not ready");
         },
@@ -63,61 +63,62 @@ const neo4jStub = {
   },
 };
 
-const buildDeps = (): Neo4jDockerDeps => ({
-  execSync: (command: string) => {
-    commands.push(command);
-    if (command.startsWith("docker --version")) {
-      if (!dockerAvailable) throw new Error("docker missing");
-      return "Docker";
-    }
-    return "";
-  },
-  spawn: () => ({
-    unref: () => {
-      spawnCalls += 1;
+const buildDeps = (): Neo4jDockerDeps =>
+  ({
+    execSync: (command: string) => {
+      commands.push(command);
+      if (command.startsWith("docker --version")) {
+        if (!dockerAvailable) throw new Error("docker missing");
+        return "Docker";
+      }
+      return "";
     },
-  }),
-  spawnSync: (command: string, args?: string[]) => {
-    const argList = Array.isArray(args) ? args : [];
-    if (spawnSyncThrowsFor === "ps-a" && command === "docker" && argList[0] === "ps" && argList[1] === "-a") {
-      throw new Error("spawnSync failed");
-    }
-    if (spawnSyncThrowsFor === "ps" && command === "docker" && argList[0] === "ps" && argList[1] !== "-a") {
-      throw new Error("spawnSync failed");
-    }
-    commands.push(formatCommand(command, argList));
-    if (command === "docker" && argList[0] === "ps" && argList[1] === "-a") {
-      return { pid: 0, status: 0, stdout: containerExists ? "opencode-neo4j" : "", stderr: "" };
-    }
-    if (command === "docker" && argList[0] === "ps") {
-      return { pid: 0, status: 0, stdout: containerRunning ? "opencode-neo4j" : "", stderr: "" };
-    }
-    if (command === "docker" && argList[0] === "start") {
-      startCalls += 1;
-      if (forceStartError) {
-        return { pid: 1, status: 1, stdout: "", stderr: "start failed", error: new Error("start failed") };
+    spawn: () => ({
+      unref: () => {
+        spawnCalls += 1;
+      },
+    }),
+    spawnSync: (command: string, args?: string[]) => {
+      const argList = Array.isArray(args) ? args : [];
+      if (spawnSyncThrowsFor === "ps-a" && command === "docker" && argList[0] === "ps" && argList[1] === "-a") {
+        throw new Error("spawnSync failed");
       }
-      return { pid: 0, status: 0, stdout: "started", stderr: "" };
-    }
-    return { pid: 0, status: 0, stdout: "", stderr: "" };
-  },
-  neo4j: neo4jStub,
-  isNeo4jAccessible: async () => {
-    try {
-      const testDriver = neo4jStub.driver();
-      const session = testDriver.session();
+      if (spawnSyncThrowsFor === "ps" && command === "docker" && argList[0] === "ps" && argList[1] !== "-a") {
+        throw new Error("spawnSync failed");
+      }
+      commands.push(formatCommand(command, argList));
+      if (command === "docker" && argList[0] === "ps" && argList[1] === "-a") {
+        return { pid: 0, status: 0, stdout: containerExists ? "opencode-neo4j" : "", stderr: "" };
+      }
+      if (command === "docker" && argList[0] === "ps") {
+        return { pid: 0, status: 0, stdout: containerRunning ? "opencode-neo4j" : "", stderr: "" };
+      }
+      if (command === "docker" && argList[0] === "start") {
+        startCalls += 1;
+        if (forceStartError) {
+          return { pid: 1, status: 1, stdout: "", stderr: "start failed", error: new Error("start failed") };
+        }
+        return { pid: 0, status: 0, stdout: "started", stderr: "" };
+      }
+      return { pid: 0, status: 0, stdout: "", stderr: "" };
+    },
+    neo4j: neo4jStub,
+    isNeo4jAccessible: async () => {
       try {
-        await session.run("RETURN 1");
-        return true;
-      } finally {
-        await session.close();
-        await testDriver.close();
+        const testDriver = neo4jStub.driver();
+        const session = testDriver.session();
+        try {
+          await session.run("RETURN 1");
+          return true;
+        } finally {
+          await session.close();
+          await testDriver.close();
+        }
+      } catch {
+        return false;
       }
-    } catch {
-      return false;
-    }
-  },
-});
+    },
+  }) as unknown as Neo4jDockerDeps;
 
 describe("neo4j docker helper", () => {
   let envState: ReturnType<typeof snapshotEnv>;
@@ -245,10 +246,10 @@ describe("neo4j docker helper", () => {
 
     const result = await ensureNeo4jRunning(
       {
-      enabled: true,
-      autoStart: true,
-      image: "neo4j:latest",
-      uri: "bolt://localhost:7687",
+        enabled: true,
+        autoStart: true,
+        image: "neo4j:latest",
+        uri: "bolt://localhost:7687",
       },
       deps,
     );

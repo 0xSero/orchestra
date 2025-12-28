@@ -41,7 +41,7 @@ describe("opencode config", () => {
   });
 
   test("drops orchestrator plugins and appends extra entries", async () => {
-    await writeConfig({ plugin: ["keep", "opencode-orchestrator", "orchestrator.js"] });
+    await writeConfig({ plugin: ["keep", "@open-orchestra/opencode-orchestrator", "orchestrator.js"] });
 
     const merged = await mergeOpenCodeConfig(undefined, {
       dropOrchestratorPlugin: true,

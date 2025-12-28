@@ -21,14 +21,40 @@ export const getFileParts = (parts: Part[]): FilePart[] => parts.filter(isFilePa
 /** Check if vision analysis has been performed (image replaced with text description). */
 const hasVisionAnalysis = (text: string): boolean => text.includes("<pasted_image>");
 
+/** Check if vision analysis is currently in progress (placeholder present). */
+const isVisionAnalyzing = (text: string): boolean =>
+  text.includes("[VISION ANALYSIS IN PROGRESS]") || text.includes('job="');
+
+/** Extract the job ID from vision placeholder if present. */
+const extractVisionJobId = (text: string): string | undefined => {
+  const match = text.match(/job="([^"]+)"/);
+  return match?.[1];
+};
+
+export type MessageDisplay = {
+  text: string;
+  files: FilePart[];
+  /** True if vision analysis is currently in progress for this message */
+  visionAnalyzing: boolean;
+  /** The job ID for pending vision analysis */
+  visionJobId?: string;
+};
+
 /** Build text + attachment payloads for a message. */
-export const getMessageDisplay = (message: Message, getMessageParts: (messageId: string) => Part[]) => {
+export const getMessageDisplay = (message: Message, getMessageParts: (messageId: string) => Part[]): MessageDisplay => {
   const parts = getMessageParts(message.id);
   const text = getMessageText(parts);
   const allFiles = getFileParts(parts);
 
-  // Hide images if vision analysis was performed (they've been converted to text)
-  const files = hasVisionAnalysis(text) ? allFiles.filter((f) => !f.mime?.startsWith("image/")) : allFiles;
+  // Hide images if vision analysis was performed or is in progress
+  const hasVision = hasVisionAnalysis(text);
+  const visionAnalyzing = isVisionAnalyzing(text);
+  const files = hasVision || visionAnalyzing ? allFiles.filter((f) => !f.mime?.startsWith("image/")) : allFiles;
 
-  return { text, files };
+  return {
+    text,
+    files,
+    visionAnalyzing,
+    visionJobId: visionAnalyzing ? extractVisionJobId(text) : undefined,
+  };
 };

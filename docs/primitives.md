@@ -22,7 +22,7 @@ This document maps every core primitive in the repo, from the frontend surface d
 - Models (resolution, capabilities, cost)
 - Permissions (tools + path constraints)
 - Memory (Neo4j/file store)
-- Integrations (Linear, Neo4j)
+- Integrations (registry, Linear, Neo4j)
 - UX helpers (repo context)
 - Prompts (orchestrator + worker profiles + workflows)
 
@@ -240,6 +240,19 @@ Responsibilities:
 - Forward orchestration events into TUI event stream.
 - Emit worker/session/model/skill events to the frontend.
 
+## Subagent UX (Spawn → Focus → Return)
+
+Primary files:
+- `orchestra/src/workers/manager.ts`
+- `orchestra/src/communication/events.ts`
+- `app/src/context/opencode.tsx`
+- `app/src/context/layout.tsx`
+
+Flow (3 steps):
+1) Spawn: orchestrator creates a worker session and emits `orchestra.worker.spawned`.
+2) Focus: UI/TUI switches into the subagent session and streams linked events.
+3) Return: on completion, the parent session receives a summary and focus returns.
+
 ## Config and Profile Inheritance
 
 Primary files:
@@ -295,11 +308,14 @@ Config:
 ## Integrations
 
 Primary files:
+- `orchestra/src/integrations/registry.ts`
+- `orchestra/src/integrations/selection.ts`
 - `orchestra/src/integrations/linear.ts`
 - `orchestra/src/memory/neo4j.ts`
 
 Responsibilities:
-- External service wiring for memory graph and issue tracking.
+- Register integrations, export env vars, and provide tool factories.
+- Resolve skill-driven integration selection for worker env/config.
 
 ## UX Helpers
 

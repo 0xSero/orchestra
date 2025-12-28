@@ -20,6 +20,16 @@ function serialize(value: unknown): string {
 
 export type LinearToolsDeps = {
   config?: LinearIntegrationConfig;
+  api?: {
+    resolveConfig?: typeof resolveLinearConfig;
+    createIssue?: typeof createIssue;
+    updateIssue?: typeof updateIssue;
+    addComment?: typeof addComment;
+    addLabel?: typeof addLabel;
+    setEstimate?: typeof setEstimate;
+    syncTaskStatus?: typeof syncTaskStatus;
+    getIssue?: typeof getIssue;
+  };
 };
 
 /** Create Linear tools for orchestrator (write) and workers (read). */
@@ -27,9 +37,10 @@ export function createLinearTools(deps: LinearToolsDeps): {
   orchestrator: Record<string, ToolDefinition>;
   workers: Record<string, ToolDefinition>;
 } {
+  const api = deps.api ?? {};
   let cfg: LinearConfig | undefined;
   const getConfig = (): LinearConfig => {
-    if (!cfg) cfg = resolveLinearConfig(deps.config);
+    if (!cfg) cfg = (api.resolveConfig ?? resolveLinearConfig)(deps.config);
     return cfg;
   };
 
@@ -44,7 +55,7 @@ export function createLinearTools(deps: LinearToolsDeps): {
       estimate: tool.schema.number().optional().describe("Estimate points"),
     },
     async execute(args) {
-      const issue = await createIssue({
+      const issue = await (api.createIssue ?? createIssue)({
         cfg: getConfig(),
         title: args.title,
         description: args.description,
@@ -69,7 +80,7 @@ export function createLinearTools(deps: LinearToolsDeps): {
       priority: tool.schema.number().optional().describe("New priority"),
     },
     async execute(args) {
-      const issue = await updateIssue({
+      const issue = await (api.updateIssue ?? updateIssue)({
         cfg: getConfig(),
         issueId: args.issueId,
         title: args.title,
@@ -87,7 +98,11 @@ export function createLinearTools(deps: LinearToolsDeps): {
       body: tool.schema.string().describe("Comment body (markdown)"),
     },
     async execute(args) {
-      const comment = await addComment({ cfg: getConfig(), issueId: args.issueId, body: args.body });
+      const comment = await (api.addComment ?? addComment)({
+        cfg: getConfig(),
+        issueId: args.issueId,
+        body: args.body,
+      });
       return serialize({ id: comment.commentId, issueId: args.issueId, url: comment.url });
     },
   });
@@ -99,7 +114,11 @@ export function createLinearTools(deps: LinearToolsDeps): {
       labelId: tool.schema.string().describe("Label ID to add"),
     },
     async execute(args) {
-      const issue = await addLabel({ cfg: getConfig(), issueId: args.issueId, labelId: args.labelId });
+      const issue = await (api.addLabel ?? addLabel)({
+        cfg: getConfig(),
+        issueId: args.issueId,
+        labelId: args.labelId,
+      });
       return serialize({ id: issue.issueId, labelIds: issue.labelIds });
     },
   });
@@ -111,7 +130,11 @@ export function createLinearTools(deps: LinearToolsDeps): {
       estimate: tool.schema.number().describe("Estimate points"),
     },
     async execute(args) {
-      const issue = await setEstimate({ cfg: getConfig(), issueId: args.issueId, estimate: args.estimate });
+      const issue = await (api.setEstimate ?? setEstimate)({
+        cfg: getConfig(),
+        issueId: args.issueId,
+        estimate: args.estimate,
+      });
       return serialize({ id: issue.issueId, estimate: issue.estimate });
     },
   });
@@ -125,7 +148,11 @@ export function createLinearTools(deps: LinearToolsDeps): {
         .describe("Status label (e.g., 'todo', 'in_progress', 'in-progress', 'done', 'canceled')"),
     },
     async execute(args) {
-      const issue = await syncTaskStatus({ cfg: getConfig(), issueId: args.issueId, status: args.status });
+      const issue = await (api.syncTaskStatus ?? syncTaskStatus)({
+        cfg: getConfig(),
+        issueId: args.issueId,
+        status: args.status,
+      });
       return serialize({ id: issue.issueId, stateId: issue.stateId, status: args.status });
     },
   });
@@ -151,7 +178,7 @@ export function createLinearTools(deps: LinearToolsDeps): {
       issueId: tool.schema.string().describe("Issue ID or identifier (e.g., 'ABC-123')"),
     },
     async execute(args) {
-      const issue = await getIssue({ cfg: getConfig(), issueId: args.issueId });
+      const issue = await (api.getIssue ?? getIssue)({ cfg: getConfig(), issueId: args.issueId });
       return serialize(issue);
     },
   });

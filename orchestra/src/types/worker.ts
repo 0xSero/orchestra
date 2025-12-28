@@ -1,4 +1,5 @@
-import type { ToolPermissions } from "./permissions";
+import type { SkillPermissions, ToolPermissions } from "./permissions";
+import type { IntegrationSelection, SkillSource } from "./skill";
 
 export type WorkerStatus = "starting" | "ready" | "busy" | "error" | "stopped";
 
@@ -73,10 +74,33 @@ export interface WorkerProfile {
   forwardEvents?: WorkerForwardEvent[];
   /** MCP server configuration for this worker */
   mcp?: WorkerMcpConfig;
+  /** Integration selection for this worker */
+  integrations?: IntegrationSelection;
   /** Environment variables to forward to this worker */
   env?: Record<string, string>;
   /** Environment variable prefixes to auto-forward (e.g., ["OPENCODE_NEO4J_"]) */
   envPrefixes?: string[];
+  /** Origin of the profile definition (builtin, project, global). */
+  source?: SkillSource;
+
+  // === Skill Isolation Configuration ===
+
+  /**
+   * Skill permissions for this worker.
+   * Controls which skills this worker can access.
+   * Uses OpenCode's permission.skill config format with glob patterns.
+   *
+   * Special values:
+   * - "inherit": Inherit all skills from parent (for agents)
+   * - undefined: Default isolation (only own skill + explicitly allowed)
+   *
+   * @example
+   * {
+   *   "memory": "allow",   // Allow memory skill
+   *   "*": "deny"          // Deny all others
+   * }
+   */
+  skillPermissions?: SkillPermissions | "inherit";
 }
 
 export interface WorkerInstance {
@@ -90,6 +114,8 @@ export interface WorkerInstance {
   /** Directory context for tool execution (query.directory) */
   directory?: string;
   sessionId?: string;
+  /** Session ID created in the parent OpenCode server for UI display */
+  uiSessionId?: string;
   client?: ReturnType<typeof import("@opencode-ai/sdk").createOpencodeClient>;
   /** If this worker was spawned in-process, this shuts down its server */
   shutdown?: () => void | Promise<void>;
@@ -121,7 +147,7 @@ export interface WorkerInstance {
   /** Parent session ID (for child mode) */
   parentSessionId?: string;
   /** Event forwarding subscription handle (for linked mode) */
-  eventForwardingHandle?: { stop: () => void };
+  eventForwardingHandle?: { stop: () => void; isActive: () => boolean; setTurboMode: (enabled: boolean) => void };
   /** Messages processed by this worker (for activity tracking) */
   messageCount?: number;
   /** Tools executed by this worker */

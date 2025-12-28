@@ -64,7 +64,7 @@ export const createCore: Factory<CoreConfig, Record<string, never>, CoreService>
   const baseProfiles = { ...config.config.profiles };
   const profiles = { ...baseProfiles };
   config.config.profiles = profiles;
-  const projectDir = config.ctx.worktree || config.ctx.directory;
+  const projectDir = config.ctx.worktree && config.ctx.worktree !== "/" ? config.ctx.worktree : config.ctx.directory;
   const database = createDatabase({ config: { directory: projectDir }, deps: {} });
   const skills = createSkillsService(projectDir);
   const workers = createWorkerManager({
@@ -75,8 +75,9 @@ export const createCore: Factory<CoreConfig, Record<string, never>, CoreService>
       profiles,
       modelSelection: config.config.modelSelection,
       modelAliases: config.config.modelAliases,
+      integrations: config.config.integrations,
     },
-    deps: { api, communication, memory },
+    deps: { api, communication, memory, db: database },
   });
   const workflows = createWorkflowEngine({ config: config.config.workflows, deps: {} });
   const orchestrator = createOrchestrator({ config: config.config, deps: { api, workers, workflows, communication } });
@@ -107,6 +108,18 @@ export const createCore: Factory<CoreConfig, Record<string, never>, CoreService>
     profiles,
     database,
   });
+
+  // Pre-load profiles synchronously so they're available for the config hook
+  // The config hook runs before start(), so we need profiles loaded early
+  let profilesLoaded = false;
+  const ensureProfilesLoaded = async () => {
+    if (profilesLoaded) return;
+    profilesLoaded = true;
+    await refreshProfiles();
+  };
+
+  // Eagerly load profiles (fire and forget, but block config hook if needed)
+  const profilesLoadPromise = ensureProfilesLoaded();
 
   const skillsApi = createSkillsApiServer({
     config: { enabled: true },
@@ -146,7 +159,7 @@ export const createCore: Factory<CoreConfig, Record<string, never>, CoreService>
     }
 
     await memory.start();
-    await refreshProfiles();
+    await ensureProfilesLoaded(); // Uses cached promise if already loaded by config hook
     await workers.start();
     await workflows.start();
     await orchestrator.start();
@@ -175,6 +188,9 @@ export const createCore: Factory<CoreConfig, Record<string, never>, CoreService>
   const hooks: CoreHooks = {
     tool: tools.tool,
     config: async (input: Config) => {
+      // Ensure profiles are loaded before accessing them
+      await profilesLoadPromise;
+
       // Inject the orchestrator agent if enabled in config
       const agentCfg = config.config.agent;
       if (agentCfg?.enabled !== false) {
@@ -188,6 +204,11 @@ export const createCore: Factory<CoreConfig, Record<string, never>, CoreService>
           ...(agentCfg?.color ? { color: agentCfg.color } : {}),
         };
       }
+
+      // NOTE: Workers with skillPermissions: "inherit" are NOT registered as separate agents.
+      // They remain as workers that the orchestrator can delegate to via ask_worker/delegate_task.
+      // This prevents them from inheriting orchestrator-only tools like spawn_worker.
+      // To interact with memory or other "agent-level" workers, use the orchestrator.
 
       const commandConfig = commands.commandConfig();
       if (Object.keys(commandConfig).length > 0) {

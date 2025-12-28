@@ -16,11 +16,16 @@ export type OrchestratorDeps = {
 };
 
 export type OrchestratorService = ServiceLifecycle & {
-  ensureWorker: (input: { workerId: string; reason: "manual" | "on-demand" }) => Promise<WorkerInstance>;
+  ensureWorker: (input: {
+    workerId: string;
+    reason: "manual" | "on-demand";
+    parentSessionId?: string;
+  }) => Promise<WorkerInstance>;
   delegateTask: (input: {
     task: string;
     attachments?: WorkerAttachment[];
     autoSpawn?: boolean;
+    parentSessionId?: string;
   }) => Promise<{ workerId: string; response: string }>;
   runWorkflow: (input: {
     workflowId: string;
@@ -34,7 +39,11 @@ export const createOrchestrator: Factory<OrchestratorConfig, OrchestratorDeps, O
   config,
   deps,
 }) => {
-  const ensureWorker = async (input: { workerId: string; reason: "manual" | "on-demand" }) => {
+  const ensureWorker = async (input: {
+    workerId: string;
+    reason: "manual" | "on-demand";
+    parentSessionId?: string;
+  }) => {
     const existing = deps.workers.getWorker(input.workerId);
     if (existing) return existing;
 
@@ -50,10 +59,15 @@ export const createOrchestrator: Factory<OrchestratorConfig, OrchestratorDeps, O
     // The spawnPolicy check above already controls on-demand spawning.
     // Vision and other workers should be spawnable on-demand by default.
 
-    return await deps.workers.spawnById(input.workerId);
+    return await deps.workers.spawnById(input.workerId, { parentSessionId: input.parentSessionId });
   };
 
-  const delegateTask = async (input: { task: string; attachments?: WorkerAttachment[]; autoSpawn?: boolean }) => {
+  const delegateTask = async (input: {
+    task: string;
+    attachments?: WorkerAttachment[];
+    autoSpawn?: boolean;
+    parentSessionId?: string;
+  }) => {
     const workerId = selectWorkerId({
       task: input.task,
       profiles: config.profiles,
@@ -72,6 +86,7 @@ export const createOrchestrator: Factory<OrchestratorConfig, OrchestratorDeps, O
 
     const res = await deps.workers.send(workerId, input.task, {
       attachments: input.attachments,
+      sessionId: input.parentSessionId,
     });
     if (!res.success || !res.response) {
       throw new Error(res.error ?? "Worker request failed");

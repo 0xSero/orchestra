@@ -1,5 +1,5 @@
 {
-  "name": "opencode-orchestrator",
+  "name": "open-orchestra",
   "version": "0.2.3",
   "description": "Multi-agent orchestrator plugin for OpenCode - spawn, manage, and coordinate specialized AI workers",
   "type": "module",
@@ -9,18 +9,21 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
-    }
+    },
+    "./schema/orchestrator.schema.json": "./schema/orchestrator.schema.json",
+    "./worker-bridge-plugin.mjs": "./dist/worker-bridge-plugin.mjs"
   },
   "files": [
     "dist",
-    "src",
     "schema",
-    "scripts",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target bun --external @opencode-ai/sdk --external @opencode-ai/plugin --external zod && if [ -f scripts/worker-bridge-plugin.mjs ]; then cp scripts/worker-bridge-plugin.mjs dist/worker-bridge-plugin.mjs; fi",
+    "build": "bun run build:types && bun build ./src/index.ts --outdir ./dist --target bun --external @opencode-ai/sdk --external @opencode-ai/plugin --external zod && if [ -f scripts/worker-bridge-plugin.mjs ]; then cp scripts/worker-bridge-plugin.mjs dist/worker-bridge-plugin.mjs; fi",
+    "build:types": "tsc -p tsconfig.build.json --emitDeclarationOnly",
     "dev": "bun --watch src/index.ts",
+    "package:check": "node scripts/package-check.mjs",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "test:real": "bun test test/integration/linear-real.test.ts test/integration/neo4j-real.test.ts"
@@ -51,6 +54,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sero/opencode-orchestrator"
+    "url": "https://github.com/open-orchestra/open-orchestra"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

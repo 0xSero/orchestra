@@ -8,11 +8,14 @@ import {
   type Preference,
   rowToUser,
   rowToWorkerConfig,
+  rowToWorkerState,
   SCHEMA_VERSION,
   type User,
   type UserRow,
   type WorkerConfig,
   type WorkerConfigRow,
+  type WorkerState,
+  type WorkerStateRow,
 } from "./schema";
 
 export type DatabaseConfig = {
@@ -40,6 +43,31 @@ export type DatabaseService = ServiceLifecycle & {
   ): void;
   getAllWorkerConfigs(): WorkerConfig[];
   clearWorkerConfig(workerId: string): void;
+
+  // Worker state operations
+  getWorkerState(workerId: string): WorkerState | null;
+  setWorkerState(state: {
+    workerId: string;
+    profileName?: string | null;
+    model?: string | null;
+    serverUrl?: string | null;
+    sessionId?: string | null;
+    uiSessionId?: string | null;
+    status?: string | null;
+    sessionMode?: string | null;
+    parentSessionId?: string | null;
+    startedAt?: Date | null;
+    lastActivity?: Date | null;
+    currentTask?: string | null;
+    lastResult?: WorkerState["lastResult"] | null;
+    lastResultAt?: Date | null;
+    lastResultJobId?: string | null;
+    lastResultDurationMs?: number | null;
+    error?: string | null;
+    warning?: string | null;
+  }): void;
+  getAllWorkerStates(): WorkerState[];
+  clearWorkerState(workerId: string): void;
 
   // Utility
   isOnboarded(): boolean;
@@ -202,6 +230,120 @@ export const createDatabase: Factory<DatabaseConfig, Record<string, never>, Data
     db.prepare("DELETE FROM worker_config WHERE user_id = ? AND worker_id = ?").run(userId, workerId);
   };
 
+  const getWorkerState = (workerId: string): WorkerState | null => {
+    if (!db) return null;
+    const userId = getUserId();
+    const row = db.prepare("SELECT * FROM worker_state WHERE user_id = ? AND worker_id = ?").get(userId, workerId) as
+      | WorkerStateRow
+      | undefined;
+    return row ? rowToWorkerState(row) : null;
+  };
+
+  const setWorkerState = (state: {
+    workerId: string;
+    profileName?: string | null;
+    model?: string | null;
+    serverUrl?: string | null;
+    sessionId?: string | null;
+    uiSessionId?: string | null;
+    status?: string | null;
+    sessionMode?: string | null;
+    parentSessionId?: string | null;
+    startedAt?: Date | null;
+    lastActivity?: Date | null;
+    currentTask?: string | null;
+    lastResult?: WorkerState["lastResult"] | null;
+    lastResultAt?: Date | null;
+    lastResultJobId?: string | null;
+    lastResultDurationMs?: number | null;
+    error?: string | null;
+    warning?: string | null;
+  }): void => {
+    if (!db) throw new Error("Database not initialized");
+    const userId = getUserId();
+    const serializedResult = state.lastResult ? JSON.stringify(state.lastResult) : null;
+    db.prepare(
+      `
+        INSERT INTO worker_state (
+          id,
+          user_id,
+          worker_id,
+          profile_name,
+          model,
+          server_url,
+          session_id,
+          ui_session_id,
+          status,
+          session_mode,
+          parent_session_id,
+          started_at,
+          last_activity,
+          current_task,
+          last_result,
+          last_result_at,
+          last_result_job_id,
+          last_result_duration_ms,
+          error,
+          warning
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, worker_id) DO UPDATE SET
+          profile_name = excluded.profile_name,
+          model = excluded.model,
+          server_url = excluded.server_url,
+          session_id = excluded.session_id,
+          ui_session_id = excluded.ui_session_id,
+          status = excluded.status,
+          session_mode = excluded.session_mode,
+          parent_session_id = excluded.parent_session_id,
+          started_at = excluded.started_at,
+          last_activity = excluded.last_activity,
+          current_task = excluded.current_task,
+          last_result = excluded.last_result,
+          last_result_at = excluded.last_result_at,
+          last_result_job_id = excluded.last_result_job_id,
+          last_result_duration_ms = excluded.last_result_duration_ms,
+          error = excluded.error,
+          warning = excluded.warning,
+          updated_at = datetime('now')
+      `,
+    ).run(
+      crypto.randomUUID().replace(/-/g, ""),
+      userId,
+      state.workerId,
+      state.profileName ?? null,
+      state.model ?? null,
+      state.serverUrl ?? null,
+      state.sessionId ?? null,
+      state.uiSessionId ?? null,
+      state.status ?? null,
+      state.sessionMode ?? null,
+      state.parentSessionId ?? null,
+      state.startedAt ? state.startedAt.toISOString() : null,
+      state.lastActivity ? state.lastActivity.toISOString() : null,
+      state.currentTask ?? null,
+      serializedResult,
+      state.lastResultAt ? state.lastResultAt.toISOString() : null,
+      state.lastResultJobId ?? null,
+      state.lastResultDurationMs ?? null,
+      state.error ?? null,
+      state.warning ?? null,
+    );
+  };
+
+  const getAllWorkerStates = (): WorkerState[] => {
+    if (!db) return [];
+    const userId = getUserId();
+    const rows = db.prepare("SELECT * FROM worker_state WHERE user_id = ?").all(userId) as WorkerStateRow[];
+    return rows.map(rowToWorkerState);
+  };
+
+  const clearWorkerState = (workerId: string): void => {
+    if (!db) throw new Error("Database not initialized");
+    const userId = getUserId();
+    db.prepare("DELETE FROM worker_state WHERE user_id = ? AND worker_id = ?").run(userId, workerId);
+  };
+
   const isOnboarded = (): boolean => {
     const user = getUser();
     return user?.onboarded ?? false;
@@ -257,9 +399,13 @@ export const createDatabase: Factory<DatabaseConfig, Record<string, never>, Data
     setWorkerConfig,
     getAllWorkerConfigs,
     clearWorkerConfig,
+    getWorkerState,
+    setWorkerState,
+    getAllWorkerStates,
+    clearWorkerState,
     isOnboarded,
     getDbPath: () => dbPath,
   };
 };
 
-export type { User, Preference, WorkerConfig };
+export type { User, Preference, WorkerConfig, WorkerState };

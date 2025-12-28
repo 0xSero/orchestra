@@ -2,6 +2,8 @@
 import type { ApiService } from "../api";
 import type { CommunicationService } from "../communication";
 import { loadOpenCodeConfig, mergeOpenCodeConfig } from "../config/opencode";
+import { getIntegrationEnv } from "../integrations/registry";
+import { resolveIntegrationsForProfile } from "../integrations/selection";
 import type { ProfileModelHydrationChange } from "../models/hydrate";
 import { buildToolConfigFromPermissions, summarizePermissions } from "../permissions/validator";
 import type { OrchestratorConfig, WorkerInstance, WorkerProfile } from "../types";
@@ -10,11 +12,22 @@ import { startEventForwarding, stopEventForwarding } from "./event-forwarding";
 import type { WorkerRegistry } from "./registry";
 import type { WorkerSessionManager } from "./session-manager";
 import { buildBootstrapPromptArgs } from "./spawn-bootstrap";
-import { getDefaultSessionMode, resolveWorkerEnv, resolveWorkerMcp } from "./spawn-env";
+import {
+  buildPermissionConfig,
+  getDefaultSessionMode,
+  resolveWorkerEnv,
+  resolveWorkerMcp,
+  resolveWorkerSkillPermissions,
+} from "./spawn-env";
 import { extractSdkData, extractSdkErrorMessage, isValidPort, withTimeout } from "./spawn-helpers";
 import { resolveProfileModel } from "./spawn-model";
 import { normalizePluginPath, resolveWorkerBridgePluginPath } from "./spawn-plugin";
-import { applyServerBundleToInstance, createWorkerSession, startWorkerServer } from "./spawn-server";
+import {
+  applyServerBundleToInstance,
+  createSubagentSession,
+  createWorkerSession,
+  startWorkerServer,
+} from "./spawn-server";
 
 export type { ModelResolutionResult } from "./spawn-model";
 
@@ -27,8 +40,12 @@ export type SpawnWorkerDeps = {
   resolveProfileModel?: typeof resolveProfileModel;
   loadOpenCodeConfig?: typeof loadOpenCodeConfig;
   mergeOpenCodeConfig?: typeof mergeOpenCodeConfig;
+  resolveIntegrationsForProfile?: typeof resolveIntegrationsForProfile;
+  getIntegrationEnv?: typeof getIntegrationEnv;
   resolveWorkerEnv?: typeof resolveWorkerEnv;
   resolveWorkerMcp?: typeof resolveWorkerMcp;
+  resolveWorkerSkillPermissions?: typeof resolveWorkerSkillPermissions;
+  buildPermissionConfig?: typeof buildPermissionConfig;
   getDefaultSessionMode?: typeof getDefaultSessionMode;
   getRepoContextForWorker?: typeof getRepoContextForWorker;
   startEventForwarding?: typeof startEventForwarding;
@@ -41,6 +58,7 @@ export type SpawnWorkerDeps = {
   normalizePluginPath?: typeof normalizePluginPath;
   startWorkerServer?: typeof startWorkerServer;
   createWorkerSession?: typeof createWorkerSession;
+  createSubagentSession?: typeof createSubagentSession;
   applyServerBundleToInstance?: typeof applyServerBundleToInstance;
 };
 
@@ -50,6 +68,7 @@ export async function spawnWorker(input: {
   registry: WorkerRegistry;
   directory: string;
   profile: WorkerProfile;
+  integrations?: OrchestratorConfig["integrations"];
   modelSelection?: OrchestratorConfig["modelSelection"];
   modelAliases?: OrchestratorConfig["modelAliases"];
   timeoutMs: number;
@@ -66,8 +85,12 @@ export async function spawnWorker(input: {
   const resolveProfileModelFn = deps.resolveProfileModel ?? resolveProfileModel;
   const loadOpenCodeConfigFn = deps.loadOpenCodeConfig ?? loadOpenCodeConfig;
   const mergeOpenCodeConfigFn = deps.mergeOpenCodeConfig ?? mergeOpenCodeConfig;
+  const resolveIntegrationsForProfileFn = deps.resolveIntegrationsForProfile ?? resolveIntegrationsForProfile;
+  const getIntegrationEnvFn = deps.getIntegrationEnv ?? getIntegrationEnv;
   const resolveWorkerEnvFn = deps.resolveWorkerEnv ?? resolveWorkerEnv;
   const resolveWorkerMcpFn = deps.resolveWorkerMcp ?? resolveWorkerMcp;
+  const resolveWorkerSkillPermissionsFn = deps.resolveWorkerSkillPermissions ?? resolveWorkerSkillPermissions;
+  const buildPermissionConfigFn = deps.buildPermissionConfig ?? buildPermissionConfig;
   const getDefaultSessionModeFn = deps.getDefaultSessionMode ?? getDefaultSessionMode;
   const getRepoContextForWorkerFn = deps.getRepoContextForWorker ?? getRepoContextForWorker;
   const startEventForwardingFn = deps.startEventForwarding ?? startEventForwarding;
@@ -80,6 +103,7 @@ export async function spawnWorker(input: {
   const normalizePluginPathFn = deps.normalizePluginPath ?? normalizePluginPath;
   const startWorkerServerFn = deps.startWorkerServer ?? startWorkerServer;
   const createWorkerSessionFn = deps.createWorkerSession ?? createWorkerSession;
+  const createSubagentSessionFn = deps.createSubagentSession ?? createSubagentSession;
   const applyServerBundleToInstanceFn = deps.applyServerBundleToInstance ?? applyServerBundleToInstance;
 
   const {
@@ -122,12 +146,25 @@ export async function spawnWorker(input: {
   // Determine session mode
   const sessionMode = resolvedProfile.sessionMode ?? getDefaultSessionModeFn(resolvedProfile);
 
+  const selectedIntegrations = resolveIntegrationsForProfileFn(resolvedProfile, input.integrations);
+  const integrationEnv = getIntegrationEnvFn(selectedIntegrations);
+
   // Resolve env vars for this worker
-  const workerEnv = resolveWorkerEnvFn(resolvedProfile);
+  const workerEnv = resolveWorkerEnvFn(resolvedProfile, integrationEnv);
 
   // Load parent config for MCP resolution
   const parentConfig = await loadOpenCodeConfigFn();
   const workerMcp = await resolveWorkerMcpFn(resolvedProfile, parentConfig);
+  const baseConfig = { ...parentConfig };
+  delete (baseConfig as Record<string, unknown>).integrations;
+
+  // Resolve skill permissions for worker isolation
+  // This prevents workers from accessing each other's skills unless explicitly allowed
+  const skillPermissions = resolveWorkerSkillPermissionsFn(resolvedProfile);
+  const permissionConfig = buildPermissionConfigFn(
+    resolvedProfile.permissions as Record<string, unknown> | undefined,
+    skillPermissions,
+  );
 
   const instance: WorkerInstance = {
     profile: resolvedProfile,
@@ -178,14 +215,16 @@ export async function spawnWorker(input: {
       {
         model: resolvedProfile.model,
         plugin: [],
+        ...(Object.keys(selectedIntegrations).length > 0 && { integrations: selectedIntegrations }),
         ...(agentOverride ?? {}),
         ...(toolConfig && { tools: toolConfig }),
-        ...(resolvedProfile.permissions && { permissions: resolvedProfile.permissions }),
+        ...(permissionConfig && { permission: permissionConfig }),
         ...(workerMcp && { mcp: workerMcp }),
       },
       {
         dropOrchestratorPlugin: true,
         appendPlugins: useWorkerBridge ? [workerBridgePluginPath as string] : undefined,
+        baseConfig,
       },
     );
 
@@ -223,13 +262,16 @@ export async function spawnWorker(input: {
           {
             model: resolvedProfile.model,
             plugin: [],
+            ...(Object.keys(selectedIntegrations).length > 0 && { integrations: selectedIntegrations }),
             ...(agentOverride ?? {}),
             ...(toolConfig && { tools: toolConfig }),
-            ...(resolvedProfile.permissions && { permissions: resolvedProfile.permissions }),
+            ...(permissionConfig && { permission: permissionConfig }),
+            ...(workerMcp && { mcp: workerMcp }),
           },
           {
             dropOrchestratorPlugin: true,
             appendPlugins: [workerBridgePluginPath],
+            baseConfig,
           },
         );
         serverBundle = await startWorkerServerFn({
@@ -261,6 +303,19 @@ export async function spawnWorker(input: {
     const repoContext = resolvedProfile.injectRepoContext
       ? await getRepoContextForWorkerFn(input.directory).catch(() => undefined)
       : undefined;
+
+    if (input.parentSessionId) {
+      const subagentResult = await createSubagentSessionFn({
+        api: input.api,
+        timeoutMs: input.timeoutMs,
+        title: `Worker: ${resolvedProfile.name}`,
+        parentSessionId: input.parentSessionId,
+      });
+      const subagent = extractSession(subagentResult);
+      if (subagent?.id) {
+        instance.uiSessionId = subagent.id;
+      }
+    }
 
     const bootstrapAbort = new AbortController();
     const bootstrapTimeoutMs = Math.min(input.timeoutMs, 15_000);

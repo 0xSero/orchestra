@@ -119,10 +119,7 @@ describe("vision routing", () => {
 
     expect(jobId).toBeUndefined();
     const analysisPart = output.parts.find(
-      (part) =>
-        part.type === "text" &&
-        typeof part.text === "string" &&
-        (part.text.includes("[VISION ANALYSIS]") || part.text.includes("[VISION ANALYSIS FAILED]")),
+      (part) => part.type === "text" && typeof part.text === "string" && part.text.includes("<pasted_image>"),
     );
     expect(analysisPart).toBeTruthy();
     const hasImageParts = output.parts.some((part) => part.type === "file" || part.type === "image");

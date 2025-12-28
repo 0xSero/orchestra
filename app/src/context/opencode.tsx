@@ -50,6 +50,8 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     agents: [],
     events: [],
     workers: {},
+    subagents: {},
+    lastSubagentEvent: null,
     workerStreams: {},
     modelOptions: [],
     toolIds: [],
@@ -120,6 +122,9 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     events: () => state.events,
     workers: () => Object.values(state.workers),
     workerStreams: () => Object.values(state.workerStreams),
+    subagents: () => Object.values(state.subagents),
+    activeSubagent: () => (state.lastSubagentEvent?.type === "active" ? state.lastSubagentEvent.subagent : null),
+    lastSubagentEvent: () => state.lastSubagentEvent,
     activeWorkerSessionIds: () =>
       new Set(
         Object.values(state.workers)
@@ -144,6 +149,7 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     abortAllSessions: actions.abortAllSessions,
     deleteAllSessions: actions.deleteAllSessions,
     disposeAllInstances: actions.disposeAllInstances,
+    hydrateWorkers: actions.hydrateWorkers,
 
     client,
   };

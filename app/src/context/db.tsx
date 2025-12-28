@@ -9,7 +9,7 @@ import {
 } from "solid-js";
 import { createStore } from "solid-js/store";
 import { getSkillsApiBase } from "@/lib/opencode-base";
-import type { DbSnapshot, DbUser, WorkerConfig } from "@/types/db";
+import type { DbSnapshot, DbUser, WorkerConfig, WorkerState } from "@/types/db";
 
 type DbContextValue = {
   ready: Accessor<boolean>;
@@ -17,6 +17,7 @@ type DbContextValue = {
   user: Accessor<DbUser | null>;
   preferences: Accessor<Record<string, string | null>>;
   workerConfigs: Accessor<WorkerConfig[]>;
+  workerStates: Accessor<WorkerState[]>;
   refresh: () => Promise<void>;
   setPreference: (key: string, value: string | null) => Promise<void>;
   deletePreference: (key: string) => Promise<void>;
@@ -43,6 +44,7 @@ export const DbProvider: ParentComponent<{ baseUrl?: string }> = (props) => {
     user: null,
     preferences: {},
     workerConfigs: [],
+    workerStates: [],
   });
   const [ready, setReady] = createSignal(false);
 
@@ -52,6 +54,7 @@ export const DbProvider: ParentComponent<{ baseUrl?: string }> = (props) => {
       user: snapshot.user ?? null,
       preferences: snapshot.preferences ?? {},
       workerConfigs: snapshot.workerConfigs ?? [],
+      workerStates: snapshot.workerStates ?? [],
     });
     setReady(true);
   };
@@ -147,6 +150,7 @@ export const DbProvider: ParentComponent<{ baseUrl?: string }> = (props) => {
     user: () => state.user,
     preferences: () => state.preferences,
     workerConfigs: () => state.workerConfigs,
+    workerStates: () => state.workerStates,
     refresh,
     setPreference,
     deletePreference,

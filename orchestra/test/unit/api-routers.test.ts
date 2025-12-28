@@ -300,6 +300,7 @@ describe("db router and skills server", () => {
       getUser: () => ({ id: "user-1", onboarded: false, createdAt: now, updatedAt: now, onboardedAt: null }),
       getAllPreferences: () => ({ theme: "dark" }),
       getAllWorkerConfigs: () => [workerConfig],
+      getAllWorkerStates: () => [],
       setPreference: () => {},
       deletePreference: () => {},
       getWorkerConfig: () => workerConfig,

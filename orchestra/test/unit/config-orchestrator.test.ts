@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadOrchestratorConfig } from "../../src/config/orchestrator";
 import {
+  getDefaultGlobalOpenCodeConfigPath,
   getDefaultGlobalOrchestratorConfigPath,
   getDefaultProjectOrchestratorConfigPath,
 } from "../../src/config/orchestrator/paths";
@@ -143,6 +144,32 @@ describe("orchestrator config loading", () => {
     expect(result.config.healthCheckInterval).toBe(12345);
     expect(result.config.healthCheck?.enabled).toBe(false);
     expect(result.config.healthCheck?.maxRetries).toBe(2);
+  });
+
+  test("merges opencode integrations with orchestrator overrides", async () => {
+    const openCodePath = getDefaultGlobalOpenCodeConfigPath();
+    await mkdir(join(tempDir, "opencode"), { recursive: true });
+    await writeFile(
+      openCodePath,
+      JSON.stringify({
+        integrations: { linear: { apiKey: "open-key" } },
+      }),
+      "utf8",
+    );
+
+    const projectPath = getDefaultProjectOrchestratorConfigPath(tempDir);
+    await mkdir(join(tempDir, ".opencode"), { recursive: true });
+    await writeFile(
+      projectPath,
+      JSON.stringify({
+        integrations: { linear: { teamId: "team-1" } },
+      }),
+      "utf8",
+    );
+
+    const result = await loadOrchestratorConfig({ directory: tempDir });
+    expect(result.config.integrations?.linear?.apiKey).toBe("open-key");
+    expect(result.config.integrations?.linear?.teamId).toBe("team-1");
   });
 
   test("filters spawn list by spawn policy", async () => {

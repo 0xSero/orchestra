@@ -150,7 +150,15 @@ export function parseMemorySection(raw: Record<string, unknown>, partial: Partia
 
 export function parseIntegrationsSection(raw: Record<string, unknown>, partial: Partial<OrchestratorConfigFile>): void {
   if (!isPlainObject(raw.integrations)) return;
-  partial.integrations = validateObject(raw.integrations, integrationsSchema) as OrchestratorConfig["integrations"];
+  const validated = validateObject(raw.integrations, integrationsSchema) as Record<string, unknown>;
+  const passthrough = raw.integrations as Record<string, unknown>;
+  const knownKeys = new Set(Object.keys(integrationsSchema.nested ?? {}));
+  for (const [key, value] of Object.entries(passthrough)) {
+    if (!knownKeys.has(key)) {
+      validated[key] = value;
+    }
+  }
+  partial.integrations = validated as OrchestratorConfig["integrations"];
 }
 
 export function parseTelemetrySection(raw: Record<string, unknown>, partial: Partial<OrchestratorConfigFile>): void {

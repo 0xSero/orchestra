@@ -1,6 +1,7 @@
 # Configuration Reference
 
 Complete configuration guide for the Open Orchestra plugin with diagrams and detailed explanations.
+For a minimal setup flow, see `docs/getting-started.md`.
 
 ## Configuration Resolution
 
@@ -30,6 +31,9 @@ Complete configuration guide for the Open Orchestra plugin with diagrams and det
 Environment variables override specific integrations (Neo4j/Linear/PostHog) and runtime knobs
 like skills API port and vision prompt/timeout.
 
+Integrations may also be supplied by `~/.opencode/opencode.json` as a low-priority source;
+values from orchestrator config override them.
+
 ## Environment Overrides
 
 Common environment variables recognized by the orchestrator runtime:
@@ -49,6 +53,7 @@ Common environment variables recognized by the orchestrator runtime:
 | `.opencode/orchestrator.json` | Project-specific config | High |
 | `orchestrator.json` | Project-specific config (repo root) | High |
 | `~/.opencode/orchestrator.json` | User-wide defaults | Medium |
+| `~/.opencode/opencode.json` | Integrations fallback only | Low |
 | Built-in defaults | Fallback values | Low |
 
 ## Full Configuration Schema
@@ -123,6 +128,7 @@ Note: the runtime config derives the `spawn` list from `workers` + `spawnPolicy`
 │  sessionMode?: string    │ child | isolated | linked                 │
 │  forwardEvents?: string[]│ Linked-mode forwarded events              │
 │  mcp?: {...}             │ MCP server forwarding                     │
+│  integrations?: {...}    │ Integration selection                      │
 │  env?: Record<...>       │ Env vars for worker                        │
 │  envPrefixes?: string[]  │ Env var prefix passthrough                │
 │  tags?: string[]         │ Keywords for routing                      │
@@ -170,12 +176,31 @@ tags:
 You are a code implementation specialist...
 ```
 
+To control which integrations a worker receives, add an `integrations` block:
+
+```markdown
+---
+name: builder
+description: Code implementation specialist
+model: node:code
+integrations:
+  inheritAll: true
+  include:
+    - linear
+    - zendesk
+  exclude:
+    - monitoring
+---
+
+You are a code implementation specialist...
+```
+
 **Model Selection**:
 - Direct: `model: anthropic/claude-sonnet-4-20250514`
 - Node tags: `model: node:code` (resolved via `modelSelection` in orchestrator.json)
 
 Common optional fields: `supportsVision`, `supportsWeb`, `injectRepoContext`, `sessionMode`, `forwardEvents`,
-`mcp`, `env`, `envPrefixes`, `tools`, `permissions`, `tags`, `extends`, `compose`.
+`mcp`, `integrations`, `env`, `envPrefixes`, `tools`, `permissions`, `tags`, `extends`, `compose`.
 
 ### Profile Inheritance
 
@@ -634,6 +659,10 @@ Reduces context size by trimming completed tool outputs.
 
 ## Integrations
 
+Integrations can be defined in `.opencode/orchestrator.json` (project), `~/.opencode/orchestrator.json` (global),
+or in `~/.opencode/opencode.json` as a low-priority fallback. Orchestrator configs override `opencode.json`,
+and environment variables still override both.
+
 ### Neo4j (Memory Graph)
 
 ```
@@ -797,7 +826,7 @@ Pre-spawn workers for fast availability.
 
 ```json
 {
-  "$schema": "./schema/orchestrator.schema.json",
+  "$schema": "./node_modules/@open-orchestra/opencode-orchestrator/schema/orchestrator.schema.json",
 
   "basePort": 14096,
   "autoSpawn": true,

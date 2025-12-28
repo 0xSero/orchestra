@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { getTeamStates, getViewer, loadLinearConfigFromEnv, resolveLinearConfig } from "../../src/integrations/linear";
+import { getTeamStates, getViewer } from "../../src/integrations/linear";
+import { loadLinearConfigFromEnv, resolveLinearConfig } from "../../src/integrations/linear-config";
 
 describe("linear real integration", () => {
   const cfg = loadLinearConfigFromEnv();

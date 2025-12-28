@@ -45,6 +45,7 @@ export const createCommunication: Factory<CommunicationConfig, CommunicationDeps
     if (
       type.startsWith("orchestra.worker.") ||
       type.startsWith("orchestra.session.") ||
+      type.startsWith("orchestra.subagent.") ||
       type.startsWith("orchestra.model.") ||
       type === "orchestra.started" ||
       type.startsWith("skill.")

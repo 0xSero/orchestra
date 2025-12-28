@@ -1,20 +1,25 @@
 import { execSync } from "node:child_process";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 type PidTrackerDeps = {
   platform?: string;
   execSync?: typeof execSync;
   homedir?: typeof homedir;
+  tmpdir?: typeof tmpdir;
 };
 
 const resolveHomeDir = (deps?: PidTrackerDeps): string => {
   const platform = deps?.platform ?? process.platform;
   const homedirFn = deps?.homedir ?? homedir;
+  const tmpdirFn = deps?.tmpdir ?? tmpdir;
+  const fallbackDir = tmpdirFn();
   if (platform === "win32") {
-    return process.env.USERPROFILE || homedirFn();
+    return process.env.USERPROFILE || homedirFn() || fallbackDir;
   }
-  return process.env.HOME || homedirFn();
+  const candidate = process.env.HOME || homedirFn();
+  if (!candidate || candidate === "/") return fallbackDir;
+  return candidate;
 };
 
 const getPidDir = (deps?: PidTrackerDeps): string => join(resolveHomeDir(deps), ".opencode");

@@ -26,10 +26,46 @@ type TestWorkerConfig = {
   updatedAt: Date;
 };
 
+type TestWorkerState = {
+  id: string;
+  userId: string;
+  workerId: string;
+  profileName: string | null;
+  model: string | null;
+  serverUrl: string | null;
+  sessionId: string | null;
+  uiSessionId: string | null;
+  status: string | null;
+  sessionMode: string | null;
+  parentSessionId: string | null;
+  startedAt: Date | null;
+  lastActivity: Date | null;
+  currentTask: string | null;
+  lastResult: {
+    at?: string;
+    jobId?: string;
+    response?: string;
+    report?: {
+      summary?: string;
+      details?: string;
+      issues?: string[];
+      notes?: string;
+    };
+    durationMs?: number;
+  } | null;
+  lastResultAt: Date | null;
+  lastResultJobId: string | null;
+  lastResultDurationMs: number | null;
+  error: string | null;
+  warning: string | null;
+  updatedAt: Date;
+};
+
 function createTestDb() {
   let user: TestUser | null = null;
   const preferences = new Map<string, string | null>();
   const workerConfigs = new Map<string, TestWorkerConfig>();
+  const workerStates = new Map<string, TestWorkerState>();
   const dbPath = "memory://opencode-test";
 
   const ensureUser = () => {
@@ -95,6 +131,57 @@ function createTestDb() {
     getAllWorkerConfigs: () => Array.from(workerConfigs.values()),
     clearWorkerConfig: (workerId: string) => {
       workerConfigs.delete(workerId);
+    },
+    getWorkerState: (workerId: string) => workerStates.get(workerId) ?? null,
+    setWorkerState: (state: {
+      workerId: string;
+      profileName?: string | null;
+      model?: string | null;
+      serverUrl?: string | null;
+      sessionId?: string | null;
+      uiSessionId?: string | null;
+      status?: string | null;
+      sessionMode?: string | null;
+      parentSessionId?: string | null;
+      startedAt?: Date | null;
+      lastActivity?: Date | null;
+      currentTask?: string | null;
+      lastResult?: TestWorkerState["lastResult"] | null;
+      lastResultAt?: Date | null;
+      lastResultJobId?: string | null;
+      lastResultDurationMs?: number | null;
+      error?: string | null;
+      warning?: string | null;
+    }) => {
+      const now = new Date();
+      const existing = workerStates.get(state.workerId);
+      workerStates.set(state.workerId, {
+        id: existing?.id ?? `state-${Math.random().toString(36).slice(2, 10)}`,
+        userId: ensureUser().id,
+        workerId: state.workerId,
+        profileName: state.profileName ?? existing?.profileName ?? null,
+        model: state.model ?? existing?.model ?? null,
+        serverUrl: state.serverUrl ?? existing?.serverUrl ?? null,
+        sessionId: state.sessionId ?? existing?.sessionId ?? null,
+        uiSessionId: state.uiSessionId ?? existing?.uiSessionId ?? null,
+        status: state.status ?? existing?.status ?? null,
+        sessionMode: state.sessionMode ?? existing?.sessionMode ?? null,
+        parentSessionId: state.parentSessionId ?? existing?.parentSessionId ?? null,
+        startedAt: state.startedAt ?? existing?.startedAt ?? null,
+        lastActivity: state.lastActivity ?? existing?.lastActivity ?? null,
+        currentTask: state.currentTask ?? existing?.currentTask ?? null,
+        lastResult: state.lastResult ?? existing?.lastResult ?? null,
+        lastResultAt: state.lastResultAt ?? existing?.lastResultAt ?? null,
+        lastResultJobId: state.lastResultJobId ?? existing?.lastResultJobId ?? null,
+        lastResultDurationMs: state.lastResultDurationMs ?? existing?.lastResultDurationMs ?? null,
+        error: state.error ?? existing?.error ?? null,
+        warning: state.warning ?? existing?.warning ?? null,
+        updatedAt: now,
+      });
+    },
+    getAllWorkerStates: () => Array.from(workerStates.values()),
+    clearWorkerState: (workerId: string) => {
+      workerStates.delete(workerId);
     },
     isOnboarded: () => ensureUser().onboarded,
     getDbPath: () => dbPath,

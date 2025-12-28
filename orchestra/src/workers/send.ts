@@ -10,6 +10,7 @@ export type WorkerSendOptions = {
   timeoutMs?: number;
   jobId?: string;
   from?: string;
+  parentSessionId?: string;
   /** Optional communication service to emit streaming events */
   communication?: CommunicationService;
   /** Enable turbo polling for real-time visibility (default: true) */

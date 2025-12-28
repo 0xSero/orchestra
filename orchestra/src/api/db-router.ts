@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { DatabaseService, User, WorkerConfig } from "../db";
+import type { DatabaseService, User, WorkerConfig, WorkerState } from "../db";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
@@ -59,6 +59,32 @@ function serializeWorkerConfig(config: WorkerConfig): JsonValue {
   };
 }
 
+function serializeWorkerState(state: WorkerState): JsonValue {
+  return {
+    id: state.id,
+    userId: state.userId,
+    workerId: state.workerId,
+    profileName: state.profileName,
+    model: state.model,
+    serverUrl: state.serverUrl,
+    sessionId: state.sessionId,
+    uiSessionId: state.uiSessionId,
+    status: state.status,
+    sessionMode: state.sessionMode,
+    parentSessionId: state.parentSessionId,
+    startedAt: state.startedAt ? state.startedAt.toISOString() : null,
+    lastActivity: state.lastActivity ? state.lastActivity.toISOString() : null,
+    currentTask: state.currentTask,
+    lastResult: state.lastResult,
+    lastResultAt: state.lastResultAt ? state.lastResultAt.toISOString() : null,
+    lastResultJobId: state.lastResultJobId,
+    lastResultDurationMs: state.lastResultDurationMs,
+    error: state.error,
+    warning: state.warning,
+    updatedAt: state.updatedAt.toISOString(),
+  };
+}
+
 export function createDbRouter(deps: DbRouterDeps) {
   const subscribers = new Set<ServerResponse>();
 
@@ -67,6 +93,7 @@ export function createDbRouter(deps: DbRouterDeps) {
     user: serializeUser(deps.db.getUser()),
     preferences: deps.db.getAllPreferences(),
     workerConfigs: deps.db.getAllWorkerConfigs().map(serializeWorkerConfig),
+    workerStates: deps.db.getAllWorkerStates().map(serializeWorkerState),
   });
 
   const broadcastSnapshot = () => {

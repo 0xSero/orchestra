@@ -195,6 +195,7 @@ describe("extra config sections", () => {
         linear: { enabled: true, apiKey: "key", teamId: "team" },
         neo4j: { enabled: true, uri: "bolt://", username: "neo4j", password: "pw" },
         monitoring: { enabled: true, port: 9000 },
+        zendesk: { subdomain: "example", apiKey: "z-key" },
       },
       telemetry: { enabled: true, apiKey: "telemetry", host: "https://telemetry" },
     };
@@ -206,6 +207,7 @@ describe("extra config sections", () => {
 
     expect(partial.memory?.enabled).toBe(true);
     expect(partial.integrations?.linear?.apiKey).toBe("key");
+    expect(partial.integrations?.zendesk).toEqual({ subdomain: "example", apiKey: "z-key" });
     expect(partial.telemetry?.enabled).toBe(true);
   });
 });

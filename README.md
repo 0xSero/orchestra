@@ -29,8 +29,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/0xSero/open-orchestra/releases"><img src="https://img.shields.io/badge/version-v0.1.0-blue.svg" alt="Version"></a>
-  <a href="https://github.com/0xSero/open-orchestra/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
+  <a href="https://github.com/open-orchestra/open-orchestra/releases"><img src="https://img.shields.io/badge/version-v0.1.0-blue.svg" alt="Version"></a>
+  <a href="https://github.com/open-orchestra/open-orchestra/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
   <a href="https://bun.sh"><img src="https://img.shields.io/badge/runtime-Bun-f9f1e1.svg" alt="Bun"></a>
   <a href="https://opencode.ai"><img src="https://img.shields.io/badge/platform-OpenCode-6495ED.svg" alt="OpenCode"></a>
 </p>
@@ -86,7 +86,8 @@ bun --version && opencode --version
 }
 ```
 
-See [docs/configuration.md](./docs/configuration.md) for detailed setup instructions.
+See [docs/getting-started.md](./docs/getting-started.md) for a minimal setup flow and
+[docs/configuration.md](./docs/configuration.md) for the full reference.
 
 ### Key Features
 
@@ -148,11 +149,11 @@ graph TB
 ### Installation
 
 ```bash
-# Add to your project
-bun add opencode-orchestrator
+# Add to your project (pin the version)
+bun add @open-orchestra/opencode-orchestrator@0.2.3
 
 # Or install globally
-bun add -g opencode-orchestrator
+bun add -g @open-orchestra/opencode-orchestrator@0.2.3
 ```
 
 ### Configuration
@@ -162,7 +163,7 @@ bun add -g opencode-orchestrator
 ```bash
 mkdir -p .opencode/plugin
 cat > .opencode/plugin/orchestrator.js <<'EOF'
-export { OrchestratorPlugin as default } from "opencode-orchestrator";
+export { OrchestratorPlugin as default } from "@open-orchestra/opencode-orchestrator";
 EOF
 ```
 
@@ -171,7 +172,7 @@ EOF
 ```json
 // opencode.json or ~/.config/opencode/opencode.json
 {
-  "plugin": ["opencode-orchestrator"]
+  "plugin": ["@open-orchestra/opencode-orchestrator"]
 }
 ```
 
@@ -204,7 +205,7 @@ EOF
 ```json
 // .opencode/orchestrator.json or orchestrator.json
 {
-  "$schema": "./node_modules/opencode-orchestrator/schema/orchestrator.schema.json",
+  "$schema": "./node_modules/@open-orchestra/opencode-orchestrator/schema/orchestrator.schema.json",
   "autoSpawn": true,
   "workers": ["vision", "docs", "coder"]
 }

@@ -6,7 +6,7 @@
  * @see https://opencode.ai/docs/skills/
  */
 
-import type { ToolPermissions } from "./permissions";
+import type { SkillPermissions, ToolPermissions } from "./permissions";
 import type { WorkerForwardEvent, WorkerMcpConfig, WorkerSessionMode } from "./worker";
 
 // ============================================================================
@@ -50,6 +50,12 @@ export interface SkillFrontmatterBase {
 // ============================================================================
 // OpenCode Profile Extensions
 // ============================================================================
+
+export type IntegrationSelection = {
+  inheritAll?: boolean;
+  include?: string[];
+  exclude?: string[];
+};
 
 /**
  * OpenCode-specific extensions for profile configuration.
@@ -140,6 +146,11 @@ export interface ProfileExtensions {
   mcp?: WorkerMcpConfig;
 
   /**
+   * Integration selection for this worker.
+   */
+  integrations?: IntegrationSelection;
+
+  /**
    * Explicit environment variables to set for this worker.
    */
   env?: Record<string, string>;
@@ -149,6 +160,20 @@ export interface ProfileExtensions {
    * E.g., ["OPENCODE_NEO4J_", "LINEAR_"] to pass all Neo4j and Linear vars.
    */
   envPrefixes?: string[];
+
+  /**
+   * Skill permissions for this worker.
+   * Controls which skills this worker can access.
+   *
+   * Special value "inherit" means inherit all skills from parent (for agents).
+   * Default behavior (undefined) isolates worker to only its own skill.
+   *
+   * @example
+   * skillPermissions:
+   *   memory: allow
+   *   "*": deny
+   */
+  skillPermissions?: SkillPermissions | "inherit";
 }
 
 // ============================================================================

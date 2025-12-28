@@ -13,13 +13,38 @@ interface WorkerMessageProps {
   getMessageParts: (messageId: string) => Part[];
 }
 
+/** Vision analysis loading indicator. */
+const VisionAnalyzingIndicator: Component = () => (
+  <div class="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 my-3">
+    <div class="relative flex h-5 w-5 items-center justify-center">
+      <div class="absolute h-5 w-5 animate-ping rounded-full bg-primary/30" />
+      <div class="relative h-3 w-3 rounded-full bg-primary animate-pulse" />
+    </div>
+    <div class="flex flex-col gap-0.5">
+      <span class="text-sm font-medium text-primary">Analyzing image...</span>
+      <span class="text-xs text-muted-foreground">Vision worker is processing your image</span>
+    </div>
+  </div>
+);
+
 /** Render a single chat message with markdown and attachments. */
 export const WorkerMessage: Component<WorkerMessageProps> = (props) => {
   const display = createMemo(() => getMessageDisplay(props.message, props.getMessageParts));
+
+  // Clean content by removing vision placeholder XML when analyzing
   const content = createMemo(() => {
-    const { text, files } = display();
+    const { text, files, visionAnalyzing } = display();
+    if (visionAnalyzing) {
+      // Remove the placeholder XML tags and their content for cleaner display
+      const cleaned = text
+        .replace(/<pasted_image[^>]*>[\s\S]*?<\/pasted_image>/g, "")
+        .replace(/\[VISION ANALYSIS IN PROGRESS\][\s\S]*?Job ID:.*$/gm, "")
+        .trim();
+      return cleaned || (files.length > 0 ? "" : "");
+    }
     return text || (files.length > 0 ? "" : `[${props.message.role} message]`);
   });
+
   const renderedHtml = createMemo(() => (content() ? marked.parse(content()) : ""));
 
   return (
@@ -34,6 +59,10 @@ export const WorkerMessage: Component<WorkerMessageProps> = (props) => {
 
       <Show when={content()}>
         <div class="message-content prose prose-sm prose-invert max-w-none" innerHTML={renderedHtml()} />
+      </Show>
+
+      <Show when={display().visionAnalyzing}>
+        <VisionAnalyzingIndicator />
       </Show>
 
       <Show when={display().files.length > 0}>

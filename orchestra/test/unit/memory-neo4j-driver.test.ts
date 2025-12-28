@@ -80,6 +80,8 @@ describe("neo4j driver helpers", () => {
       runShouldThrow = true;
       expect(await isNeo4jAccessible(cfg2)).toBe(false);
     } finally {
+      runShouldThrow = false;
+      closeShouldThrow = false;
       if (envSnapshot.OPENCODE_NEO4J_URI) process.env.OPENCODE_NEO4J_URI = envSnapshot.OPENCODE_NEO4J_URI;
       else delete process.env.OPENCODE_NEO4J_URI;
       if (envSnapshot.OPENCODE_NEO4J_USERNAME)

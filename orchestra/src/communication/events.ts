@@ -64,6 +64,24 @@ export type StreamChunk = {
   final?: boolean;
 };
 
+export type SubagentSessionInfo = {
+  workerId: string;
+  sessionId: string;
+  parentSessionId?: string;
+  profile?: { id: string; name: string; model?: string };
+  serverUrl?: string;
+  status?: string;
+};
+
+export type SubagentActivePayload = {
+  subagent: SubagentSessionInfo;
+};
+
+export type SubagentClosedPayload = {
+  subagent: SubagentSessionInfo;
+  result?: { summary?: string; error?: string };
+};
+
 export type ModelResolution = {
   profileId: string;
   from: string;
@@ -77,23 +95,28 @@ export type OrchestraEventMap = {
   "orchestra.model.resolved": { resolution: ModelResolution };
   "orchestra.model.fallback": { profileId: string; model: string; reason: string };
   "orchestra.worker.spawned": { worker: WorkerInstance };
+  "orchestra.worker.created": { worker: WorkerInstance };
   "orchestra.worker.reused": { worker: WorkerInstance };
   "orchestra.worker.ready": { worker: WorkerInstance };
   "orchestra.worker.busy": { worker: WorkerInstance };
   "orchestra.worker.error": { worker: WorkerInstance; error: string };
+  "orchestra.worker.completed": { worker: WorkerInstance; jobId?: string; response?: string };
   "orchestra.worker.stopped": { worker: WorkerInstance };
   "orchestra.worker.job": { job: WorkerJob; status: "created" | "succeeded" | "failed" };
   "orchestra.worker.stream": { chunk: StreamChunk };
   "orchestra.worker.response": { worker: WorkerInstance; response: string; jobId?: string };
   "orchestra.worker.wakeup": { workerId: string; jobId?: string; reason: string; summary?: string };
-  "orchestra.vision.started": { sessionId: string; messageId?: string };
-  "orchestra.vision.completed": { success: boolean; error?: string; durationMs?: number };
+  "orchestra.vision.started": { sessionId: string; messageId?: string; jobId?: string };
+  "orchestra.vision.completed": { success: boolean; error?: string; durationMs?: number; jobId?: string };
   // Session events
   "orchestra.session.created": SessionCreatedPayload;
   "orchestra.session.activity": SessionActivityPayload;
   "orchestra.session.status": SessionStatusPayload;
   "orchestra.session.closed": SessionClosedPayload;
   "orchestra.session.error": SessionErrorPayload;
+  // Subagent events
+  "orchestra.subagent.active": SubagentActivePayload;
+  "orchestra.subagent.closed": SubagentClosedPayload;
   // Skill events
   "skill.created": { skill: Skill };
   "skill.updated": { skill: Skill };

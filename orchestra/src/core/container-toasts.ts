@@ -129,6 +129,25 @@ export const registerCommunicationToasts = (input: {
     },
   );
 
+  communication.on("orchestra.subagent.active", (event) => {
+    const subagent = event.data.subagent;
+    showToast({
+      title: `Subagent Active: ${subagent.workerId}`,
+      message: subagent.profile?.name ?? "Switching to worker session",
+      variant: "info",
+    });
+  });
+
+  communication.on("orchestra.subagent.closed", (event) => {
+    const subagent = event.data.subagent;
+    const error = event.data.result?.error;
+    showToast({
+      title: `Subagent Closed: ${subagent.workerId}`,
+      message: error ?? "Returning to parent session",
+      variant: error ? "error" : "success",
+    });
+  });
+
   communication.on("orchestra.vision.started", () => {
     showToast({
       title: "Analyzing Image",

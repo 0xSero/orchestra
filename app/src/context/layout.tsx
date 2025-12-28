@@ -12,10 +12,14 @@ import {
   useContext,
 } from "solid-js";
 import { createStore } from "solid-js/store";
+import { useDb } from "@/context/db";
+import { useOpenCode } from "@/context/opencode";
 
 interface LayoutState {
   sidebarOpen: boolean;
   selectedWorkerId: string | null;
+  activeSubagentSessionId: string | null;
+  activeSubagentParentId: string | null;
   showJobQueue: boolean;
   showLogs: boolean;
   activePanel: "workers" | "skills" | "jobs" | "logs" | "settings";
@@ -39,6 +43,9 @@ interface LayoutContextValue {
   // Worker selection
   selectWorker: (id: string | null) => void;
   selectedWorkerId: Accessor<string | null>;
+  activeSubagentSessionId: Accessor<string | null>;
+  activeSubagentParentId: Accessor<string | null>;
+  returnToParentSession: () => void;
 
   // Panels
   toggleJobQueue: () => void;
@@ -68,6 +75,8 @@ export const LayoutProvider: ParentComponent = (props) => {
   const [state, setState] = createStore<LayoutState>({
     sidebarOpen: false, // Start closed on mobile
     selectedWorkerId: null,
+    activeSubagentSessionId: null,
+    activeSubagentParentId: null,
     showJobQueue: true,
     showLogs: true,
     activePanel: "workers",
@@ -75,6 +84,9 @@ export const LayoutProvider: ParentComponent = (props) => {
     commandPaletteQuery: "",
     spawnDialogOpen: false,
   });
+
+  const openCode = useOpenCode();
+  const db = useDb();
 
   // Responsive signals
   const [windowWidth, setWindowWidth] = createSignal(typeof window !== "undefined" ? window.innerWidth : 1024);
@@ -99,6 +111,39 @@ export const LayoutProvider: ParentComponent = (props) => {
   createEffect(() => {
     if (isDesktop()) {
       setState("sidebarOpen", true);
+    }
+  });
+
+  const selectWorker = (id: string | null) => {
+    setState("selectedWorkerId", id);
+    if (isMobile()) {
+      setState("sidebarOpen", false);
+    }
+  };
+
+  createEffect(() => {
+    const workerStates = db.workerStates();
+    if (workerStates.length === 0) return;
+    openCode.hydrateWorkers(workerStates);
+  });
+
+  createEffect(() => {
+    const event = openCode.lastSubagentEvent();
+    if (!event) return;
+    if (event.type === "active") {
+      const sessionId = event.subagent.sessionId;
+      setState("activeSubagentSessionId", sessionId);
+      setState("activeSubagentParentId", event.subagent.parentSessionId ?? null);
+      if (state.selectedWorkerId !== sessionId) selectWorker(sessionId);
+      return;
+    }
+
+    if (event.type === "closed") {
+      if (state.activeSubagentSessionId !== event.subagent.sessionId) return;
+      const parentId = event.subagent.parentSessionId ?? state.activeSubagentParentId;
+      setState("activeSubagentSessionId", null);
+      setState("activeSubagentParentId", null);
+      if (parentId && state.selectedWorkerId === event.subagent.sessionId) selectWorker(parentId);
     }
   });
 
@@ -143,14 +188,17 @@ export const LayoutProvider: ParentComponent = (props) => {
     toggleSidebar: () => setState("sidebarOpen", (v) => !v),
     setSidebarOpen: (open) => setState("sidebarOpen", open),
 
-    selectWorker: (id) => {
-      setState("selectedWorkerId", id);
-      // On mobile, close sidebar when selecting
-      if (isMobile()) {
-        setState("sidebarOpen", false);
-      }
-    },
+    selectWorker,
     selectedWorkerId: () => state.selectedWorkerId,
+    activeSubagentSessionId: () => state.activeSubagentSessionId,
+    activeSubagentParentId: () => state.activeSubagentParentId,
+    returnToParentSession: () => {
+      const parentId = state.activeSubagentParentId;
+      if (!parentId) return;
+      setState("activeSubagentSessionId", null);
+      setState("activeSubagentParentId", null);
+      selectWorker(parentId);
+    },
 
     toggleJobQueue: () => setState("showJobQueue", (v) => !v),
     setShowJobQueue: (show) => setState("showJobQueue", show),

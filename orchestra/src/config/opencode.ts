@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { deepMerge, getUserConfigDir, isPlainObject } from "../helpers/format";
 
 const ORCHESTRATOR_PLUGIN_SUFFIXES = ["orchestrator.js", "orchestrator.mjs", "orchestrator.cjs", "orchestrator.ts"];
-const ORCHESTRATOR_PLUGIN_PACKAGE = "opencode-orchestrator";
+const ORCHESTRATOR_PLUGIN_PACKAGE = "@open-orchestra/opencode-orchestrator";
 
 function isOrchestratorPlugin(entry: string): boolean {
   const normalized = entry.toLowerCase();
@@ -45,6 +45,13 @@ export async function loadOpenCodeConfig(): Promise<Record<string, unknown>> {
   } catch {
     return {};
   }
+}
+
+export function extractIntegrationsFromOpenCodeConfig(
+  config: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  if (!isPlainObject(config.integrations)) return undefined;
+  return config.integrations as Record<string, unknown>;
 }
 
 export async function mergeOpenCodeConfig(

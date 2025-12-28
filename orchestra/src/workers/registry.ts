@@ -137,6 +137,8 @@ export class WorkerRegistry {
         port: w.port,
         pid: w.pid,
         serverUrl: w.serverUrl,
+        sessionId: w.sessionId,
+        uiSessionId: w.uiSessionId,
         supportsVision: Boolean(w.profile.supportsVision),
         supportsWeb: Boolean(w.profile.supportsWeb),
         lastActivity: w.lastActivity?.toISOString(),

@@ -8,22 +8,42 @@ export function createToolGuard(config: OrchestratorConfig) {
   const readString = (value: unknown): string =>
     typeof value === "string" ? value : value == null ? "" : String(value);
 
-  return async (input: { tool: string }, output: { args?: ToolArgs }) => {
-    const args = output.args ?? {};
+  // Get orchestrator agent name for permission checks
+  const orchestratorName = config.agent?.name ?? "orchestrator";
 
+  return async (input: { tool: string; agent?: string }, output: { args?: ToolArgs }) => {
+    const args = output.args ?? {};
+    const agentId = input.agent ?? orchestratorName;
+
+    // spawn_worker is only available to the orchestrator agent
     if (input.tool === "spawn_worker") {
+      if (agentId !== orchestratorName) {
+        throw new Error(`Tool "spawn_worker" is only available to the orchestrator. Use "ask_worker" or "delegate_task" instead.`);
+      }
       const profileId = readString(args.profileId);
       if (profileId && !canSpawnManually(config.spawnPolicy, profileId))
         throw new Error(`Spawning worker "${profileId}" is disabled by spawnPolicy.`);
     }
 
+    // Prevent workers from spawning themselves via delegation
     if (input.tool === "delegate_task" || input.tool === "ask_worker" || input.tool === "ask_worker_async") {
       const workerId = readString(args.workerId);
+
+      // Prevent self-spawning (worker trying to spawn itself)
+      if (workerId && workerId === agentId) {
+        throw new Error(`Worker "${agentId}" cannot delegate to itself. Choose a different worker.`);
+      }
+
       const autoSpawn = args.autoSpawn !== false;
       if (autoSpawn && workerId && !canSpawnOnDemand(config.spawnPolicy, workerId))
         throw new Error(`On-demand spawn for worker "${workerId}" is disabled by spawnPolicy.`);
-      // Note: Removed redundant spawnOnDemand whitelist check.
-      // The spawnPolicy check above already controls on-demand spawning.
+    }
+
+    // run_workflow is only available to the orchestrator agent
+    if (input.tool === "run_workflow") {
+      if (agentId !== orchestratorName) {
+        throw new Error(`Tool "run_workflow" is only available to the orchestrator.`);
+      }
     }
   };
 }

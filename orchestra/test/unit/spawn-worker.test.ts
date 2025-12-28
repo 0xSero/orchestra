@@ -50,7 +50,7 @@ beforeEach(() => {
 
   deps = {
     resolveProfileModel: async () => resolveProfileModelResult,
-    resolveWorkerEnv: () => workerEnv,
+    resolveWorkerEnv: (_profile, _integrationEnv) => workerEnv,
     resolveWorkerMcp: async () => workerMcp,
     getDefaultSessionMode: () => defaultSessionMode,
     loadOpenCodeConfig: async () => ({}),
@@ -59,7 +59,7 @@ beforeEach(() => {
     startEventForwarding: () => {
       startEventForwardingCalls += 1;
       if (startEventForwardingShouldThrow) throw new Error("forward failed");
-      return { stop: () => {}, isActive: () => true };
+      return { stop: () => {}, isActive: () => true, setTurboMode: () => {} };
     },
     stopEventForwarding: (instance) => {
       stopEventForwardingCalls += 1;
@@ -172,6 +172,35 @@ describe("spawn worker", () => {
     expect(process.env.NEW_VAR).toBeUndefined();
 
     delete process.env.EXISTING_VAR;
+  });
+
+  test("injects integration env when profile selects integrations", async () => {
+    resolveProfileModelResult = {
+      profile: { ...baseProfile, integrations: { inheritAll: true } },
+      changes: [],
+      fallbackModel: undefined,
+    };
+    createWorkerSessionResponses = [{ data: { id: "session-integrations" } }];
+
+    let capturedEnv: Record<string, string> | undefined;
+    deps.resolveWorkerEnv = (_profile, integrationEnv) => {
+      capturedEnv = integrationEnv;
+      return {};
+    };
+
+    const registry = { register: () => {}, updateStatus: () => {}, unregister: () => {} } as unknown as WorkerRegistry;
+    await spawnWorker({
+      api: {} as never,
+      registry,
+      directory: "/tmp",
+      profile: { ...baseProfile, model: "auto", integrations: { inheritAll: true } },
+      integrations: { linear: { apiKey: "key", teamId: "team" } },
+      timeoutMs: 1000,
+      deps,
+    });
+
+    expect(capturedEnv?.LINEAR_API_KEY).toBe("key");
+    expect(capturedEnv?.LINEAR_TEAM_ID).toBe("team");
   });
 
   test("retries session creation with worker bridge", async () => {

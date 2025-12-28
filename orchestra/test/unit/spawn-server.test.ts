@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { WorkerInstance } from "../../src/types";
-import { applyServerBundleToInstance, createWorkerSession, startWorkerServer } from "../../src/workers/spawn-server";
+import {
+  applyServerBundleToInstance,
+  createSubagentSession,
+  createWorkerSession,
+  startWorkerServer,
+} from "../../src/workers/spawn-server";
 
 describe("spawn server helpers", () => {
   test("startWorkerServer toggles env vars and restores them", async () => {
@@ -92,6 +97,43 @@ describe("spawn server helpers", () => {
       directory: process.cwd(),
       timeoutMs: 10,
       title: "Worker",
+    });
+
+    expect(result).toEqual(payload);
+  });
+
+  test("createSubagentSession returns error payload on failures", async () => {
+    const api = {
+      session: {
+        create: async () => {
+          throw new Error("create failed");
+        },
+      },
+    };
+
+    const result = await createSubagentSession({
+      api: api as never,
+      timeoutMs: 1,
+      title: "Worker",
+      parentSessionId: "parent-1",
+    });
+
+    expect(result).toHaveProperty("error");
+  });
+
+  test("createSubagentSession returns session response on success", async () => {
+    const payload = { data: { id: "session-2" } };
+    const api = {
+      session: {
+        create: async () => payload,
+      },
+    };
+
+    const result = await createSubagentSession({
+      api: api as never,
+      timeoutMs: 10,
+      title: "Worker",
+      parentSessionId: "parent-1",
     });
 
     expect(result).toEqual(payload);

@@ -17,9 +17,10 @@ describe("spawn env helpers", () => {
       envPrefixes: ["TEST_PREFIX_"],
     };
 
-    const env = resolveWorkerEnv(profile);
+    const env = resolveWorkerEnv(profile, { TEST_PREFIX_VALUE: "integration", CUSTOM: "override", OTHER: "ok" });
     expect(env.CUSTOM).toBe("value");
-    expect(env.TEST_PREFIX_VALUE).toBe("prefixed");
+    expect(env.TEST_PREFIX_VALUE).toBe("integration");
+    expect(env.OTHER).toBe("ok");
 
     if (original) process.env.TEST_PREFIX_VALUE = original;
     else delete process.env.TEST_PREFIX_VALUE;

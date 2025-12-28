@@ -1,6 +1,7 @@
 import type { FilePartInput, OpencodeClient, TextPartInput } from "@opencode-ai/sdk/client";
 import type { SetStoreFunction } from "solid-js/store";
 import { produce } from "solid-js/store";
+import type { WorkerState } from "@/types/db";
 import {
   buildAttachmentParts,
   buildModelOptions,
@@ -8,8 +9,10 @@ import {
   extractMessagesAndParts,
   extractOrchestraWorker,
   extractProvidersPayload,
+  extractSubagentEvent,
   extractToolIdsPayload,
   extractWorkerStreamChunk,
+  isWorkerStatus,
   toWorkerRuntime,
 } from "./opencode-helpers";
 import type { OpenCodeEventItem, OpenCodeState, Session } from "./opencode-types";
@@ -170,10 +173,50 @@ export function createOpenCodeActions({ client, state, setState }: ActionDeps) {
       }),
     );
   };
+  const hydrateWorkers = (states: WorkerState[]) => {
+    if (!states || states.length === 0) return;
+    setState(
+      produce((s) => {
+        for (const stateItem of states) {
+          const id = stateItem.workerId;
+          if (!id || s.workers[id]) continue;
+          const status = isWorkerStatus(stateItem.status) ? stateItem.status : "starting";
+          s.workers[id] = {
+            id,
+            name: stateItem.profileName ?? id,
+            status,
+            sessionId: stateItem.uiSessionId ?? stateItem.sessionId ?? undefined,
+            workerSessionId: stateItem.sessionId ?? undefined,
+            parentSessionId: stateItem.parentSessionId ?? undefined,
+            model: stateItem.model ?? undefined,
+            serverUrl: stateItem.serverUrl ?? undefined,
+            lastActivity: stateItem.lastActivity ?? undefined,
+            currentTask: stateItem.currentTask ?? undefined,
+            lastResult: stateItem.lastResult ?? undefined,
+            error: stateItem.error ?? undefined,
+            warning: stateItem.warning ?? undefined,
+          };
+        }
+      }),
+    );
+  };
   const handleOrchestraEvent = (payload: unknown) => {
     const worker = extractOrchestraWorker(payload);
     if (worker) upsertWorker(worker);
     handleWorkerStream(payload);
+    const subagentEvent = extractSubagentEvent(payload);
+    if (subagentEvent) {
+      setState(
+        produce((s) => {
+          s.lastSubagentEvent = subagentEvent;
+          if (subagentEvent.type === "active") {
+            s.subagents[subagentEvent.subagent.sessionId] = subagentEvent.subagent;
+          } else {
+            delete s.subagents[subagentEvent.subagent.sessionId];
+          }
+        }),
+      );
+    }
   };
   const createSession = async (): Promise<Session | null> => {
     try {
@@ -313,5 +356,6 @@ export function createOpenCodeActions({ client, state, setState }: ActionDeps) {
     abortAllSessions,
     deleteAllSessions,
     disposeAllInstances,
+    hydrateWorkers,
   };
 }

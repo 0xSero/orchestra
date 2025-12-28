@@ -19,7 +19,7 @@ describe("skills loader", () => {
     delete process.env.OPENCODE_SKILLS_HOME;
   });
 
-  test("project overrides global", async () => {
+  test("global overrides project", async () => {
     // Use new path: .opencode/skill/{id}/SKILL.md
     const projectSkillDir = join(tempDir, ".opencode", "skill", "coder");
     const globalSkillDir = join(homeDir, ".opencode", "skill", "coder");
@@ -39,14 +39,14 @@ describe("skills loader", () => {
 
     const all = await loadAllSkills(tempDir);
     const coder = all.get("coder");
-    expect(coder?.source.type).toBe("project");
-    expect(coder?.frontmatter.description).toBe("project coder");
+    expect(coder?.source.type).toBe("global");
+    expect(coder?.frontmatter.description).toBe("global coder");
 
     const overrides = await loadSkillOverrides(tempDir);
     const override = overrides.get("coder");
-    expect(override?.source.type).toBe("project");
+    expect(override?.source.type).toBe("global");
 
     const direct = await loadSkill("coder", tempDir);
-    expect(direct?.frontmatter.description).toBe("project coder");
+    expect(direct?.frontmatter.description).toBe("global coder");
   });
 });

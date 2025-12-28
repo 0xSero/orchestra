@@ -67,6 +67,26 @@ export const createWorkerSession = async (input: {
   }
 };
 
+/** Create a subagent session on the parent OpenCode server. */
+export const createSubagentSession = async (input: {
+  api: ApiService;
+  timeoutMs: number;
+  title: string;
+  parentSessionId?: string;
+}): Promise<unknown> => {
+  const sessionAbort = new AbortController();
+  try {
+    const createArgs: SessionCreateArgs = {
+      body: { title: input.title, ...(input.parentSessionId ? { parentID: input.parentSessionId } : {}) },
+      signal: sessionAbort.signal,
+      throwOnError: false,
+    };
+    return await withTimeout(input.api.session.create(createArgs), input.timeoutMs, sessionAbort);
+  } catch (error) {
+    return { error };
+  }
+};
+
 /** Apply server connection info to a worker instance. */
 export const applyServerBundleToInstance = (instance: WorkerInstance, bundle: ServerBundle) => {
   const { client, server } = bundle;

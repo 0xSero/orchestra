@@ -23,8 +23,9 @@ export const ChatView: Component = () => {
     sendMessage,
     abortSession,
     workers,
+    workerStreams,
   } = useOpenCode();
-  const { selectedWorkerId, selectWorker } = useLayout();
+  const { selectedWorkerId, selectWorker, activeSubagentSessionId, returnToParentSession } = useLayout();
 
   const [isSending, setIsSending] = createSignal(false);
   let messagesEndRef: HTMLDivElement | undefined;
@@ -44,9 +45,19 @@ export const ChatView: Component = () => {
     if (!id) return undefined;
     return workers().find((item) => item.sessionId === id);
   });
+  const stream = createMemo(() => {
+    const id = worker()?.id;
+    if (!id) return undefined;
+    return workerStreams().find((item) => item.workerId === id);
+  });
 
   const status = createMemo(() => getSessionStatus(session(), worker()));
   const isBusy = createMemo(() => status() === "busy" || status() === "starting");
+  const isSubagentView = createMemo(() => {
+    const activeId = activeSubagentSessionId();
+    const selected = selectedWorkerId();
+    return Boolean(activeId && selected && activeId === selected);
+  });
 
   createEffect(async () => {
     const id = selectedWorkerId();
@@ -91,6 +102,19 @@ export const ChatView: Component = () => {
       <Show when={session()} fallback={<WorkerDetailEmptyState />}>
         {(currentSession) => (
           <>
+            <Show when={isSubagentView()}>
+              <div class="flex items-center justify-between gap-3 px-4 py-2 text-xs bg-muted/40 border-b border-border">
+                <div class="min-w-0">
+                  <span class="font-semibold text-foreground">Subagent active</span>
+                  <span class="text-muted-foreground ml-2 truncate">
+                    {worker()?.name ?? currentSession().title ?? "Worker session"}
+                  </span>
+                </div>
+                <button class="btn btn-xs btn-ghost" onClick={returnToParentSession}>
+                  Return to parent
+                </button>
+              </div>
+            </Show>
             <WorkerDetailHeader
               session={currentSession()}
               status={status()}
@@ -100,6 +124,14 @@ export const ChatView: Component = () => {
             />
 
             <div class="flex-1 overflow-auto scrollbar-thin">
+              <Show when={isSubagentView() && stream()}>
+                <div class="max-w-3xl mx-auto px-4 pt-4">
+                  <div class="rounded-lg border border-border/60 bg-muted/40 p-3 text-xs">
+                    <div class="text-[10px] uppercase text-muted-foreground mb-2">Live output</div>
+                    <div class="whitespace-pre-wrap text-foreground">{stream()?.chunk}</div>
+                  </div>
+                </div>
+              </Show>
               <Show
                 when={messages().length > 0}
                 fallback={
@@ -127,8 +159,9 @@ export const ChatView: Component = () => {
                   onSubmit={handleSubmit}
                   onCancel={handleAbort}
                   isLoading={isSending() || isBusy()}
+                  disabled={isSubagentView()}
                   allowFilePicker
-                  placeholder="Message..."
+                  placeholder={isSubagentView() ? "Subagent session is read-only" : "Message..."}
                 />
               </div>
             </div>
