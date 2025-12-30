@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
-import type { WorkflowDefinition, WorkflowRunInput, WorkflowRunResult, WorkflowStepDefinition } from "./types";
+import type {
+  WorkflowDefinition,
+  WorkflowRunInput,
+  WorkflowRunResult,
+  WorkflowStepDefinition,
+  WorkflowStepResult,
+} from "./types";
 import { publishOrchestratorEvent } from "../core/orchestrator-events";
 
 const workflows = new Map<string, WorkflowDefinition>();
@@ -10,7 +16,7 @@ export type WorkflowRunDependencies = {
     workerId: string,
     message: string,
     options: { attachments?: WorkflowRunInput["attachments"]; timeoutMs: number }
-  ) => Promise<{ success: boolean; response?: string; error?: string }>;
+  ) => Promise<{ success: boolean; response?: string; warning?: string; error?: string }>;
 };
 
 export function registerWorkflow(def: WorkflowDefinition) {
@@ -61,6 +67,99 @@ function resolveStepTimeout(step: WorkflowStepDefinition, limits: WorkflowRunInp
   return Math.min(requested, limits.perStepTimeoutMs);
 }
 
+export function validateWorkflowInput(input: WorkflowRunInput, workflow: WorkflowDefinition): void {
+  if (input.task.length > input.limits.maxTaskChars) {
+    throw new Error(`Task exceeds maxTaskChars (${input.limits.maxTaskChars}).`);
+  }
+
+  if (workflow.steps.length > input.limits.maxSteps) {
+    throw new Error(`Workflow has ${workflow.steps.length} steps (maxSteps=${input.limits.maxSteps}).`);
+  }
+}
+
+export async function executeWorkflowStep(
+  input: {
+    runId: string;
+    workflow: WorkflowDefinition;
+    stepIndex: number;
+    task: string;
+    carry: string;
+    autoSpawn: boolean;
+    limits: WorkflowRunInput["limits"];
+    attachments?: WorkflowRunInput["attachments"];
+  },
+  deps: WorkflowRunDependencies
+): Promise<{ step: WorkflowStepResult; response?: string; carry: string }> {
+  const step = input.workflow.steps[input.stepIndex];
+  const stepStarted = Date.now();
+  const workerId = await deps.resolveWorker(step.workerId, input.autoSpawn);
+  const prompt = buildStepPrompt(step, input.task, input.carry);
+  const res = await deps.sendToWorker(workerId, prompt, {
+    attachments: input.stepIndex === 0 ? input.attachments : undefined,
+    timeoutMs: resolveStepTimeout(step, input.limits),
+  });
+  const stepFinished = Date.now();
+  if (!res.success) {
+    const result: WorkflowStepResult = {
+      id: step.id,
+      title: step.title,
+      workerId,
+      status: "error",
+      error: res.error ?? "unknown_error",
+      startedAt: stepStarted,
+      finishedAt: stepFinished,
+      durationMs: stepFinished - stepStarted,
+    };
+    publishOrchestratorEvent("orchestra.workflow.step", {
+      runId: input.runId,
+      workflowId: input.workflow.id,
+      workflowName: input.workflow.name,
+      stepId: step.id,
+      stepTitle: step.title,
+      workerId,
+      status: "error",
+      startedAt: stepStarted,
+      finishedAt: stepFinished,
+      durationMs: stepFinished - stepStarted,
+      error: res.error ?? "unknown_error",
+    });
+    return { step: result, carry: input.carry };
+  }
+
+  const response = res.response ?? "";
+  const preview = truncateResponse(response);
+  const result: WorkflowStepResult = {
+    id: step.id,
+    title: step.title,
+    workerId,
+    status: "success",
+    response,
+    ...(res.warning ? { warning: res.warning } : {}),
+    startedAt: stepStarted,
+    finishedAt: stepFinished,
+    durationMs: stepFinished - stepStarted,
+  };
+  publishOrchestratorEvent("orchestra.workflow.step", {
+    runId: input.runId,
+    workflowId: input.workflow.id,
+    workflowName: input.workflow.name,
+    stepId: step.id,
+    stepTitle: step.title,
+    workerId,
+    status: "success",
+    startedAt: stepStarted,
+    finishedAt: stepFinished,
+    durationMs: stepFinished - stepStarted,
+    response: preview.value,
+    responseTruncated: preview.truncated,
+    ...(res.warning ? { warning: res.warning } : {}),
+  });
+
+  const carryBlock = step.carry ? [`### ${step.title}`, response].join("\n") : "";
+  const nextCarry = step.carry ? appendCarry(input.carry, carryBlock, input.limits.maxCarryChars) : input.carry;
+  return { step: result, response, carry: nextCarry };
+}
+
 export async function runWorkflow(
   input: WorkflowRunInput,
   deps: WorkflowRunDependencies
@@ -70,13 +169,7 @@ export async function runWorkflow(
     throw new Error(`Unknown workflow "${input.workflowId}".`);
   }
 
-  if (input.task.length > input.limits.maxTaskChars) {
-    throw new Error(`Task exceeds maxTaskChars (${input.limits.maxTaskChars}).`);
-  }
-
-  if (workflow.steps.length > input.limits.maxSteps) {
-    throw new Error(`Workflow has ${workflow.steps.length} steps (maxSteps=${input.limits.maxSteps}).`);
-  }
+  validateWorkflowInput(input, workflow);
 
   const runId = randomUUID();
   const startedAt = Date.now();
@@ -90,74 +183,28 @@ export async function runWorkflow(
 
   const steps: WorkflowRunResult["steps"] = [];
   let carry = "";
+  let status: WorkflowRunResult["status"] = "running";
 
   for (let i = 0; i < workflow.steps.length; i++) {
-    const step = workflow.steps[i];
-    const stepStarted = Date.now();
-    const workerId = await deps.resolveWorker(step.workerId, input.autoSpawn ?? true);
-    const prompt = buildStepPrompt(step, input.task, carry);
-    const res = await deps.sendToWorker(workerId, prompt, {
-      attachments: i === 0 ? input.attachments : undefined,
-      timeoutMs: resolveStepTimeout(step, input.limits),
-    });
-    const stepFinished = Date.now();
-    if (!res.success) {
-      steps.push({
-        id: step.id,
-        title: step.title,
-        workerId,
-        status: "error",
-        error: res.error ?? "unknown_error",
-        startedAt: stepStarted,
-        finishedAt: stepFinished,
-        durationMs: stepFinished - stepStarted,
-      });
-      publishOrchestratorEvent("orchestra.workflow.step", {
+    const executed = await executeWorkflowStep(
+      {
         runId,
-        workflowId: workflow.id,
-        workflowName: workflow.name,
-        stepId: step.id,
-        stepTitle: step.title,
-        workerId,
-        status: "error",
-        startedAt: stepStarted,
-        finishedAt: stepFinished,
-        durationMs: stepFinished - stepStarted,
-        error: res.error ?? "unknown_error",
-      });
+        workflow,
+        stepIndex: i,
+        task: input.task,
+        carry,
+        autoSpawn: input.autoSpawn ?? true,
+        limits: input.limits,
+        attachments: input.attachments,
+      },
+      deps
+    );
+    steps.push(executed.step);
+    if (executed.step.status === "error") {
+      status = "error";
       break;
     }
-    const response = res.response ?? "";
-    const preview = truncateResponse(response);
-    steps.push({
-      id: step.id,
-      title: step.title,
-      workerId,
-      status: "success",
-      response,
-      startedAt: stepStarted,
-      finishedAt: stepFinished,
-      durationMs: stepFinished - stepStarted,
-    });
-    publishOrchestratorEvent("orchestra.workflow.step", {
-      runId,
-      workflowId: workflow.id,
-      workflowName: workflow.name,
-      stepId: step.id,
-      stepTitle: step.title,
-      workerId,
-      status: "success",
-      startedAt: stepStarted,
-      finishedAt: stepFinished,
-      durationMs: stepFinished - stepStarted,
-      response: preview.value,
-      responseTruncated: preview.truncated,
-    });
-
-    if (step.carry) {
-      const carryBlock = [`### ${step.title}`, response].join("\n");
-      carry = appendCarry(carry, carryBlock, input.limits.maxCarryChars);
-    }
+    carry = executed.carry;
   }
 
   const finishedAt = Date.now();
@@ -174,10 +221,14 @@ export async function runWorkflow(
   });
 
   return {
+    runId,
     workflowId: workflow.id,
     workflowName: workflow.name,
+    status: status === "error" ? "error" : "success",
     startedAt,
     finishedAt,
+    currentStepIndex: Math.min(steps.length, workflow.steps.length),
     steps,
+    lastStepResult: steps[steps.length - 1],
   };
 }

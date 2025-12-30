@@ -34,6 +34,7 @@ export interface SpawnOptions {
   timeout: number;
   directory: string;
   client?: any;
+  parentSessionId?: string;
 }
 
 export interface SendOptions {
@@ -335,6 +336,8 @@ export class WorkerPool {
 
       const instance: WorkerInstance = {
         profile,
+        kind: profile.kind ?? (profile.backend === "server" ? "server" : "agent"),
+        execution: profile.execution,
         status: existing.status === "busy" ? "busy" : "ready",
         port: existing.port ?? 0,
         serverUrl: existing.url,
@@ -617,6 +620,9 @@ export class WorkerPool {
       model: w.profile.model,
       modelResolution: w.modelResolution,
       backend: resolveWorkerBackend(w.profile),
+      kind: w.kind ?? w.profile.kind,
+      execution: w.execution ?? w.profile.execution,
+      parentSessionId: w.parentSessionId,
       purpose: w.profile.purpose,
       whenToUse: w.profile.whenToUse,
       status: w.status,

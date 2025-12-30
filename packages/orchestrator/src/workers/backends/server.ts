@@ -78,6 +78,8 @@ async function _spawnWorkerCore(
 
   const instance: WorkerInstance = {
     profile: resolvedProfile,
+    kind: resolvedProfile.kind ?? (resolvedProfile.backend === "server" ? "server" : "agent"),
+    execution: resolvedProfile.execution,
     status: "starting",
     port: requestedPort,
     directory: options.directory,
@@ -249,6 +251,8 @@ export async function connectToServerWorker(
 ): Promise<WorkerInstance> {
   const instance: WorkerInstance = {
     profile,
+    kind: profile.kind ?? (profile.backend === "server" ? "server" : "agent"),
+    execution: profile.execution,
     status: "starting",
     port,
     serverUrl: `http://127.0.0.1:${port}`,
@@ -329,7 +333,7 @@ export async function sendToServerWorker(
   workerId: string,
   message: string,
   options?: SendToWorkerOptions
-): Promise<{ success: boolean; response?: string; error?: string }> {
+): Promise<{ success: boolean; response?: string; warning?: string; error?: string }> {
   const instance = workerPool.get(workerId);
 
   if (!instance) {
@@ -360,6 +364,7 @@ export async function sendToServerWorker(
 
   try {
     const startedAt = Date.now();
+    const warning = instance.warning;
 
     const responseText = await sendWorkerPrompt({
       client: instance.client,
@@ -399,7 +404,7 @@ export async function sendToServerWorker(
       });
     }
 
-    return { success: true, response: responseText };
+    return { success: true, response: responseText, ...(warning ? { warning } : {}) };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     const isSdkError = Boolean((error as any)?.isSdkError);

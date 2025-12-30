@@ -309,6 +309,10 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
 
         const profileCommands: Record<string, any> = {};
         for (const profile of Object.values(config.profiles)) {
+          const isInProcess =
+            profile.kind === "agent" ||
+            profile.kind === "subagent" ||
+            (!profile.kind && profile.backend === "agent");
           profileCommands[`${prefix}spawn.${profile.id}`] = {
             description: `Spawn worker: ${profile.name} (${profile.id})`,
             template: `Call spawn_worker({ profileId: '${profile.id}' }).`,
@@ -317,6 +321,12 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
             description: `Show recent trace for worker: ${profile.name} (${profile.id})`,
             template: `Call worker_trace({ workerId: '${profile.id}' }).`,
           };
+          if (isInProcess) {
+            profileCommands[`${prefix}open.${profile.id}`] = {
+              description: `Open sessions list for worker: ${profile.name} (${profile.id})`,
+              template: `Call open_worker_session({ workerId: '${profile.id}' }).`,
+            };
+          }
         }
 
         opencodeConfig.command = {

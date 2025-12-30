@@ -96,7 +96,13 @@ const enableDocsPassthrough: ToolDefinition = tool({
       const profile = getProfile(workerId, getProfiles());
       if (profile) {
         const { basePort, timeout } = getSpawnDefaults();
-        await spawnWorker(profile, { basePort, timeout, directory: getDirectory(), client }).catch(() => {});
+        await spawnWorker(profile, {
+          basePort,
+          timeout,
+          directory: getDirectory(),
+          client,
+          parentSessionId: _ctx?.sessionID,
+        }).catch(() => {});
       }
     }
 
@@ -133,7 +139,13 @@ const setPassthroughMode: ToolDefinition = tool({
       const profile = getProfile(workerId, getProfiles());
       if (!profile) return `Worker "${workerId}" is not running and no profile "${workerId}" exists to spawn.`;
       const { basePort, timeout } = getSpawnDefaults();
-      await spawnWorker(profile, { basePort, timeout, directory: getDirectory(), client });
+      await spawnWorker(profile, {
+        basePort,
+        timeout,
+        directory: getDirectory(),
+        client,
+        parentSessionId: ctx?.sessionID,
+      });
     }
 
     setPassthrough(ctx.sessionID, workerId);
@@ -220,7 +232,13 @@ const orchestratorStart: ToolDefinition = tool({
     if (!instance) {
       try {
         const { basePort, timeout } = getSpawnDefaults();
-        instance = await spawnWorker(base, { basePort, timeout, directory: getDirectory(), client });
+        instance = await spawnWorker(base, {
+          basePort,
+          timeout,
+          directory: getDirectory(),
+          client,
+          parentSessionId: ctx?.sessionID,
+        });
         chosenPersistModel = instance.profile.model;
         spawned = true;
       } catch (e) {
@@ -355,6 +373,7 @@ const orchestratorDashboard: ToolDefinition = tool({
       warnings.length ? ["", "## Warnings", ...warnings.map((w) => `- \`${w.id}\`: ${w.warning}`)].join("\n") : "",
       "",
       "Tip: `orchestrator.trace.docs` shows docs worker activity.",
+      "Tip: `orchestrator.open.<workerId>` opens the sessions list for in-process workers.",
     ].join("\n");
   },
 });

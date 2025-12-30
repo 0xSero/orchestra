@@ -55,6 +55,8 @@ Worker profiles define the worker kind (`server`, `agent`, `subagent`) and execu
 ## Runtime wiring
 
 - OpenCode loads the orchestrator plugin from `packages/orchestrator/dist/index.js` (desktop fallback: `src/index.ts`).
+- Agent/subagent workers run in-process; subagents are child sessions created via `session.fork` and appear in the OpenCode session list.
+- Server workers remain isolated `opencode serve` processes with their own sessions and tool bridge.
 - Control panel connects to OpenCode sessions/messages and to the orchestrator event stream for workers/workflows/memory.
 - Desktop spawns the OpenCode sidecar and injects connection URLs into `window.__OPENCODE__`.
 

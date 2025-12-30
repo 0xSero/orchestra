@@ -96,6 +96,7 @@ export async function analyzeImages(
         client: options.client,
         basePort: options.basePort ?? 14096,
         timeout: 30000,
+        parentSessionId: options.sessionId,
       });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import type { WorkerBackend, WorkerInstance, WorkerStatus } from "../types";
+import type { WorkerBackend, WorkerExecution, WorkerInstance, WorkerKind, WorkerStatus } from "../types";
 
 export const ORCHESTRATOR_EVENT_VERSION = 1 as const;
 
@@ -18,6 +18,9 @@ export type OrchestratorWorkerSnapshot = {
   name: string;
   status: WorkerStatus;
   backend: WorkerBackend;
+  kind?: WorkerKind;
+  execution?: WorkerExecution;
+  parentSessionId?: string;
   model: string;
   modelResolution?: string;
   purpose?: string;
@@ -82,6 +85,8 @@ export type OrchestratorEventDataMap = {
     durationMs: number;
     response?: string;
     responseTruncated?: boolean;
+    warning?: string;
+    jobId?: string;
     error?: string;
   };
   "orchestra.workflow.completed": {
@@ -143,6 +148,9 @@ export function serializeWorkerInstance(
     name: instance.profile.name,
     status,
     backend: resolveWorkerBackend(instance.profile),
+    kind: instance.kind ?? instance.profile.kind,
+    execution: instance.execution ?? instance.profile.execution,
+    parentSessionId: instance.parentSessionId,
     model: instance.profile.model,
     modelResolution: instance.modelResolution,
     purpose: instance.profile.purpose,

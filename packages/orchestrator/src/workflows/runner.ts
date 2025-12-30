@@ -64,6 +64,7 @@ export async function runWorkflowWithContext(
       timeout,
       directory: context.directory,
       client: context.client,
+      parentSessionId: options?.sessionId,
     });
     return instance.profile.id;
   };

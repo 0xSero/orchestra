@@ -58,7 +58,7 @@ export async function sendToWorker(
   workerId: string,
   message: string,
   options?: SendToWorkerOptions & { client?: any; directory?: string }
-): Promise<{ success: boolean; response?: string; error?: string }> {
+): Promise<{ success: boolean; response?: string; warning?: string; error?: string }> {
   const instance = workerPool.get(workerId);
   if (!instance) {
     publishErrorEvent({ message: `Worker "${workerId}" not found`, source: "worker", workerId });

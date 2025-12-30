@@ -22,6 +22,7 @@ type WorkerTools = {
   delegateTask: ToolDefinition;
   findWorker: ToolDefinition;
   workerTrace: ToolDefinition;
+  openWorkerSession: ToolDefinition;
 };
 
 export function createWorkerTools(context: OrchestratorContext): WorkerTools {
@@ -357,6 +358,7 @@ You can also provide custom configuration to override defaults.`,
           timeout,
           directory: context.directory,
           client,
+          parentSessionId: ctx?.sessionID,
         });
         if (ctx?.sessionID && !existing && instance.modelResolution !== "reused existing worker") {
           workerPool.trackOwnership(ctx.sessionID, instance.profile.id);
@@ -411,6 +413,7 @@ You can also provide custom configuration to override defaults.`,
         timeout,
         directory: context.directory,
         client: context.client,
+        parentSessionId: ctx?.sessionID,
       });
       if (ctx?.sessionID) {
         for (const instance of succeeded) {
@@ -496,6 +499,7 @@ You can also provide custom configuration to override defaults.`,
           timeout,
           directory: context.directory,
           client: context.client,
+          parentSessionId: ctx?.sessionID,
         });
         targetId = instance.profile.id;
         if (ctx?.sessionID && instance.modelResolution !== "reused existing worker") {
@@ -616,6 +620,59 @@ You can also provide custom configuration to override defaults.`,
     },
   });
 
+  const openWorkerSession: ToolDefinition = tool({
+    description:
+      "Open the sessions list so you can switch into a worker session (agent/subagent). Adds a prompt hint for the next best command.",
+    args: {
+      workerId: tool.schema.string().describe("Worker ID (e.g. 'docs', 'memory')"),
+      showToast: tool.schema.boolean().optional().describe("Show a toast with switching tips (default: true)"),
+      appendHint: tool.schema.boolean().optional().describe("Append a next-command hint to the prompt (default: true)"),
+    },
+    async execute(args) {
+      const client = context.client;
+      if (!client) return "OpenCode client not available; restart OpenCode.";
+
+      const instance = workerPool.get(args.workerId);
+      if (!instance) return `Worker "${args.workerId}" not found.`;
+      if (!instance.sessionId) return `Worker "${args.workerId}" missing sessionId; spawn it first.`;
+
+      const resolvedKind = instance.kind ?? instance.profile.kind;
+      const isServerWorker = resolvedKind === "server" || (!resolvedKind && instance.profile.backend === "server");
+      if (isServerWorker) {
+        return `Worker "${args.workerId}" runs on the server backend; its session lives on a separate OpenCode server.`;
+      }
+
+      const showToast = args.showToast ?? true;
+      const appendHint = args.appendHint ?? true;
+      const hintCommand = `orchestrator.trace.${instance.profile.id}`;
+      const kindLabel = resolvedKind === "subagent" ? "child session" : "session";
+      const sessionLabel = instance.sessionId ? `(${instance.sessionId})` : "";
+
+      await client.tui
+        .openSessions({ query: { directory: context.directory } })
+        .catch(() => {});
+
+      if (showToast) {
+        void client.tui
+          .showToast({
+            body: {
+              message: `Sessions list opened. Switch to ${instance.profile.id} ${kindLabel} ${sessionLabel}. Tip: run ${hintCommand}.`,
+              variant: "info",
+            },
+          })
+          .catch(() => {});
+      }
+
+      if (appendHint) {
+        void client.tui
+          .appendPrompt({ body: { text: hintCommand }, query: { directory: context.directory } })
+          .catch(() => {});
+      }
+
+      return `Opened sessions list for worker "${instance.profile.id}".`;
+    },
+  });
+
   return {
     listWorkers,
     askWorker,
@@ -630,6 +687,7 @@ You can also provide custom configuration to override defaults.`,
     delegateTask,
     findWorker,
     workerTrace,
+    openWorkerSession,
   };
 }
 
@@ -648,3 +706,4 @@ export const stopWorkerTool: ToolDefinition = defaultTools.stopWorkerTool;
 export const delegateTask: ToolDefinition = defaultTools.delegateTask;
 export const findWorker: ToolDefinition = defaultTools.findWorker;
 export const workerTrace: ToolDefinition = defaultTools.workerTrace;
+export const openWorkerSession: ToolDefinition = defaultTools.openWorkerSession;

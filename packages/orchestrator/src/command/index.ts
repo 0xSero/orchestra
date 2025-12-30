@@ -38,6 +38,7 @@ export {
   getWorkerInfo,
   listWorkers,
   listWorkerJobs,
+  openWorkerSession,
   spawnNewWorker,
   stopWorkerTool,
   workerTrace,
@@ -128,6 +129,7 @@ function buildToolSets(context: OrchestratorContext) {
     orchestrator_keybinds_macos: uxTools.macosKeybindsFix,
     orchestrator_help: uxTools.orchestratorHelp,
     enable_docs_passthrough: uxTools.enableDocsPassthrough,
+    open_worker_session: workerTools.openWorkerSession,
 
     // Config tools (manual by design)
     set_profile_model: profileTools.setProfileModel,

@@ -48,6 +48,12 @@ export interface WorkerProfile {
 
 export interface WorkerInstance {
   profile: WorkerProfile;
+  /** Worker kind (server, agent, subagent) resolved at spawn time */
+  kind?: WorkerKind;
+  /** Execution mode (foreground/background) resolved at spawn time */
+  execution?: WorkerExecution;
+  /** Parent session ID for subagent workers */
+  parentSessionId?: string;
   status: WorkerStatus;
   port: number;
   /** PID of the spawned `opencode serve` process (when spawned by orchestrator) */
@@ -123,12 +129,16 @@ export type WorkflowTriggerConfig = {
   blocking?: boolean;
 };
 
+export type WorkflowExecutionMode = "step" | "auto";
+export type WorkflowIntervenePolicy = "never" | "on-warning" | "on-error" | "always";
+export type WorkflowUiPolicy = {
+  execution?: WorkflowExecutionMode;
+  intervene?: WorkflowIntervenePolicy;
+};
+
 export type WorkflowsConfig = {
   enabled?: boolean;
-  ui?: {
-    execution?: "step" | "auto";
-    intervene?: "never" | "on-warning" | "on-error" | "always";
-  };
+  ui?: WorkflowUiPolicy;
   definitions?: WorkflowDefinitionConfig[];
   triggers?: {
     visionOnImage?: WorkflowTriggerConfig;

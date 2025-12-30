@@ -1,5 +1,5 @@
 import type { WorkerInstance, WorkerProfile } from "../../types";
-import { workerPool } from "../../core/worker-pool";
+import { workerPool, type SpawnOptions } from "../../core/worker-pool";
 import { publishErrorEvent } from "../../core/orchestrator-events";
 import { sendWorkerPrompt, type SendToWorkerOptions } from "../send";
 import { buildWorkerBootstrapPrompt } from "../prompt/worker-prompt";
@@ -10,11 +10,14 @@ function getBackendClient(instance: WorkerInstance, fallback?: any) {
 
 export async function spawnAgentWorker(
   profile: WorkerProfile,
-  options: { basePort: number; timeout: number; directory: string; client?: any }
+  options: SpawnOptions
 ): Promise<WorkerInstance> {
   return workerPool.getOrSpawn(profile, options, async (resolvedProfile, spawnOptions) => {
+    const resolvedKind = resolvedProfile.kind ?? "agent";
     const instance: WorkerInstance = {
       profile: resolvedProfile,
+      kind: resolvedKind,
+      execution: resolvedProfile.execution,
       status: "starting",
       port: 0,
       directory: spawnOptions.directory,
@@ -34,11 +37,25 @@ export async function spawnAgentWorker(
 
     instance.client = spawnOptions.client;
 
-    // Create a dedicated session for this worker
-    const sessionResult = await spawnOptions.client.session.create({
-      body: { title: `Worker: ${resolvedProfile.name}` },
-      query: { directory: spawnOptions.directory },
-    });
+    const isSubagent = resolvedKind === "subagent";
+    const parentSessionId = spawnOptions.parentSessionId;
+    if (isSubagent && !parentSessionId) {
+      const msg = `Subagent worker "${resolvedProfile.id}" requires parentSessionId to fork a child session.`;
+      instance.status = "error";
+      instance.error = msg;
+      workerPool.updateStatus(resolvedProfile.id, "error", msg);
+      throw new Error(msg);
+    }
+
+    const sessionResult = isSubagent
+      ? await spawnOptions.client.session.fork({
+          path: { id: parentSessionId as string },
+          query: { directory: spawnOptions.directory },
+        })
+      : await spawnOptions.client.session.create({
+          body: { title: `Worker: ${resolvedProfile.name}` },
+          query: { directory: spawnOptions.directory },
+        });
 
     const session = sessionResult.data;
     if (!session) {
@@ -51,6 +68,9 @@ export async function spawnAgentWorker(
     }
 
     instance.sessionId = session.id;
+    if (isSubagent && parentSessionId) {
+      instance.parentSessionId = parentSessionId;
+    }
 
     // Inject bootstrap prompt (worker identity & instructions)
     const bootstrapPrompt = await buildWorkerBootstrapPrompt({
@@ -81,7 +101,7 @@ export async function sendToAgentWorker(
   workerId: string,
   message: string,
   options?: SendToWorkerOptions & { client?: any; directory?: string }
-): Promise<{ success: boolean; response?: string; error?: string }> {
+): Promise<{ success: boolean; response?: string; warning?: string; error?: string }> {
   const instance = workerPool.get(workerId);
 
   if (!instance) {
@@ -125,6 +145,7 @@ export async function sendToAgentWorker(
 
   try {
     const startedAt = Date.now();
+    const warning = instance.warning;
     const responseText = await sendWorkerPrompt({
       client,
       sessionId,
@@ -153,7 +174,7 @@ export async function sendToAgentWorker(
       durationMs,
     };
 
-    return { success: true, response: responseText };
+    return { success: true, response: responseText, ...(warning ? { warning } : {}) };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     const isSdkError = Boolean((error as any)?.isSdkError);
