@@ -114,9 +114,12 @@ Configure the orchestrator agent injected into OpenCode.
 | `agent.enabled` | boolean | `true` | Enable orchestrator agent |
 | `agent.name` | string | `"orchestrator"` | Agent name |
 | `agent.model` | string | - | Model to use (default: your default model) |
-| `agent.prompt` | string | - | Custom system prompt |
+| `agent.prompt` | string | - | Custom system prompt (overrides `prompts/orchestrator.md`) |
 | `agent.mode` | string | `"primary"` | `"primary"` or `"subagent"` |
 | `agent.color` | string | - | Agent color in UI |
+| `agent.tools` | object | - | Tool allow/deny overrides (OpenCode `tools.*`) |
+| `agent.permission` | object | - | Permission overrides (OpenCode `permission.*`) |
+| `agent.applyToBuild` | boolean | `false` | Also override the built-in `build` agent model |
 
 **Example:**
 ```json
@@ -125,7 +128,11 @@ Configure the orchestrator agent injected into OpenCode.
     "enabled": true,
     "name": "orchestrator",
     "model": "anthropic/claude-sonnet-4-5",
-    "mode": "primary"
+    "mode": "primary",
+    "tools": {
+      "bash": false,
+      "edit": false
+    }
   }
 }
 ```
@@ -137,6 +144,15 @@ Configure the workflow engine and built-in workflows.
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `workflows.enabled` | boolean | `true` | Enable workflow engine |
+| `workflows.definitions` | array | `[]` | Custom workflow definitions (id/name/description/steps) |
+| `workflows.triggers.visionOnImage.enabled` | boolean | `true` | Auto-run vision workflow when a message contains images |
+| `workflows.triggers.visionOnImage.workflowId` | string | `vision` | Workflow ID to run for vision |
+| `workflows.triggers.visionOnImage.autoSpawn` | boolean | `true` | Auto-spawn missing workers |
+| `workflows.triggers.visionOnImage.blocking` | boolean | `false` | Run synchronously (blocks the message) |
+| `workflows.triggers.memoryOnTurnEnd.enabled` | boolean | `true` | Auto-run memory workflow at turn end |
+| `workflows.triggers.memoryOnTurnEnd.workflowId` | string | `memory` | Workflow ID to run for memory |
+| `workflows.triggers.memoryOnTurnEnd.autoSpawn` | boolean | `true` | Auto-spawn missing workers |
+| `workflows.triggers.memoryOnTurnEnd.blocking` | boolean | `false` | Run synchronously (blocks the message) |
 | `workflows.roocodeBoomerang.enabled` | boolean | `true` | Enable RooCode Boomerang workflow |
 | `workflows.roocodeBoomerang.maxSteps` | number | `4` | Maximum steps in workflow |
 | `workflows.roocodeBoomerang.maxTaskChars` | number | `12000` | Max characters in task |
@@ -148,6 +164,10 @@ Configure the workflow engine and built-in workflows.
 {
   "workflows": {
     "enabled": true,
+    "triggers": {
+      "visionOnImage": { "enabled": true, "workflowId": "vision" },
+      "memoryOnTurnEnd": { "enabled": true, "workflowId": "memory" }
+    },
     "roocodeBoomerang": {
       "enabled": true,
       "maxSteps": 4,
@@ -356,6 +376,8 @@ Profiles define worker types with their capabilities and configuration.
 | `explorer` | Code Explorer | `node:fast` | No | No | Full |
 | `memory` | Memory Graph Curator | `node` | No | Yes | Full |
 
+Built-in profile prompts are stored under `packages/orchestrator/prompts/workers/` and referenced by `promptFile`.
+
 ### Custom Profile Example
 
 ```json
@@ -369,7 +391,7 @@ Profiles define worker types with their capabilities and configuration.
       "whenToUse": "When working with React components, hooks, or state management",
       "supportsVision": false,
       "supportsWeb": true,
-      "systemPrompt": "You are a React expert. Focus on hooks, functional components, and modern patterns. Prefer TypeScript.",
+      "promptFile": "workers/react-expert.md",
       "tags": ["react", "frontend", "typescript"]
     }
   ]
@@ -386,7 +408,8 @@ Profiles define worker types with their capabilities and configuration.
 | `providerID` | string | No | Specific provider |
 | `purpose` | string | No | What this profile does |
 | `whenToUse` | string | No | When to use this profile |
-| `systemPrompt` | string | No | Custom system prompt |
+| `promptFile` | string | No | Prompt file relative to `packages/orchestrator/prompts` |
+| `systemPrompt` | string | No | Custom system prompt (overrides `promptFile`) |
 | `port` | number | No | Fixed port (not recommended) |
 | `supportsVision` | boolean | No | Has vision capability |
 | `supportsWeb` | boolean | No | Has web browsing |

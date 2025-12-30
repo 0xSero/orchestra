@@ -1,0 +1,318 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OpenCode Orchestrator Config",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "basePort": { "type": "number", "default": 14096 },
+    "autoSpawn": { "type": "boolean", "default": true },
+    "startupTimeout": { "type": "number", "default": 30000 },
+    "healthCheckInterval": { "type": "number", "default": 30000 },
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "toasts": { "type": "boolean", "default": true },
+        "injectSystemContext": { "type": "boolean", "default": true },
+        "systemContextMaxWorkers": { "type": "number", "default": 12 },
+        "defaultListFormat": { "type": "string", "enum": ["markdown", "json"], "default": "markdown" },
+        "debug": { "type": "boolean", "default": false },
+        "logToConsole": { "type": "boolean", "default": false },
+        "wakeupInjection": { 
+          "type": "boolean", 
+          "default": true,
+          "description": "When async worker jobs or vision analysis complete, inject a prompt into the orchestrator session to resume it."
+        }
+      }
+    },
+    "notifications": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "idle": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "title": { "type": "string" },
+            "message": { "type": "string" },
+            "delayMs": { "type": "number", "default": 1500 }
+          }
+        }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "name": { "type": "string", "default": "orchestrator" },
+        "model": { "type": "string" },
+        "prompt": { "type": "string" },
+        "mode": { "type": "string", "enum": ["primary", "subagent"], "default": "primary" },
+        "color": { "type": "string" },
+        "applyToBuild": { "type": "boolean", "default": false },
+        "tools": {
+          "type": "object",
+          "additionalProperties": { "type": "boolean" }
+        },
+        "permission": { "type": "object" }
+      }
+    },
+    "commands": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "prefix": { "type": "string", "default": "orchestrator." }
+      }
+    },
+    "pruning": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "DCP-inspired context pruning (truncates large tool inputs/outputs before sending to the LLM).",
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "maxToolOutputChars": { "type": "number", "default": 12000 },
+        "maxToolInputChars": { "type": "number", "default": 4000 },
+        "protectedTools": { "type": "array", "items": { "type": "string" }, "default": ["task", "todowrite", "todoread"] }
+      }
+    },
+    "workflows": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "definitions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "name", "description", "steps"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["id", "workerId", "prompt"],
+                  "properties": {
+                    "id": { "type": "string" },
+                    "title": { "type": "string" },
+                    "workerId": { "type": "string" },
+                    "prompt": { "type": "string" },
+                    "carry": { "type": "boolean" },
+                    "timeoutMs": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "triggers": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "visionOnImage": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "type": "boolean", "default": true },
+                "workflowId": { "type": "string", "default": "vision" },
+                "autoSpawn": { "type": "boolean", "default": true },
+                "blocking": { "type": "boolean", "default": false }
+              }
+            },
+            "memoryOnTurnEnd": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "type": "boolean", "default": true },
+                "workflowId": { "type": "string", "default": "memory" },
+                "autoSpawn": { "type": "boolean", "default": true },
+                "blocking": { "type": "boolean", "default": false }
+              }
+            }
+          }
+        },
+        "roocodeBoomerang": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "steps": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id"],
+                "properties": {
+                  "id": { "type": "string" },
+                  "title": { "type": "string" },
+                  "workerId": { "type": "string" },
+                  "prompt": { "type": "string" },
+                  "carry": { "type": "boolean" },
+                  "timeoutMs": { "type": "number" }
+                }
+              }
+            },
+            "maxSteps": { "type": "number", "default": 4 },
+            "maxTaskChars": { "type": "number", "default": 12000 },
+            "maxCarryChars": { "type": "number", "default": 24000 },
+            "perStepTimeoutMs": { "type": "number", "default": 120000 }
+          }
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "workflows": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxSteps": { "type": "number", "default": 4 },
+            "maxTaskChars": { "type": "number", "default": 12000 },
+            "maxCarryChars": { "type": "number", "default": 24000 },
+            "perStepTimeoutMs": { "type": "number", "default": 120000 }
+          }
+        }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "autoSpawn": { "type": "boolean", "default": true },
+        "autoRecord": { "type": "boolean", "default": true },
+        "autoInject": { "type": "boolean", "default": true },
+        "scope": { "type": "string", "enum": ["project", "global"], "default": "project" },
+        "maxChars": { "type": "number", "default": 2000 },
+        "summaries": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "sessionMaxChars": { "type": "number", "default": 2000 },
+            "projectMaxChars": { "type": "number", "default": 2000 }
+          }
+        },
+        "trim": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxMessagesPerSession": { "type": "number", "default": 60 },
+            "maxMessagesPerProject": { "type": "number", "default": 400 },
+            "maxMessagesGlobal": { "type": "number", "default": 2000 },
+            "maxProjectsGlobal": { "type": "number", "default": 25 }
+          }
+        },
+        "inject": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxChars": { "type": "number", "default": 2000 },
+            "maxEntries": { "type": "number", "default": 8 },
+            "includeMessages": { "type": "boolean", "default": false },
+            "includeSessionSummary": { "type": "boolean", "default": true },
+            "includeProjectSummary": { "type": "boolean", "default": true },
+            "includeGlobal": { "type": "boolean", "default": true },
+            "maxGlobalEntries": { "type": "number", "default": 3 }
+          }
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "PostHog telemetry settings. Set POSTHOG_API_KEY env var or provide apiKey here.",
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "apiKey": { "type": "string", "description": "PostHog API key (or use POSTHOG_API_KEY env var)" },
+        "host": { "type": "string", "description": "PostHog host (default: https://us.i.posthog.com)" }
+      }
+    },
+    "profiles": {
+      "type": "array",
+      "description": "Profiles available to spawn. Use this to set worker→model mapping without auto-spawning.",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "backend": {
+                "type": "string",
+                "enum": ["agent", "server"],
+                "description": "Execution backend for this worker (agent = in-process, server = spawned)"
+              },
+              "model": { "type": "string" },
+              "providerID": { "type": "string" },
+              "purpose": { "type": "string" },
+              "whenToUse": { "type": "string" },
+              "promptFile": { "type": "string" },
+              "systemPrompt": { "type": "string" },
+              "port": { "type": "number" },
+              "supportsVision": { "type": "boolean" },
+              "supportsWeb": { "type": "boolean" },
+              "temperature": { "type": "number" },
+              "tags": { "type": "array", "items": { "type": "string" } },
+              "tools": {
+                "type": "object",
+                "additionalProperties": { "type": "boolean" }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "workers": {
+      "type": "array",
+      "description": "Workers to auto-spawn. Items may be built-in IDs (string) or full profile objects.",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "backend": {
+                "type": "string",
+                "enum": ["agent", "server"],
+                "description": "Execution backend for this worker (agent = in-process, server = spawned)"
+              },
+              "model": { "type": "string" },
+              "providerID": { "type": "string" },
+              "purpose": { "type": "string" },
+              "whenToUse": { "type": "string" },
+              "promptFile": { "type": "string" },
+              "systemPrompt": { "type": "string" },
+              "port": { "type": "number" },
+              "supportsVision": { "type": "boolean" },
+              "supportsWeb": { "type": "boolean" },
+              "temperature": { "type": "number" },
+              "tags": { "type": "array", "items": { "type": "string" } },
+              "tools": {
+                "type": "object",
+                "additionalProperties": { "type": "boolean" }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

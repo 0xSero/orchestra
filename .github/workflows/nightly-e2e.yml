@@ -1,0 +1,27 @@
+name: Nightly E2E
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * *"
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      OPENCODE_ORCH_E2E_MODEL: opencode/gpt-5-nano
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install root dependencies
+        run: bun install
+
+      - name: Install OpenCode CLI (required for E2E tests)
+        run: bun add -g opencode-ai@latest
+
+      - name: Run E2E tests
+        run: bun run test:e2e

@@ -1,0 +1,65 @@
+{
+  "name": "opencode-orchestrator",
+  "version": "0.2.3",
+  "description": "Multi-agent orchestrator plugin for OpenCode - spawn, manage, and coordinate specialized AI workers",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "bin",
+    "src",
+    "schema",
+    "prompts",
+    "docs",
+    "README.md",
+    "HEADLESS_TESTING.md"
+  ],
+  "scripts": {
+    "build:plugin": "bun build ./src/index.ts --outdir ./dist --target node --external @opencode-ai/sdk --external @opencode-ai/plugin --external zod && tsc --emitDeclarationOnly --declaration --outDir dist -p tsconfig.json",
+    "build": "bun run build:plugin",
+    "build:watch": "bun build ./src/index.ts --outdir ./dist --target node --external @opencode-ai/sdk --external @opencode-ai/plugin --external zod --watch",
+    "dev": "bun --watch src/index.ts",
+    "lint": "node ../../scripts/biome.mjs lint .",
+    "format": "node ../../scripts/biome.mjs format . --write",
+    "format:check": "node ../../scripts/biome.mjs format .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test",
+    "bench": "bun test ./test/perf/*.bench.ts",
+    "check": "bun run lint && bun run typecheck && bun run test && bun run build"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.0.203",
+    "@opencode-ai/sdk": "^1.0.203",
+    "neo4j-driver": "^6.0.1",
+    "posthog-node": "^5.17.4"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@biomejs/biome": "^1.9.4",
+    "typescript": "^5.0.0",
+    "zod": "4.1.8"
+  },
+  "peerDependencies": {
+    "bun": ">=1.0.0"
+  },
+  "keywords": [
+    "opencode",
+    "ai",
+    "agents",
+    "orchestrator",
+    "multi-agent",
+    "plugin"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sero/opencode-orchestrator"
+  }
+}

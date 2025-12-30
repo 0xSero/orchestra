@@ -4,3 +4,9 @@ node_modules
 .tmp
 .osgrep
 .claude
+.opencode/user.db*
+.opencode/attachments/
+.opencode/vision/
+examples/**/node_modules/
+examples/**/dist/
+examples/**/coverage/

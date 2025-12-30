@@ -43,6 +43,22 @@
 
 ## Overview
 
+**Open Orchestra** is a monorepo that ships the orchestrator plugin, control panel, and desktop shell for OpenCode.
+
+### Repo in 10 minutes
+
+Mental model:
+- **Workers**: orchestrator-managed runtimes that do the work.
+- **Workflows**: multi-step plans the orchestrator runs across workers.
+- **Memory**: persistent records written by workflows and tools.
+
+The 3 commands:
+- `bun run dev` — developer loop (plugin watch + control panel)
+- `bun run build` — release build (plugin + app + desktop)
+- `opencode` + plugin install — user flow (add `opencode-orchestrator` to OpenCode config)
+
+---
+
 **Open Orchestra** is a multi-agent orchestration plugin for [OpenCode](https://opencode.ai) that enables you to spawn, manage, and coordinate specialized AI workers. It implements a **hub-and-spoke architecture** where a central orchestrator coordinates multiple specialized workers, each optimized for specific tasks.
 
 ### Why Multiple AI Workers?
@@ -299,18 +315,16 @@ Open Orchestra includes an optional Neo4j-backed memory system for persistent kn
 
 ## Development
 
+See [docs/standards.md](./docs/standards.md) for engineering standards and [docs/testing.md](./docs/testing.md) for test tiers and CI behavior.
+
 ```bash
 # Install dependencies
 bun install
+cd app && bun install
+cd desktop && bun install
 
-# Type check
-bun run typecheck
-
-# Build
-bun run build
-
-# Run tests
-bun test
+# Run the full quality gate
+bun run check
 ```
 
 ## Project Structure

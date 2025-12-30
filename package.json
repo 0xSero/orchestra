@@ -1,56 +1,41 @@
 {
-  "name": "opencode-orchestrator",
-  "version": "0.2.3",
-  "description": "Multi-agent orchestrator plugin for OpenCode - spawn, manage, and coordinate specialized AI workers",
+  "name": "opencode-workspace",
+  "private": true,
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
-  },
-  "files": [
-    "dist",
-    "bin",
-    "src",
-    "schema",
-    "docs",
-    "README.md",
-    "HEADLESS_TESTING.md"
+  "workspaces": [
+    "apps/*",
+    "packages/*"
   ],
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target node --external @opencode-ai/sdk --external @opencode-ai/plugin --external zod && tsc --emitDeclarationOnly --declaration --outDir dist",
-    "dev": "bun --watch src/index.ts",
-    "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "bench": "bun test ./test/performance/*.bench.ts"
-  },
-  "dependencies": {
-    "@opencode-ai/plugin": "^1.0.164",
-    "@opencode-ai/sdk": "^1.0.164",
-    "neo4j-driver": "^6.0.1",
-    "posthog-node": "^5.17.4"
+    "dev": "node scripts/dev.mjs",
+    "dev:desktop": "node scripts/dev.mjs --desktop",
+    "dev:min": "bun run --cwd packages/orchestrator build:watch",
+    "loc": "node scripts/loc.mjs",
+    "lint": "node scripts/biome.mjs lint .",
+    "format": "node scripts/biome.mjs format . --write",
+    "format:check": "node scripts/biome.mjs format .",
+    "typecheck:plugin": "cd packages/orchestrator && bun run typecheck",
+    "typecheck:control-panel": "cd apps/control-panel && bun run typecheck",
+    "typecheck:desktop": "cd apps/desktop && bun run typecheck",
+    "typecheck": "bun run typecheck:plugin && bun run typecheck:control-panel && bun run typecheck:desktop",
+    "test:unit": "cd packages/orchestrator && bun test ./test/unit",
+    "test:integration": "cd packages/orchestrator && bun test ./test/integration",
+    "test:e2e": "cd packages/orchestrator && bun test ./test/e2e",
+    "test:optional": "cd packages/orchestrator && bun test ./test/optional",
+    "test:stress": "cd packages/orchestrator && bun test ./test/stress/*.stress.ts",
+    "test:plugin": "cd packages/orchestrator && bun test ./test/unit && bun test ./test/integration",
+    "test:control-panel": "cd apps/control-panel && bun run test",
+    "test": "bun run test:plugin && bun run test:control-panel",
+    "build:plugin": "cd packages/orchestrator && bun run build",
+    "build:control-panel": "cd apps/control-panel && bun run build",
+    "build:desktop": "cd apps/desktop && bun run build",
+    "build": "bun run build:plugin && bun run build:control-panel && bun run build:desktop",
+    "bench": "cd packages/orchestrator && bun run bench",
+    "check": "bun run lint && bun run typecheck && bun run test && bun run build"
   },
   "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
     "@types/bun": "latest",
     "typescript": "^5.0.0"
-  },
-  "peerDependencies": {
-    "bun": ">=1.0.0"
-  },
-  "keywords": [
-    "opencode",
-    "ai",
-    "agents",
-    "orchestrator",
-    "multi-agent",
-    "plugin"
-  ],
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/sero/opencode-orchestrator"
   }
 }
