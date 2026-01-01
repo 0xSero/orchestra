@@ -372,6 +372,7 @@ export async function sendToServerWorker(
       directory: instance.directory ?? process.cwd(),
       workerId,
       message,
+      model: instance.profile.model,
       attachments: options?.attachments,
       timeoutMs: options?.timeout ?? 600_000,
       jobId: options?.jobId,

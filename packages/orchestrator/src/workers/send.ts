@@ -1,5 +1,6 @@
 import { buildPromptParts, prepareWorkerAttachments, type WorkerAttachment } from "./prompt/attachments";
 import { extractWorkerResponse } from "./prompt/extract";
+import { isFullModelID, parseFullModelID } from "../models/catalog";
 
 export type SendToWorkerOptions = {
   attachments?: WorkerAttachment[];
@@ -61,6 +62,7 @@ export async function sendWorkerPrompt(input: {
   from?: string;
   allowStreaming?: boolean;
   agent?: string;
+  model?: string;
   debugLabel?: string;
 }): Promise<string> {
   const taskText = buildWorkerTaskText({
@@ -86,10 +88,11 @@ export async function sendWorkerPrompt(input: {
     const result = await input.client.session
       .prompt({
         path: { id: input.sessionId },
-        body: {
-          ...(input.agent ? { agent: input.agent } : {}),
+        body: buildWorkerPromptBody({
           parts: parts as any,
-        },
+          agent: input.agent,
+          model: input.model,
+        }),
         query: { directory: input.directory },
         signal: abort.signal as any,
       } as any)
@@ -118,4 +121,31 @@ export async function sendWorkerPrompt(input: {
   } finally {
     await prepared.cleanup();
   }
+}
+
+export function buildWorkerPromptBody(input: {
+  parts: any[];
+  agent?: string;
+  model?: string;
+}): { parts: any[]; agent?: string; model?: { providerID: string; modelID: string } } {
+  const body: { parts: any[]; agent?: string; model?: { providerID: string; modelID: string } } = {
+    parts: input.parts,
+  };
+
+  if (input.agent) {
+    body.agent = input.agent;
+  }
+
+  if (input.model) {
+    if (!isFullModelID(input.model)) {
+      throw new Error(`Invalid model override "${input.model}". Expected "provider/model".`);
+    }
+    const parsed = parseFullModelID(input.model);
+    if (!parsed.providerID || !parsed.modelID) {
+      throw new Error(`Invalid model override "${input.model}". Expected "provider/model".`);
+    }
+    body.model = { providerID: parsed.providerID, modelID: parsed.modelID };
+  }
+
+  return body;
 }

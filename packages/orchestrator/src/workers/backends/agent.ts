@@ -3,6 +3,8 @@ import { workerPool, type SpawnOptions } from "../../core/worker-pool";
 import { publishErrorEvent } from "../../core/orchestrator-events";
 import { sendWorkerPrompt, type SendToWorkerOptions } from "../send";
 import { buildWorkerBootstrapPrompt } from "../prompt/worker-prompt";
+import { isFullModelID } from "../../models/catalog";
+import { hydrateProfileModelsFromOpencode } from "../../models/hydrate";
 
 function getBackendClient(instance: WorkerInstance, fallback?: any) {
   return instance.client ?? fallback;
@@ -146,12 +148,23 @@ export async function sendToAgentWorker(
   try {
     const startedAt = Date.now();
     const warning = instance.warning;
+    const directory = instance.directory ?? options?.directory ?? process.cwd();
+    let modelOverride = instance.profile.model;
+    if (modelOverride && !isFullModelID(modelOverride)) {
+      const { profiles } = await hydrateProfileModelsFromOpencode({
+        client,
+        directory,
+        profiles: { [instance.profile.id]: instance.profile },
+      });
+      modelOverride = profiles[instance.profile.id]?.model ?? modelOverride;
+    }
     const responseText = await sendWorkerPrompt({
       client,
       sessionId,
-      directory: instance.directory ?? options?.directory ?? process.cwd(),
+      directory,
       workerId,
       message,
+      model: modelOverride,
       attachments: options?.attachments,
       timeoutMs: options?.timeout ?? 600_000,
       jobId: options?.jobId,
