@@ -145,6 +145,8 @@ async function _spawnWorkerCore(
         sessionId: instance.sessionId,
         status: "starting",
         startedAt: instance.startedAt.getTime(),
+        model: instance.profile.model,
+        modelPolicy: instance.modelPolicy ?? "dynamic",
       });
     }
 
@@ -185,6 +187,8 @@ async function _spawnWorkerCore(
         sessionId: instance.sessionId,
         status: "starting",
         startedAt: instance.startedAt.getTime(),
+        model: instance.profile.model,
+        modelPolicy: instance.modelPolicy ?? "dynamic",
       });
     }
 
@@ -216,6 +220,8 @@ async function _spawnWorkerCore(
         sessionId: instance.sessionId,
         status: "ready",
         startedAt: instance.startedAt.getTime(),
+        model: instance.profile.model,
+        modelPolicy: instance.modelPolicy ?? "dynamic",
       });
     }
 
@@ -241,6 +247,8 @@ async function _spawnWorkerCore(
         status: "error",
         startedAt: instance.startedAt.getTime(),
         lastError: errorMsg,
+        model: instance.profile.model,
+        modelPolicy: instance.modelPolicy ?? "dynamic",
       });
     }
     throw error;
@@ -322,6 +330,8 @@ export async function stopServerWorker(workerId: string): Promise<boolean> {
         sessionId: instance.sessionId,
         status: "stopped",
         startedAt: instance.startedAt.getTime(),
+        model: instance.profile.model,
+        modelPolicy: instance.modelPolicy ?? "dynamic",
       });
       await removeWorkerEntriesByPid(instance.pid).catch(() => {});
     }
@@ -404,6 +414,8 @@ export async function sendToServerWorker(
         sessionId: instance.sessionId,
         status: "ready",
         startedAt: instance.startedAt.getTime(),
+        model: instance.profile.model,
+        modelPolicy: instance.modelPolicy ?? "dynamic",
       });
     }
 

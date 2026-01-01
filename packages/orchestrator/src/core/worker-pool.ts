@@ -21,6 +21,8 @@ import { writeJsonAtomic } from "../helpers/fs";
 import { getUserConfigDir } from "../helpers/format";
 import { isProcessAlive } from "../helpers/process";
 import { publishErrorEvent, publishWorkerStatusEvent } from "./orchestrator-events";
+import { fetchOpencodeConfig, fetchProviders } from "../models/catalog";
+import { resolveWorkerModel } from "../models/resolve";
 
 // =============================================================================
 // Types
@@ -35,6 +37,7 @@ export interface SpawnOptions {
   directory: string;
   client?: any;
   parentSessionId?: string;
+  forceNew?: boolean;
 }
 
 export interface SendOptions {
@@ -70,6 +73,8 @@ export type DeviceRegistryWorkerEntry = {
   startedAt: number;
   updatedAt: number;
   lastError?: string;
+  model?: string;
+  modelPolicy?: "dynamic" | "sticky";
 };
 
 export type DeviceRegistrySessionEntry = {
@@ -216,6 +221,37 @@ export class WorkerPool {
     this.instanceId = id;
   }
 
+  private async resolveReuseFingerprint(
+    profile: WorkerProfile,
+    options: SpawnOptions
+  ): Promise<{ model: string; policy: "dynamic" | "sticky" } | undefined> {
+    const modelRef = profile.model?.trim();
+    if (!modelRef) return undefined;
+    const policy: "dynamic" | "sticky" = "dynamic";
+    const isNodeTag = modelRef.startsWith("auto") || modelRef.startsWith("node");
+    if (!options.client) {
+      if (modelRef.includes("/") && !isNodeTag) {
+        return { model: modelRef, policy };
+      }
+      return undefined;
+    }
+    try {
+      const [cfg, providersRes] = await Promise.all([
+        fetchOpencodeConfig(options.client, options.directory),
+        fetchProviders(options.client, options.directory),
+      ]);
+      const resolved = resolveWorkerModel({
+        profile,
+        config: cfg,
+        providers: providersRes.providers,
+        providerDefaults: providersRes.defaults,
+      });
+      return { model: resolved.resolvedModel, policy };
+    } catch {
+      return undefined;
+    }
+  }
+
   /**
    * Get or spawn a worker by profile ID.
    * Handles deduplication - concurrent calls return the same promise.
@@ -239,9 +275,10 @@ export class WorkerPool {
 
     // Create the spawn promise BEFORE any async work to prevent race conditions
     // Wrap the entire flow (reuse check + spawn) in a single promise
+    const forceNew = options.forceNew === true;
     const spawnPromise = (async (): Promise<WorkerInstance> => {
       const backend = resolveWorkerBackend(profile);
-      if (backend === "server") {
+      if (backend === "server" && !forceNew) {
         const reused = await this.tryReuseFromDeviceRegistry(profile, options);
         if (reused) {
           return reused;
@@ -275,12 +312,17 @@ export class WorkerPool {
       await pruneDeadEntries(path);
       const file = await readRegistryFile(path);
 
+      const expected = await this.resolveReuseFingerprint(profile, options);
+      if (!expected) return undefined;
+
       const candidates = file.entries.filter(
         (e): e is DeviceRegistryWorkerEntry =>
           e.kind === "worker" &&
           e.workerId === profile.id &&
           (e.status === "ready" || e.status === "busy") &&
-          isProcessAlive(e.pid)
+          isProcessAlive(e.pid) &&
+          e.model === expected.model &&
+          (e.modelPolicy ?? "dynamic") === expected.policy
       );
 
       if (candidates.length === 0) return undefined;
@@ -335,7 +377,7 @@ export class WorkerPool {
       }
 
       const instance: WorkerInstance = {
-        profile,
+        profile: { ...profile, model: existing.model ?? profile.model },
         kind: profile.kind ?? (profile.backend === "server" ? "server" : "agent"),
         execution: profile.execution,
         status: existing.status === "busy" ? "busy" : "ready",
@@ -348,7 +390,7 @@ export class WorkerPool {
         pid: existing.pid,
         sessionId,
         modelRef: profile.model,
-        modelPolicy: "dynamic",
+        modelPolicy: existing.modelPolicy ?? "dynamic",
         modelResolution: "reused existing worker",
       };
 
@@ -517,6 +559,8 @@ export class WorkerPool {
         startedAt: instance.startedAt.getTime(),
         updatedAt: now,
         lastError: instance.error,
+        model: instance.profile.model,
+        modelPolicy: instance.modelPolicy ?? "dynamic",
       };
 
       const idx = file.entries.findIndex(

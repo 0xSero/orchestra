@@ -62,7 +62,7 @@ git push origin main
 
 ## Completion record (fill in when done)
 
-- Commit: `<sha>`
+- Commit: `HEAD`
 - After references (update with final line numbers):
-  - `packages/orchestrator/src/core/worker-pool.ts:<line>`
-  - `packages/orchestrator/src/workers/backends/server.ts:<line>`
+  - `packages/orchestrator/src/core/worker-pool.ts:315`
+  - `packages/orchestrator/src/workers/backends/server.ts:149`

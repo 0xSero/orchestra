@@ -291,6 +291,8 @@ export async function registerWorkerInDeviceRegistry(input: {
 	status: "starting" | "ready" | "busy" | "error" | "stopped";
 	startedAt: number;
 	lastError?: string;
+	model?: string;
+	modelPolicy?: "dynamic" | "sticky";
 }): Promise<void> {
 	const rt = await ensureRuntime();
 	await upsertWorkerEntry({
@@ -304,5 +306,7 @@ export async function registerWorkerInDeviceRegistry(input: {
 		status: input.status,
 		startedAt: input.startedAt,
 		lastError: input.lastError,
+		model: input.model,
+		modelPolicy: input.modelPolicy,
 	}).catch(() => {});
 }
