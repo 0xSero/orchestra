@@ -58,7 +58,7 @@ git push origin main
 
 ## Completion record (fill in when done)
 
-- Commit: `<sha>`
+- Commit: `HEAD`
 - After references (update with final line numbers):
-  - `packages/orchestrator/src/config/profiles.ts:<line>`
-  - `docs/configuration.md:<line>`
+  - `packages/orchestrator/src/config/profiles.ts:18`
+  - `docs/configuration.md:367`

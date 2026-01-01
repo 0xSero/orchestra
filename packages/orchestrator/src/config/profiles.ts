@@ -15,7 +15,7 @@ export const builtInProfiles: Record<string, WorkerProfile> = {
     id: "vision",
     name: "Vision Analyst",
     backend: "server",
-    model: "zhipuai-coding-plan/glm-4.6v",
+    model: "node:vision",
     purpose: "Analyze images, screenshots, diagrams, and visual content",
     whenToUse:
       "When you need to understand visual content like screenshots, architecture diagrams, UI mockups, error screenshots, or any image-based information",
