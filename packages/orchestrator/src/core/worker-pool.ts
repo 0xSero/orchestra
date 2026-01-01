@@ -347,6 +347,8 @@ export class WorkerPool {
         client,
         pid: existing.pid,
         sessionId,
+        modelRef: profile.model,
+        modelPolicy: "dynamic",
         modelResolution: "reused existing worker",
       };
 
@@ -617,7 +619,9 @@ export class WorkerPool {
     return Array.from(this.workers.values()).map((w) => ({
       id: w.profile.id,
       name: w.profile.name,
+      modelRef: w.modelRef ?? w.profile.model,
       model: w.profile.model,
+      modelPolicy: w.modelPolicy ?? "dynamic",
       modelResolution: w.modelResolution,
       backend: resolveWorkerBackend(w.profile),
       kind: w.kind ?? w.profile.kind,

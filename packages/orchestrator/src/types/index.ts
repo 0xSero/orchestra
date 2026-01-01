@@ -88,6 +88,10 @@ export interface WorkerInstance {
   };
   /** How the worker model was resolved */
   modelResolution?: string;
+  /** Original model reference (tag or provider/model) */
+  modelRef?: string;
+  /** Model override policy for this worker */
+  modelPolicy?: "dynamic" | "sticky";
 }
 
 export interface Registry {

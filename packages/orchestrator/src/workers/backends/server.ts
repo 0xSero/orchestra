@@ -37,8 +37,10 @@ async function _spawnWorkerCore(
   profile: WorkerProfile,
   options: SpawnOptionsWithForce
 ): Promise<WorkerInstance> {
+  const modelRef = profile.model.trim();
+  let modelResolutionReason: string | undefined;
   const resolvedProfile = await (async (): Promise<WorkerProfile> => {
-    const modelSpec = profile.model.trim();
+    const modelSpec = modelRef;
     const isNodeTag = modelSpec.startsWith("auto") || modelSpec.startsWith("node");
 
     if (!options.client) {
@@ -57,11 +59,13 @@ async function _spawnWorkerCore(
       return profile;
     }
 
-    const { profiles } = await hydrateProfileModelsFromOpencode({
+    const { profiles, changes } = await hydrateProfileModelsFromOpencode({
       client: options.client,
       directory: options.directory,
       profiles: { [profile.id]: profile },
     });
+    const change = changes.find((c) => c.profileId === profile.id);
+    modelResolutionReason = change?.reason;
     return profiles[profile.id] ?? profile;
   })();
 
@@ -70,11 +74,7 @@ async function _spawnWorkerCore(
   const requestedPort = fixedPort ?? 0;
 
   const modelResolution =
-    profile.model.trim().startsWith("auto") || profile.model.trim().startsWith("node")
-      ? `resolved from ${profile.model.trim()}`
-      : resolvedProfile.model === profile.model
-        ? "configured"
-        : `resolved from ${profile.model.trim()}`;
+    modelResolutionReason ?? (resolvedProfile.model === modelRef ? "configured" : `resolved from ${modelRef}`);
 
   const instance: WorkerInstance = {
     profile: resolvedProfile,
@@ -84,6 +84,8 @@ async function _spawnWorkerCore(
     port: requestedPort,
     directory: options.directory,
     startedAt: new Date(),
+    modelRef,
+    modelPolicy: "dynamic",
     modelResolution,
   };
 
@@ -372,7 +374,7 @@ export async function sendToServerWorker(
       directory: instance.directory ?? process.cwd(),
       workerId,
       message,
-      model: instance.profile.model,
+      model: options?.model,
       attachments: options?.attachments,
       timeoutMs: options?.timeout ?? 600_000,
       jobId: options?.jobId,

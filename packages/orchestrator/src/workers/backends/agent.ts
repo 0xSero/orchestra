@@ -16,6 +16,7 @@ export async function spawnAgentWorker(
 ): Promise<WorkerInstance> {
   return workerPool.getOrSpawn(profile, options, async (resolvedProfile, spawnOptions) => {
     const resolvedKind = resolvedProfile.kind ?? "agent";
+    const modelRef = resolvedProfile.model.trim();
     const instance: WorkerInstance = {
       profile: resolvedProfile,
       kind: resolvedKind,
@@ -24,7 +25,9 @@ export async function spawnAgentWorker(
       port: 0,
       directory: spawnOptions.directory,
       startedAt: new Date(),
-      modelResolution: "agent backend",
+      modelRef,
+      modelPolicy: "dynamic",
+      modelResolution: isFullModelID(modelRef) ? "configured" : `resolved from ${modelRef}`,
     };
 
     workerPool.register(instance);
@@ -149,14 +152,24 @@ export async function sendToAgentWorker(
     const startedAt = Date.now();
     const warning = instance.warning;
     const directory = instance.directory ?? options?.directory ?? process.cwd();
-    let modelOverride = instance.profile.model;
+    const overrideRequested = typeof options?.model === "string" && options.model.trim().length > 0;
+    let modelOverride = (options?.model ?? instance.profile.model).trim();
+    let resolutionReason = instance.modelResolution;
     if (modelOverride && !isFullModelID(modelOverride)) {
-      const { profiles } = await hydrateProfileModelsFromOpencode({
+      const profileOverride = { ...instance.profile, model: modelOverride };
+      const { profiles, changes } = await hydrateProfileModelsFromOpencode({
         client,
         directory,
-        profiles: { [instance.profile.id]: instance.profile },
+        profiles: { [instance.profile.id]: profileOverride },
       });
       modelOverride = profiles[instance.profile.id]?.model ?? modelOverride;
+      const change = changes.find((c) => c.profileId === instance.profile.id);
+      resolutionReason = change?.reason ?? `resolved from ${profileOverride.model}`;
+    } else if (modelOverride && !overrideRequested) {
+      resolutionReason = "configured";
+    }
+    if (!overrideRequested && resolutionReason) {
+      instance.modelResolution = resolutionReason;
     }
     const responseText = await sendWorkerPrompt({
       client,

@@ -10,6 +10,8 @@ export type SendToWorkerOptions = {
   from?: string;
   /** Parent session id for agent backend */
   sessionId?: string;
+  /** Per-message model override (provider/model) */
+  model?: string;
 };
 
 export function buildWorkerTaskText(input: {

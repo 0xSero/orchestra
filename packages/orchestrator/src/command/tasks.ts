@@ -10,7 +10,8 @@ import { getWorkflow, listWorkflows } from "../workflows/engine";
 import type { WorkflowRunResult } from "../workflows/types";
 import { continueWorkflowWithContext, resolveWorkflowLimits, runWorkflowWithContext } from "../workflows/runner";
 import { getLogBuffer } from "../core/logger";
-import { fetchProviders, filterProviders, flattenProviders } from "../models/catalog";
+import { fetchOpencodeConfig, fetchProviders, filterProviders, flattenProviders } from "../models/catalog";
+import { resolveWorkerModel } from "../models/resolve";
 import { loadNeo4jConfigFromEnv } from "../memory/neo4j";
 import { linkMemory, upsertMemory, type MemoryScope } from "../memory/graph";
 import { completeMemoryTask, recordMemoryLink, recordMemoryPut } from "../memory/tasks";
@@ -225,6 +226,14 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
         .describe("Task kind (default: auto = pick a worker based on task/attachments)"),
       task: tool.schema.string().describe("What to do (sent to worker/workflow; for op use a short label)"),
       workerId: tool.schema.string().optional().describe("Worker id when kind=worker (e.g. 'docs', 'coder')"),
+      model: tool.schema
+        .string()
+        .optional()
+        .describe("Model override for kind=worker (tag like node:fast or provider/model)"),
+      modelPolicy: tool.schema
+        .enum(["dynamic", "sticky"])
+        .optional()
+        .describe("Model override policy (dynamic = per-task, sticky = update worker default)"),
       workflowId: tool.schema.string().optional().describe("Workflow id when kind=workflow (e.g. 'roocode-boomerang')"),
       continueRunId: tool.schema.string().optional().describe("Continue a paused workflow run by runId (kind=workflow only)"),
       op: tool.schema
@@ -275,6 +284,7 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
       const kind = args.kind ?? "auto";
       const autoSpawn = args.autoSpawn ?? true;
       const timeoutMs = args.timeoutMs ?? 600_000;
+      const modelPolicy = args.modelPolicy ?? "dynamic";
       const sessionId = ctx?.sessionID;
 
       const resolvedKind = kind === "auto" ? "worker" : kind;
@@ -417,12 +427,51 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
             return;
           }
 
+          let resolvedModelOverride: string | undefined;
+          if (args.model) {
+            const client = context.client;
+            if (!client) {
+              workerJobs.setError(job.id, { error: "OpenCode client not available; restart OpenCode." });
+              return;
+            }
+
+            const instance = context.workerPool.get(workerId);
+            const profile = instance?.profile ?? getProfile(workerId, context.profiles);
+            if (!profile) {
+              workerJobs.setError(job.id, { error: `Unknown worker "${workerId}".` });
+              return;
+            }
+
+            const [cfg, providersRes] = await Promise.all([
+              fetchOpencodeConfig(client, context.directory),
+              fetchProviders(client, context.directory),
+            ]);
+
+            const resolved = resolveWorkerModel({
+              profile,
+              overrideModelRef: args.model,
+              config: cfg,
+              providers: providersRes.providers,
+              providerDefaults: providersRes.defaults,
+            });
+
+            resolvedModelOverride = resolved.resolvedModel;
+
+            if (instance && modelPolicy === "sticky") {
+              instance.profile = { ...instance.profile, model: resolved.resolvedModel };
+              instance.modelRef = resolved.modelRef;
+              instance.modelPolicy = "sticky";
+              instance.modelResolution = resolved.reason;
+            }
+          }
+
           const res = await sendToWorker(workerId, args.task, {
             attachments: args.attachments,
             timeout: timeoutMs,
             jobId: job.id,
             from: args.from,
             sessionId,
+            model: resolvedModelOverride,
           });
 
           if (res.success && res.response) workerJobs.setResult(job.id, { responseText: res.response });
@@ -529,13 +578,19 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
         const rows = workers.map((w: any) => [
           String(w.id),
           String(w.status),
+          String(w.modelRef ?? ""),
           String(w.model),
+          String(w.modelPolicy ?? ""),
+          String(w.modelResolution ?? ""),
           w.supportsVision ? "yes" : "no",
           w.supportsWeb ? "yes" : "no",
           String(w.port ?? ""),
           String(w.purpose ?? ""),
         ]);
-        return renderMarkdownTable(["Worker", "Status", "Model", "Vision", "Web", "Port", "Purpose"], rows);
+        return renderMarkdownTable(
+          ["Worker", "Status", "Model Ref", "Model", "Policy", "Reason", "Vision", "Web", "Port", "Purpose"],
+          rows
+        );
       }
 
       if (view === "profiles") {
