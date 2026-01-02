@@ -1,0 +1,11 @@
+# Limit parallel compilation to prevent memory exhaustion
+# Default is number of CPU cores which can cause OOM on large builds
+[build]
+jobs = 4
+
+# Also limit codegen units for lower memory usage during linking
+[profile.dev]
+codegen-units = 4
+
+[profile.release]
+codegen-units = 4
