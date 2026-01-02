@@ -2,14 +2,18 @@ import type { WorkerProfile } from "../../types";
 import { loadPromptFile } from "../../prompts/load";
 import { getRepoContextForWorker } from "../../ux/repo-context";
 
-async function resolveProfilePrompt(profile: WorkerProfile): Promise<string | undefined> {
+async function resolveProfilePrompt(
+  profile: WorkerProfile,
+): Promise<string | undefined> {
   if (profile.systemPrompt?.trim()) return profile.systemPrompt;
   if (!profile.promptFile) return undefined;
   try {
     return await loadPromptFile(profile.promptFile);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to load prompt for worker "${profile.id}": ${detail}`);
+    throw new Error(
+      `Failed to load prompt for worker "${profile.id}": ${detail}`,
+    );
   }
 }
 
@@ -18,19 +22,24 @@ export async function buildWorkerBootstrapPrompt(input: {
   directory?: string;
 }): Promise<string> {
   const { profile, directory } = input;
-  const resolvedKind = profile.kind ?? (profile.backend === "server" ? "server" : "agent");
+  const resolvedKind =
+    profile.kind ?? (profile.backend === "server" ? "server" : "agent");
   const allowStreaming = resolvedKind === "server";
 
   let repoContextSection = "";
   if (profile.injectRepoContext && directory) {
-    const repoContext = await getRepoContextForWorker(directory).catch(() => undefined);
+    const repoContext = await getRepoContextForWorker(directory).catch(
+      () => undefined,
+    );
     if (repoContext) {
       repoContextSection = `\n\n${repoContext}\n`;
     }
   }
 
   const profilePrompt = await resolveProfilePrompt(profile);
-  const outputContract = await loadPromptFile("snippets/worker-output-contract.md");
+  const outputContract = await loadPromptFile(
+    "snippets/worker-output-contract.md",
+  );
   const streamingContract = allowStreaming
     ? await loadPromptFile("snippets/worker-streaming-contract.md")
     : "";

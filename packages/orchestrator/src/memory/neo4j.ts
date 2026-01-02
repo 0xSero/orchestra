@@ -46,14 +46,15 @@ export function getNeo4jDriver(cfg: Neo4jConfig): Driver {
 
 export async function withNeo4jSession<T>(
   cfg: Neo4jConfig,
-  fn: (session: Session) => Promise<T>
+  fn: (session: Session) => Promise<T>,
 ): Promise<T> {
   const d = getNeo4jDriver(cfg);
-  const session = d.session(cfg.database ? { database: cfg.database } : undefined);
+  const session = d.session(
+    cfg.database ? { database: cfg.database } : undefined,
+  );
   try {
     return await fn(session);
   } finally {
     await session.close();
   }
 }
-

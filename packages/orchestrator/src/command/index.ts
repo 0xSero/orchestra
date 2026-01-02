@@ -40,20 +40,28 @@ function buildToolSets(context: OrchestratorContext) {
   return { core, plugin };
 }
 
-export function createCoreOrchestratorTools(context: OrchestratorContext): Record<string, ToolDefinition> {
+export function createCoreOrchestratorTools(
+  context: OrchestratorContext,
+): Record<string, ToolDefinition> {
   return buildToolSets(context).core;
 }
 
-export function createPluginTools(context: OrchestratorContext): Record<string, ToolDefinition> {
+export function createPluginTools(
+  context: OrchestratorContext,
+): Record<string, ToolDefinition> {
   return buildToolSets(context).plugin;
 }
 
-export function createOrchestratorTools(context: OrchestratorContext): Record<string, ToolDefinition> {
+export function createOrchestratorTools(
+  context: OrchestratorContext,
+): Record<string, ToolDefinition> {
   const { core, plugin } = buildToolSets(context);
   return { ...core, ...plugin };
 }
 
-export function createAdvancedTools(context: OrchestratorContext): Record<string, ToolDefinition> {
+export function createAdvancedTools(
+  context: OrchestratorContext,
+): Record<string, ToolDefinition> {
   return createOrchestratorTools(context);
 }
 
@@ -62,7 +70,8 @@ const defaultSets = buildToolSets(getOrchestratorContext());
 /**
  * Core tools exported for the plugin (Task API only)
  */
-export const coreOrchestratorTools: Record<string, ToolDefinition> = defaultSets.core;
+export const coreOrchestratorTools: Record<string, ToolDefinition> =
+  defaultSets.core;
 
 export const pluginTools: Record<string, ToolDefinition> = defaultSets.plugin;
 

@@ -32,13 +32,19 @@ export type ResolveFallbackModelInput = {
 export function resolveFallbackModel(input: ResolveFallbackModelInput): string {
   const fallbackCandidate =
     input.config?.model ||
-    (input.providerDefaults?.opencode ? `opencode/${input.providerDefaults.opencode}` : undefined) ||
+    (input.providerDefaults?.opencode
+      ? `opencode/${input.providerDefaults.opencode}`
+      : undefined) ||
     "opencode/gpt-5-nano";
   const resolvedFallback = resolveModelRef(fallbackCandidate, input.providers);
-  return "error" in resolvedFallback ? fallbackCandidate : resolvedFallback.full;
+  return "error" in resolvedFallback
+    ? fallbackCandidate
+    : resolvedFallback.full;
 }
 
-export function resolveWorkerModel(input: ResolveWorkerModelInput): WorkerModelResolution {
+export function resolveWorkerModel(
+  input: ResolveWorkerModelInput,
+): WorkerModelResolution {
   const modelRef = (input.overrideModelRef ?? input.profile.model).trim();
   const providersAll = input.providers;
   const providersUsable = filterProviders(providersAll, "configured");
@@ -51,14 +57,22 @@ export function resolveWorkerModel(input: ResolveWorkerModelInput): WorkerModelR
 
   const isNodeTag = modelRef.startsWith("auto") || modelRef.startsWith("node");
   if (isNodeTag) {
-    const isVision = input.profile.supportsVision || /(?:auto|node):vision/i.test(modelRef);
+    const isVision =
+      input.profile.supportsVision || /(?:auto|node):vision/i.test(modelRef);
     const isDocs = /(?:auto|node):docs/i.test(modelRef);
     const isFast = /(?:auto|node):fast/i.test(modelRef);
 
     if (isFast && input.config?.small_model) {
-      const resolvedSmall = resolveModelRef(input.config.small_model, providersAll);
+      const resolvedSmall = resolveModelRef(
+        input.config.small_model,
+        providersAll,
+      );
       if (!("error" in resolvedSmall)) {
-        return { resolvedModel: resolvedSmall.full, modelRef, reason: `auto-selected from small_model (${modelRef})` };
+        return {
+          resolvedModel: resolvedSmall.full,
+          modelRef,
+          reason: `auto-selected from small_model (${modelRef})`,
+        };
       }
     }
 
@@ -71,25 +85,38 @@ export function resolveWorkerModel(input: ResolveWorkerModelInput): WorkerModelR
           : undefined;
 
     if (picked) {
-      return { resolvedModel: picked.full, modelRef, reason: `auto-selected from configured models (${modelRef})` };
+      return {
+        resolvedModel: picked.full,
+        modelRef,
+        reason: `auto-selected from configured models (${modelRef})`,
+      };
     }
 
     if (isVision) {
       throw new Error(
         `No vision-capable models found for "${input.profile.id}" (model tag: "${modelRef}"). ` +
-          `Configure a vision model in OpenCode or set the profile model explicitly.`
+          `Configure a vision model in OpenCode or set the profile model explicitly.`,
       );
     }
 
-    return { resolvedModel: fallbackModel, modelRef, reason: `fallback to default model (${modelRef})` };
+    return {
+      resolvedModel: fallbackModel,
+      modelRef,
+      reason: `fallback to default model (${modelRef})`,
+    };
   }
 
   const resolved = resolveModelRef(modelRef, providersAll);
   if ("error" in resolved) {
-    const suffix = resolved.suggestions?.length ? `\nSuggestions:\n- ${resolved.suggestions.join("\n- ")}` : "";
-    throw new Error(`Invalid model for profile "${input.profile.id}": ${resolved.error}${suffix}`);
+    const suffix = resolved.suggestions?.length
+      ? `\nSuggestions:\n- ${resolved.suggestions.join("\n- ")}`
+      : "";
+    throw new Error(
+      `Invalid model for profile "${input.profile.id}": ${resolved.error}${suffix}`,
+    );
   }
 
-  const reason = resolved.full === modelRef ? "configured" : `resolved from ${modelRef}`;
+  const reason =
+    resolved.full === modelRef ? "configured" : `resolved from ${modelRef}`;
   return { resolvedModel: resolved.full, modelRef, reason };
 }

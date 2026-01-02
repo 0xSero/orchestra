@@ -14,7 +14,7 @@ export const DEFAULT_ORCHESTRATOR_AGENT_TOOL_FLAGS = {
 } as const;
 
 export function buildDefaultOrchestratorPluginToolOverrides(
-  toolIds: Iterable<string>
+  toolIds: Iterable<string>,
 ): Record<string, boolean> {
   const allowlist = new Set<string>(DEFAULT_ORCHESTRATOR_TOOL_ALLOWLIST);
   const overrides: Record<string, boolean> = {};

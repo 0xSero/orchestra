@@ -22,13 +22,20 @@ export function redactSecrets(input: string): string {
 }
 
 export function normalizeForMemory(input: string, maxChars: number): string {
-  const cleaned = redactSecrets(stripCodeBlocks(input)).replace(/\s+/g, " ").trim();
+  const cleaned = redactSecrets(stripCodeBlocks(input))
+    .replace(/\s+/g, " ")
+    .trim();
   return truncate(cleaned, maxChars);
 }
 
-export function shortenWithMarker(text: string, maxChars: number, options?: { headRatio?: number }): string {
+export function shortenWithMarker(
+  text: string,
+  maxChars: number,
+  options?: { headRatio?: number },
+): string {
   if (text.length <= maxChars) return text;
-  const headRatio = typeof options?.headRatio === "number" ? options.headRatio : 0.4;
+  const headRatio =
+    typeof options?.headRatio === "number" ? options.headRatio : 0.4;
   const marker = `\n\n[... trimmed ${text.length - maxChars} chars ...]\n\n`;
   const budget = Math.max(0, maxChars - marker.length);
   const keepHead = Math.floor(budget * headRatio);
@@ -36,8 +43,12 @@ export function shortenWithMarker(text: string, maxChars: number, options?: { he
   return `${text.slice(0, keepHead)}${marker}${text.slice(text.length - keepTail)}`;
 }
 
-export function appendRollingSummary(prev: string | undefined, entry: string, maxChars: number): string {
-  const next = prev && prev.trim().length > 0 ? `${prev.trim()}\n${entry}` : entry;
+export function appendRollingSummary(
+  prev: string | undefined,
+  entry: string,
+  maxChars: number,
+): string {
+  const next =
+    prev && prev.trim().length > 0 ? `${prev.trim()}\n${entry}` : entry;
   return shortenWithMarker(next, maxChars, { headRatio: 0.35 });
 }
-

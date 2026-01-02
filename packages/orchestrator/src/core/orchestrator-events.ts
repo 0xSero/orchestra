@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import type { WorkerBackend, WorkerExecution, WorkerInstance, WorkerKind, WorkerStatus } from "../types";
+import type {
+  WorkerBackend,
+  WorkerExecution,
+  WorkerInstance,
+  WorkerKind,
+  WorkerStatus,
+} from "../types";
 
 export const ORCHESTRATOR_EVENT_VERSION = 1 as const;
 
@@ -165,7 +171,9 @@ export type OrchestratorEventDataMap = {
   };
 };
 
-export type OrchestratorEvent<T extends OrchestratorEventType = OrchestratorEventType> = {
+export type OrchestratorEvent<
+  T extends OrchestratorEventType = OrchestratorEventType,
+> = {
   version: typeof ORCHESTRATOR_EVENT_VERSION;
   id: string;
   type: T;
@@ -176,7 +184,9 @@ export type OrchestratorEvent<T extends OrchestratorEventType = OrchestratorEven
 const emitter = new EventEmitter();
 emitter.setMaxListeners(100);
 
-function resolveWorkerBackend(profile: WorkerInstance["profile"]): WorkerBackend {
+function resolveWorkerBackend(
+  profile: WorkerInstance["profile"],
+): WorkerBackend {
   if (profile.kind === "server") return "server";
   if (profile.kind === "agent" || profile.kind === "subagent") return "agent";
   return profile.backend ?? "server";
@@ -184,7 +194,7 @@ function resolveWorkerBackend(profile: WorkerInstance["profile"]): WorkerBackend
 
 export function serializeWorkerInstance(
   instance: WorkerInstance,
-  overrides?: { status?: WorkerStatus }
+  overrides?: { status?: WorkerStatus },
 ): OrchestratorWorkerSnapshot {
   const status = overrides?.status ?? instance.status;
   return {
@@ -224,7 +234,7 @@ export function serializeWorkerInstance(
 export function createOrchestratorEvent<T extends OrchestratorEventType>(
   type: T,
   data: OrchestratorEventDataMap[T],
-  options?: { id?: string; timestamp?: number }
+  options?: { id?: string; timestamp?: number },
 ): OrchestratorEvent<T> {
   return {
     version: ORCHESTRATOR_EVENT_VERSION,
@@ -238,7 +248,7 @@ export function createOrchestratorEvent<T extends OrchestratorEventType>(
 export function publishOrchestratorEvent<T extends OrchestratorEventType>(
   type: T,
   data: OrchestratorEventDataMap[T],
-  options?: { id?: string; timestamp?: number }
+  options?: { id?: string; timestamp?: number },
 ): OrchestratorEvent<T> {
   const event = createOrchestratorEvent(type, data, options);
   emitter.emit("event", event);
@@ -251,7 +261,9 @@ export function publishWorkerStatusEvent(input: {
   status?: WorkerStatus;
   reason?: string;
 }): OrchestratorEvent<"orchestra.worker.status"> {
-  const worker = serializeWorkerInstance(input.instance, { status: input.status });
+  const worker = serializeWorkerInstance(input.instance, {
+    status: input.status,
+  });
   return publishOrchestratorEvent("orchestra.worker.status", {
     worker,
     status: worker.status,
@@ -280,7 +292,9 @@ export function publishErrorEvent(input: {
   });
 }
 
-export function onOrchestratorEvent(handler: (event: OrchestratorEvent) => void): () => void {
+export function onOrchestratorEvent(
+  handler: (event: OrchestratorEvent) => void,
+): () => void {
   emitter.on("event", handler);
   return () => emitter.off("event", handler);
 }

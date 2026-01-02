@@ -3,7 +3,11 @@ import { readdir } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 
-export type SkillSource = "project" | "project-claude" | "global" | "global-claude";
+export type SkillSource =
+  | "project"
+  | "project-claude"
+  | "global"
+  | "global-claude";
 
 export type SkillSearchRoot = {
   root: string;
@@ -46,7 +50,9 @@ const walkUp = (start: string, stop: string): string[] => {
   return paths;
 };
 
-export const getSkillSearchRoots = (options: SkillDiscoveryOptions): SkillSearchRoot[] => {
+export const getSkillSearchRoots = (
+  options: SkillDiscoveryOptions,
+): SkillSearchRoot[] => {
   const directory = resolve(options.directory);
   const worktree = resolve(options.worktree ?? options.directory);
   const stop = isWithin(directory, worktree) ? worktree : directory;
@@ -66,7 +72,10 @@ export const getSkillSearchRoots = (options: SkillDiscoveryOptions): SkillSearch
   }
 
   if (options.includeGlobal !== false) {
-    const configHome = options.xdgConfigHome ?? process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config");
+    const configHome =
+      options.xdgConfigHome ??
+      process.env.XDG_CONFIG_HOME ??
+      join(homedir(), ".config");
     const home = options.homeDir ?? process.env.HOME ?? homedir();
     roots.push({
       root: join(configHome, "opencode", "skill"),
@@ -83,14 +92,19 @@ export const getSkillSearchRoots = (options: SkillDiscoveryOptions): SkillSearch
   return roots;
 };
 
-export const discoverSkills = async (options: SkillDiscoveryOptions): Promise<SkillEntry[]> => {
+export const discoverSkills = async (
+  options: SkillDiscoveryOptions,
+): Promise<SkillEntry[]> => {
   const roots = getSkillSearchRoots(options);
   const entries: SkillEntry[] = [];
 
   for (const root of roots) {
     let dirents: Dirent[];
     try {
-      dirents = await readdir(root.root, { withFileTypes: true, encoding: "utf8" });
+      dirents = await readdir(root.root, {
+        withFileTypes: true,
+        encoding: "utf8",
+      });
     } catch {
       continue;
     }

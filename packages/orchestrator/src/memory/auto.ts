@@ -1,5 +1,11 @@
 import type { MemoryScope } from "./graph";
-import { getMemoryByKey, linkMemory, trimGlobalMessageProjects, trimMemoryByKeyPrefix, upsertMemory } from "./graph";
+import {
+  getMemoryByKey,
+  linkMemory,
+  trimGlobalMessageProjects,
+  trimMemoryByKeyPrefix,
+  upsertMemory,
+} from "./graph";
 import { loadNeo4jConfigFromEnv, type Neo4jConfig } from "./neo4j";
 import { appendRollingSummary, normalizeForMemory } from "./text";
 
@@ -30,7 +36,9 @@ function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
 
-export async function recordMessageMemory(input: MessageMemoryInput): Promise<void> {
+export async function recordMessageMemory(
+  input: MessageMemoryInput,
+): Promise<void> {
   const cfg = input.cfg ?? loadNeo4jConfigFromEnv();
   if (!cfg) {
     return;
@@ -127,11 +135,20 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
     const entrySnippet = normalizeForMemory(text, 420);
     const entry = `- ${new Date().toISOString()} [${role}/${userId}] ${entrySnippet}`;
 
-    const projectMaxChars = clamp(input.summaries?.projectMaxChars ?? 2000, 200, 20000);
+    const projectMaxChars = clamp(
+      input.summaries?.projectMaxChars ?? 2000,
+      200,
+      20000,
+    );
     const globalProjectSummaryKey = `summary:project:${projectId}`;
 
     if (input.scope === "project") {
-      const prev = await getMemoryByKey({ cfg, scope: "project", projectId, key: "summary:project" }).catch(() => undefined);
+      const prev = await getMemoryByKey({
+        cfg,
+        scope: "project",
+        projectId,
+        key: "summary:project",
+      }).catch(() => undefined);
       const next = appendRollingSummary(prev?.value, entry, projectMaxChars);
       await upsertMemory({
         cfg,
@@ -142,10 +159,23 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
         tags: ["summary", "project"],
       }).catch(() => {});
 
-      const sessionMaxChars = clamp(input.summaries?.sessionMaxChars ?? 2000, 200, 20000);
+      const sessionMaxChars = clamp(
+        input.summaries?.sessionMaxChars ?? 2000,
+        200,
+        20000,
+      );
       const sessionKey = `summary:session:${session}`;
-      const prevSession = await getMemoryByKey({ cfg, scope: "project", projectId, key: sessionKey }).catch(() => undefined);
-      const nextSession = appendRollingSummary(prevSession?.value, entry, sessionMaxChars);
+      const prevSession = await getMemoryByKey({
+        cfg,
+        scope: "project",
+        projectId,
+        key: sessionKey,
+      }).catch(() => undefined);
+      const nextSession = appendRollingSummary(
+        prevSession?.value,
+        entry,
+        sessionMaxChars,
+      );
       await upsertMemory({
         cfg,
         scope: "project",
@@ -157,8 +187,16 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
     }
 
     // Always update a global per-project summary for cross-project retrieval.
-    const prevGlobal = await getMemoryByKey({ cfg, scope: "global", key: globalProjectSummaryKey }).catch(() => undefined);
-    const nextGlobal = appendRollingSummary(prevGlobal?.value, entry, projectMaxChars);
+    const prevGlobal = await getMemoryByKey({
+      cfg,
+      scope: "global",
+      key: globalProjectSummaryKey,
+    }).catch(() => undefined);
+    const nextGlobal = appendRollingSummary(
+      prevGlobal?.value,
+      entry,
+      projectMaxChars,
+    );
     await upsertMemory({
       cfg,
       scope: "global",
@@ -174,10 +212,20 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
   const maxGlobal = input.trim?.maxMessagesGlobal;
   const maxProjectsGlobal = input.trim?.maxProjectsGlobal;
 
-  const sessionLimit = typeof maxPerSession === "number" ? clamp(maxPerSession, 0, 10000) : undefined;
-  const projectLimit = typeof maxPerProject === "number" ? clamp(maxPerProject, 0, 100000) : undefined;
-  const globalLimit = typeof maxGlobal === "number" ? clamp(maxGlobal, 0, 200000) : undefined;
-  const projectsLimit = typeof maxProjectsGlobal === "number" ? clamp(maxProjectsGlobal, 0, 10000) : undefined;
+  const sessionLimit =
+    typeof maxPerSession === "number"
+      ? clamp(maxPerSession, 0, 10000)
+      : undefined;
+  const projectLimit =
+    typeof maxPerProject === "number"
+      ? clamp(maxPerProject, 0, 100000)
+      : undefined;
+  const globalLimit =
+    typeof maxGlobal === "number" ? clamp(maxGlobal, 0, 200000) : undefined;
+  const projectsLimit =
+    typeof maxProjectsGlobal === "number"
+      ? clamp(maxProjectsGlobal, 0, 10000)
+      : undefined;
 
   if (sessionLimit !== undefined) {
     const prefix =
@@ -194,7 +242,8 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
   }
 
   if (projectLimit !== undefined && projectId) {
-    const prefix = input.scope === "global" ? `message:${projectId}:` : "message:";
+    const prefix =
+      input.scope === "global" ? `message:${projectId}:` : "message:";
     await trimMemoryByKeyPrefix({
       cfg,
       scope: input.scope,
@@ -205,10 +254,17 @@ export async function recordMessageMemory(input: MessageMemoryInput): Promise<vo
   }
 
   if (input.scope === "global" && globalLimit !== undefined) {
-    await trimMemoryByKeyPrefix({ cfg, scope: "global", keyPrefix: "message:", keepLatest: globalLimit }).catch(() => {});
+    await trimMemoryByKeyPrefix({
+      cfg,
+      scope: "global",
+      keyPrefix: "message:",
+      keepLatest: globalLimit,
+    }).catch(() => {});
   }
 
   if (input.scope === "global" && projectsLimit !== undefined) {
-    await trimGlobalMessageProjects({ cfg, keepProjects: projectsLimit }).catch(() => {});
+    await trimGlobalMessageProjects({ cfg, keepProjects: projectsLimit }).catch(
+      () => {},
+    );
   }
 }

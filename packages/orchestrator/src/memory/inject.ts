@@ -1,4 +1,9 @@
-import { getMemoryByKey, recentMemory, type MemoryNode, type MemoryScope } from "./graph";
+import {
+  getMemoryByKey,
+  recentMemory,
+  type MemoryNode,
+  type MemoryScope,
+} from "./graph";
 import { loadNeo4jConfigFromEnv, type Neo4jConfig } from "./neo4j";
 import { shortenWithMarker } from "./text";
 
@@ -68,28 +73,64 @@ export async function buildMemoryInjection(input: {
       : projectId
         ? `summary:project:${projectId}`
         : undefined;
-  const sessionSummaryKey = sessionId ? `summary:session:${sessionId}` : undefined;
+  const sessionSummaryKey = sessionId
+    ? `summary:session:${sessionId}`
+    : undefined;
 
   if (includeProjectSummary && projectSummaryKey) {
-    const node = await getMemoryByKey({ cfg, scope, projectId: scope === "project" ? projectId : undefined, key: projectSummaryKey }).catch(() => undefined);
+    const node = await getMemoryByKey({
+      cfg,
+      scope,
+      projectId: scope === "project" ? projectId : undefined,
+      key: projectSummaryKey,
+    }).catch(() => undefined);
     if (node?.value?.trim()) {
       lines.push("### Project");
-      lines.push(shorten(node.value.trim(), clamp(Math.floor(maxChars * 0.5), 200, 6000)));
+      lines.push(
+        shorten(
+          node.value.trim(),
+          clamp(Math.floor(maxChars * 0.5), 200, 6000),
+        ),
+      );
       lines.push("");
     }
   }
 
-  if (includeSessionSummary && scope === "project" && projectId && sessionSummaryKey) {
-    const node = await getMemoryByKey({ cfg, scope: "project", projectId, key: sessionSummaryKey }).catch(() => undefined);
+  if (
+    includeSessionSummary &&
+    scope === "project" &&
+    projectId &&
+    sessionSummaryKey
+  ) {
+    const node = await getMemoryByKey({
+      cfg,
+      scope: "project",
+      projectId,
+      key: sessionSummaryKey,
+    }).catch(() => undefined);
     if (node?.value?.trim()) {
       lines.push("### Session");
-      lines.push(shorten(node.value.trim(), clamp(Math.floor(maxChars * 0.35), 200, 4000)));
+      lines.push(
+        shorten(
+          node.value.trim(),
+          clamp(Math.floor(maxChars * 0.35), 200, 4000),
+        ),
+      );
       lines.push("");
     }
   }
 
-  const gather = async (scopeToRead: MemoryScope, projectIdToRead: string | undefined, limit: number): Promise<MemoryNode[]> => {
-    const nodes = await recentMemory({ cfg, scope: scopeToRead, projectId: projectIdToRead, limit }).catch(() => []);
+  const gather = async (
+    scopeToRead: MemoryScope,
+    projectIdToRead: string | undefined,
+    limit: number,
+  ): Promise<MemoryNode[]> => {
+    const nodes = await recentMemory({
+      cfg,
+      scope: scopeToRead,
+      projectId: projectIdToRead,
+      limit,
+    }).catch(() => []);
     const filtered = nodes.filter((n) => {
       if (!includeMessages && isMessageLike(n)) return false;
       if (isAutoScaffold(n)) return false;
@@ -98,7 +139,11 @@ export async function buildMemoryInjection(input: {
     return filtered;
   };
 
-  const mainNodes = await gather(scope, scope === "project" ? projectId : undefined, 50);
+  const mainNodes = await gather(
+    scope,
+    scope === "project" ? projectId : undefined,
+    50,
+  );
   const extras: string[] = [];
   for (const node of mainNodes.slice(0, maxEntries)) {
     extras.push(renderEntry(node));

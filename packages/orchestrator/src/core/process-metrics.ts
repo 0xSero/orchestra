@@ -17,11 +17,15 @@ export function formatBytes(bytes: number): string {
   return `${value.toFixed(digits)} ${units[unit]}`;
 }
 
-export async function getProcessRssBytes(pid: number): Promise<number | undefined> {
+export async function getProcessRssBytes(
+  pid: number,
+): Promise<number | undefined> {
   if (!Number.isFinite(pid) || pid <= 0) return undefined;
 
   if (process.platform === "linux") {
-    const status = await readFile(`/proc/${pid}/status`, "utf8").catch(() => "");
+    const status = await readFile(`/proc/${pid}/status`, "utf8").catch(
+      () => "",
+    );
     const m = status.match(/^VmRSS:\s+(\d+)\s+kB/m);
     if (m) {
       const kb = Number(m[1]);
@@ -29,7 +33,12 @@ export async function getProcessRssBytes(pid: number): Promise<number | undefine
     }
   }
 
-  const { stdout } = await execFileAsync("ps", ["-o", "rss=", "-p", String(pid)]).catch(() => ({ stdout: "" } as any));
+  const { stdout } = await execFileAsync("ps", [
+    "-o",
+    "rss=",
+    "-p",
+    String(pid),
+  ]).catch(() => ({ stdout: "" }) as any);
   const kb = Number(String(stdout).trim().split(/\s+/)[0]);
   if (!Number.isFinite(kb)) return undefined;
   return kb * 1024;
@@ -38,7 +47,10 @@ export async function getProcessRssBytes(pid: number): Promise<number | undefine
 export type ProcessInfo = { pid: number; rssBytes?: number; args: string };
 
 export async function listOpencodeServeProcesses(): Promise<ProcessInfo[]> {
-  const { stdout } = await execFileAsync("ps", ["-axo", "pid=,rss=,args="]).catch(() => ({ stdout: "" } as any));
+  const { stdout } = await execFileAsync("ps", [
+    "-axo",
+    "pid=,rss=,args=",
+  ]).catch(() => ({ stdout: "" }) as any);
   const lines = String(stdout)
     .split("\n")
     .map((l) => l.trim())
@@ -61,4 +73,3 @@ export async function listOpencodeServeProcesses(): Promise<ProcessInfo[]> {
   }
   return out;
 }
-

@@ -1,4 +1,8 @@
-import { buildPromptParts, prepareWorkerAttachments, type WorkerAttachment } from "./prompt/attachments";
+import {
+  buildPromptParts,
+  prepareWorkerAttachments,
+  type WorkerAttachment,
+} from "./prompt/attachments";
 import { extractWorkerResponse } from "./prompt/extract";
 import { isFullModelID, parseFullModelID } from "../models/catalog";
 
@@ -81,11 +85,17 @@ export async function sendWorkerPrompt(input: {
   });
 
   try {
-    const parts = await buildPromptParts({ message: taskText, attachments: prepared.attachments });
+    const parts = await buildPromptParts({
+      message: taskText,
+      attachments: prepared.attachments,
+    });
 
     const abort = new AbortController();
     const timeoutMs = input.timeoutMs ?? 600_000;
-    const timer = setTimeout(() => abort.abort(new Error("worker prompt timed out")), timeoutMs);
+    const timer = setTimeout(
+      () => abort.abort(new Error("worker prompt timed out")),
+      timeoutMs,
+    );
 
     const result = await input.client.session
       .prompt({
@@ -129,8 +139,16 @@ export function buildWorkerPromptBody(input: {
   parts: any[];
   agent?: string;
   model?: string;
-}): { parts: any[]; agent?: string; model?: { providerID: string; modelID: string } } {
-  const body: { parts: any[]; agent?: string; model?: { providerID: string; modelID: string } } = {
+}): {
+  parts: any[];
+  agent?: string;
+  model?: { providerID: string; modelID: string };
+} {
+  const body: {
+    parts: any[];
+    agent?: string;
+    model?: { providerID: string; modelID: string };
+  } = {
     parts: input.parts,
   };
 
@@ -140,11 +158,15 @@ export function buildWorkerPromptBody(input: {
 
   if (input.model) {
     if (!isFullModelID(input.model)) {
-      throw new Error(`Invalid model override "${input.model}". Expected "provider/model".`);
+      throw new Error(
+        `Invalid model override "${input.model}". Expected "provider/model".`,
+      );
     }
     const parsed = parseFullModelID(input.model);
     if (!parsed.providerID || !parsed.modelID) {
-      throw new Error(`Invalid model override "${input.model}". Expected "provider/model".`);
+      throw new Error(
+        `Invalid model override "${input.model}". Expected "provider/model".`,
+      );
     }
     body.model = { providerID: parsed.providerID, modelID: parsed.modelID };
   }

@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { validateSkillDefinition, validateSkillDescription, validateSkillName } from "../../src/skills/validate";
+import {
+  validateSkillDefinition,
+  validateSkillDescription,
+  validateSkillName,
+} from "../../src/skills/validate";
 
 describe("skills validation", () => {
   test("accepts valid skill names", () => {
@@ -10,7 +14,15 @@ describe("skills validation", () => {
   });
 
   test("rejects invalid skill names", () => {
-    const names = ["", "A", "bad_name", "-start", "end-", "double--dash", "two words"];
+    const names = [
+      "",
+      "A",
+      "bad_name",
+      "-start",
+      "end-",
+      "double--dash",
+      "two words",
+    ];
     for (const name of names) {
       expect(validateSkillName(name)).toBeTruthy();
     }
@@ -28,9 +40,15 @@ describe("skills validation", () => {
   });
 
   test("requires name to match directory", () => {
-    const ok = validateSkillDefinition({ name: "git-release", directoryName: "git-release" });
+    const ok = validateSkillDefinition({
+      name: "git-release",
+      directoryName: "git-release",
+    });
     expect(ok.ok).toBe(true);
-    const bad = validateSkillDefinition({ name: "git-release", directoryName: "gitrelease" });
+    const bad = validateSkillDefinition({
+      name: "git-release",
+      directoryName: "gitrelease",
+    });
     expect(bad.ok).toBe(false);
   });
 });

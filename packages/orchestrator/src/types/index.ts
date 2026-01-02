@@ -137,7 +137,11 @@ export type WorkflowTriggerConfig = {
 };
 
 export type WorkflowExecutionMode = "step" | "auto";
-export type WorkflowIntervenePolicy = "never" | "on-warning" | "on-error" | "always";
+export type WorkflowIntervenePolicy =
+  | "never"
+  | "on-warning"
+  | "on-error"
+  | "always";
 export type WorkflowUiPolicy = {
   execution?: WorkflowExecutionMode;
   intervene?: WorkflowIntervenePolicy;

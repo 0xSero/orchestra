@@ -14,14 +14,18 @@ export function initTelemetry(apiKey?: string, host?: string) {
   });
 
   // Use machine ID or fallback
-  distinctId = process.env.USER ?? process.env.USERNAME ?? `node-${process.pid}`;
+  distinctId =
+    process.env.USER ?? process.env.USERNAME ?? `node-${process.pid}`;
 }
 
 export function setTelemetryUser(userId: string) {
   distinctId = userId;
 }
 
-export function trackEvent(event: string, properties?: Record<string, unknown>) {
+export function trackEvent(
+  event: string,
+  properties?: Record<string, unknown>,
+) {
   if (!client) return;
 
   client.capture({
@@ -36,7 +40,11 @@ export function trackEvent(event: string, properties?: Record<string, unknown>) 
   });
 }
 
-export function trackSpawn(profileId: string, status: "started" | "ready" | "error" | "reused", meta?: Record<string, unknown>) {
+export function trackSpawn(
+  profileId: string,
+  status: "started" | "ready" | "error" | "reused",
+  meta?: Record<string, unknown>,
+) {
   trackEvent("worker_spawn", {
     profileId,
     status,
@@ -44,7 +52,11 @@ export function trackSpawn(profileId: string, status: "started" | "ready" | "err
   });
 }
 
-export function trackDelegation(fromProfile: string, toProfile: string, taskLength: number) {
+export function trackDelegation(
+  fromProfile: string,
+  toProfile: string,
+  taskLength: number,
+) {
   trackEvent("task_delegation", {
     fromProfile,
     toProfile,
@@ -52,7 +64,11 @@ export function trackDelegation(fromProfile: string, toProfile: string, taskLeng
   });
 }
 
-export function trackWorkflow(workflowId: string, status: "started" | "completed" | "failed", durationMs?: number) {
+export function trackWorkflow(
+  workflowId: string,
+  status: "started" | "completed" | "failed",
+  durationMs?: number,
+) {
   trackEvent("workflow_run", {
     workflowId,
     status,

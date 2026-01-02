@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { parseOrchestratorConfigFile, resolveWorkerEntry } from "../../src/config/orchestrator";
+import {
+  parseOrchestratorConfigFile,
+  resolveWorkerEntry,
+} from "../../src/config/orchestrator";
 import { builtInProfiles } from "../../src/config/profiles";
 
 describe("parseOrchestratorConfigFile", () => {
@@ -12,7 +15,9 @@ describe("parseOrchestratorConfigFile", () => {
         defaultListFormat: "json",
         debug: "nope",
       },
-      notifications: { idle: { enabled: true, title: 123, message: "hello", delayMs: 1500 } },
+      notifications: {
+        idle: { enabled: true, title: 123, message: "hello", delayMs: 1500 },
+      },
       workflows: { ui: { execution: "step", intervene: "on-warning" } },
       profiles: ["coder", 123, { id: "custom" }],
     });
@@ -20,12 +25,23 @@ describe("parseOrchestratorConfigFile", () => {
     expect(parsed.basePort).toBeUndefined();
     expect(parsed.autoSpawn).toBe(true);
     expect(parsed.ui).toEqual({ toasts: false, defaultListFormat: "json" });
-    expect(parsed.notifications?.idle).toEqual({ enabled: true, message: "hello", delayMs: 1500 });
-    expect(parsed.workflows?.ui).toEqual({ execution: "step", intervene: "on-warning" });
+    expect(parsed.notifications?.idle).toEqual({
+      enabled: true,
+      message: "hello",
+      delayMs: 1500,
+    });
+    expect(parsed.workflows?.ui).toEqual({
+      execution: "step",
+      intervene: "on-warning",
+    });
     const profiles = parsed.profiles ?? [];
     expect(profiles[0]).toBe("coder");
     const customProfile = profiles[1];
-    if (customProfile && typeof customProfile === "object" && "id" in customProfile) {
+    if (
+      customProfile &&
+      typeof customProfile === "object" &&
+      "id" in customProfile
+    ) {
       expect(customProfile.id).toBe("custom");
     } else {
       throw new Error("Expected custom profile entry to be parsed.");
@@ -64,7 +80,10 @@ describe("resolveWorkerEntry", () => {
     expect(resolved?.kind).toBe("agent");
     expect(resolved?.backend).toBe("agent");
     expect(resolved?.execution).toBe("foreground");
-    expect(resolved?.requiredSkills).toEqual(["docs-research", "code-implementer"]);
+    expect(resolved?.requiredSkills).toEqual([
+      "docs-research",
+      "code-implementer",
+    ]);
   });
 
   test("rejects conflicting backend and kind", () => {
@@ -77,7 +96,7 @@ describe("resolveWorkerEntry", () => {
         whenToUse: "Test",
         backend: "server",
         kind: "agent",
-      })
+      }),
     ).toThrow(/conflicting backend/i);
   });
 });

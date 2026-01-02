@@ -40,7 +40,10 @@ export function createOrchestratorContext(input: {
     projectId: input.projectId,
     client: input.client,
     config,
-    spawnDefaults: { basePort: config.basePort, timeout: config.startupTimeout },
+    spawnDefaults: {
+      basePort: config.basePort,
+      timeout: config.startupTimeout,
+    },
     profiles: config.profiles,
     defaultListFormat: config.ui?.defaultListFormat ?? "markdown",
     workflows: config.workflows,

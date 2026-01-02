@@ -14,46 +14,58 @@ import {
 import { publishErrorEvent } from "../../core/orchestrator-events";
 import { logger } from "../../core/logger";
 import { hydrateProfileModelsFromOpencode } from "../../models/hydrate";
-import { ensureRuntime, registerWorkerInDeviceRegistry } from "../../core/runtime";
+import {
+  ensureRuntime,
+  registerWorkerInDeviceRegistry,
+} from "../../core/runtime";
 import { sendWorkerPrompt, type SendToWorkerOptions } from "../send";
 import { buildWorkerBootstrapPrompt } from "../prompt/worker-prompt";
-import { spawnOpencodeServe, resolveWorkerBridgePluginSpecifier } from "../spawn/spawn-opencode";
+import {
+  spawnOpencodeServe,
+  resolveWorkerBridgePluginSpecifier,
+} from "../spawn/spawn-opencode";
 import { checkWorkerBridgeTools, isProcessAlive } from "../spawn/readiness";
 
 type SpawnOptionsWithForce = SpawnOptions & { forceNew?: boolean };
 
 function isValidPort(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 65535;
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= 65535
+  );
 }
 
 export async function spawnServerWorker(
   profile: WorkerProfile,
-  options: SpawnOptionsWithForce
+  options: SpawnOptionsWithForce,
 ): Promise<WorkerInstance> {
   return workerPool.getOrSpawn(profile, options, _spawnWorkerCore);
 }
 
 async function _spawnWorkerCore(
   profile: WorkerProfile,
-  options: SpawnOptionsWithForce
+  options: SpawnOptionsWithForce,
 ): Promise<WorkerInstance> {
   const modelRef = profile.model.trim();
   let modelResolutionReason: string | undefined;
   const resolvedProfile = await (async (): Promise<WorkerProfile> => {
     const modelSpec = modelRef;
-    const isNodeTag = modelSpec.startsWith("auto") || modelSpec.startsWith("node");
+    const isNodeTag =
+      modelSpec.startsWith("auto") || modelSpec.startsWith("node");
 
     if (!options.client) {
       if (isNodeTag) {
         throw new Error(
           `Profile "${profile.id}" uses "${profile.model}", but model resolution is unavailable. ` +
-            `Set a concrete provider/model ID for this profile.`
+            `Set a concrete provider/model ID for this profile.`,
         );
       }
       if (!modelSpec.includes("/")) {
         throw new Error(
           `Invalid model "${profile.model}". OpenCode models must be in "provider/model" format. ` +
-            `Run task_list({ view: "models" }) to see configured models and copy the full ID.`
+            `Run task_list({ view: "models" }) to see configured models and copy the full ID.`,
         );
       }
       return profile;
@@ -70,15 +82,22 @@ async function _spawnWorkerCore(
   })();
 
   const hostname = "127.0.0.1";
-  const fixedPort = isValidPort(resolvedProfile.port) ? resolvedProfile.port : undefined;
+  const fixedPort = isValidPort(resolvedProfile.port)
+    ? resolvedProfile.port
+    : undefined;
   const requestedPort = fixedPort ?? 0;
 
   const modelResolution =
-    modelResolutionReason ?? (resolvedProfile.model === modelRef ? "configured" : `resolved from ${modelRef}`);
+    modelResolutionReason ??
+    (resolvedProfile.model === modelRef
+      ? "configured"
+      : `resolved from ${modelRef}`);
 
   const instance: WorkerInstance = {
     profile: resolvedProfile,
-    kind: resolvedProfile.kind ?? (resolvedProfile.backend === "server" ? "server" : "agent"),
+    kind:
+      resolvedProfile.kind ??
+      (resolvedProfile.backend === "server" ? "server" : "agent"),
     execution: resolvedProfile.execution,
     status: "starting",
     port: requestedPort,
@@ -96,7 +115,7 @@ async function _spawnWorkerCore(
     const pluginSpecifier = resolveWorkerBridgePluginSpecifier();
     if (process.env.OPENCODE_ORCH_SPAWNER_DEBUG === "1") {
       logger.debug(
-        `[spawner] pluginSpecifier=${pluginSpecifier}, profile=${resolvedProfile.id}, model=${resolvedProfile.model}`
+        `[spawner] pluginSpecifier=${pluginSpecifier}, profile=${resolvedProfile.id}, model=${resolvedProfile.model}`,
       );
     }
 
@@ -122,7 +141,10 @@ async function _spawnWorkerCore(
     instance.serverUrl = url;
 
     const client = createOpencodeClient({ baseUrl: url });
-    const toolCheck = await checkWorkerBridgeTools(client, options.directory).catch((error) => {
+    const toolCheck = await checkWorkerBridgeTools(
+      client,
+      options.directory,
+    ).catch((error) => {
       instance.warning = `Unable to verify worker bridge tools: ${error instanceof Error ? error.message : String(error)}`;
       return undefined;
     });
@@ -130,7 +152,7 @@ async function _spawnWorkerCore(
       throw new Error(
         `Worker bridge tools missing (${toolCheck.missing.join(", ")}). ` +
           `Loaded tools: ${toolCheck.toolIds.join(", ")}. ` +
-          `Check worker plugin path (${pluginSpecifier ?? "none"}) and OpenCode config.`
+          `Check worker plugin path (${pluginSpecifier ?? "none"}) and OpenCode config.`,
       );
     }
 
@@ -173,7 +195,9 @@ async function _spawnWorkerCore(
     const session = sessionResult.data;
     if (!session) {
       const err = sessionResult.error as any;
-      throw new Error(err?.message ?? err?.toString?.() ?? "Failed to create session");
+      throw new Error(
+        err?.message ?? err?.toString?.() ?? "Failed to create session",
+      );
     }
 
     instance.sessionId = session.id;
@@ -257,7 +281,7 @@ async function _spawnWorkerCore(
 
 export async function connectToServerWorker(
   profile: WorkerProfile,
-  port: number
+  port: number,
 ): Promise<WorkerInstance> {
   const instance: WorkerInstance = {
     profile,
@@ -278,7 +302,9 @@ export async function connectToServerWorker(
       baseUrl: instance.serverUrl,
     });
 
-    const sessionsResult = await client.session.list({ query: { directory: instance.directory } } as any);
+    const sessionsResult = await client.session.list({
+      query: { directory: instance.directory },
+    } as any);
     const sessions = sessionsResult.data;
 
     instance.client = client;
@@ -344,12 +370,21 @@ export async function stopServerWorker(workerId: string): Promise<boolean> {
 export async function sendToServerWorker(
   workerId: string,
   message: string,
-  options?: SendToWorkerOptions
-): Promise<{ success: boolean; response?: string; warning?: string; error?: string }> {
+  options?: SendToWorkerOptions,
+): Promise<{
+  success: boolean;
+  response?: string;
+  warning?: string;
+  error?: string;
+}> {
   const instance = workerPool.get(workerId);
 
   if (!instance) {
-    publishErrorEvent({ message: `Worker "${workerId}" not found`, source: "worker", workerId });
+    publishErrorEvent({
+      message: `Worker "${workerId}" not found`,
+      source: "worker",
+      workerId,
+    });
     return { success: false, error: `Worker "${workerId}" not found` };
   }
 
@@ -359,7 +394,10 @@ export async function sendToServerWorker(
       source: "worker",
       workerId,
     });
-    return { success: false, error: `Worker "${workerId}" is ${instance.status}, not ready` };
+    return {
+      success: false,
+      error: `Worker "${workerId}" is ${instance.status}, not ready`,
+    };
   }
 
   if (!instance.client || !instance.sessionId) {
@@ -368,7 +406,10 @@ export async function sendToServerWorker(
       source: "worker",
       workerId,
     });
-    return { success: false, error: `Worker "${workerId}" not properly initialized` };
+    return {
+      success: false,
+      error: `Worker "${workerId}" not properly initialized`,
+    };
   }
 
   workerPool.updateStatus(workerId, "busy");
@@ -419,7 +460,11 @@ export async function sendToServerWorker(
       });
     }
 
-    return { success: true, response: responseText, ...(warning ? { warning } : {}) };
+    return {
+      success: true,
+      response: responseText,
+      ...(warning ? { warning } : {}),
+    };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     const isSdkError = Boolean((error as any)?.isSdkError);
@@ -427,7 +472,7 @@ export async function sendToServerWorker(
     instance.currentTask = undefined;
     instance.warning = isSdkError
       ? `Last request failed: ${errorMsg}`
-      : instance.warning ?? `Last request failed: ${errorMsg}`;
+      : (instance.warning ?? `Last request failed: ${errorMsg}`);
     publishErrorEvent({ message: errorMsg, source: "worker", workerId });
     return { success: false, error: errorMsg };
   }
@@ -435,8 +480,11 @@ export async function sendToServerWorker(
 
 export async function spawnServerWorkers(
   profiles: WorkerProfile[],
-  options: SpawnOptions & { sequential?: boolean }
-): Promise<{ succeeded: WorkerInstance[]; failed: Array<{ profile: WorkerProfile; error: string }> }> {
+  options: SpawnOptions & { sequential?: boolean },
+): Promise<{
+  succeeded: WorkerInstance[];
+  failed: Array<{ profile: WorkerProfile; error: string }>;
+}> {
   const succeeded: WorkerInstance[] = [];
   const failed: Array<{ profile: WorkerProfile; error: string }> = [];
 
@@ -456,7 +504,7 @@ export async function spawnServerWorkers(
     }
   } else {
     const results = await Promise.allSettled(
-      profiles.map((profile) => spawnServerWorker(profile, options))
+      profiles.map((profile) => spawnServerWorker(profile, options)),
     );
 
     results.forEach((result, index) => {
@@ -474,7 +522,9 @@ export async function spawnServerWorkers(
   return { succeeded, failed };
 }
 
-export async function listReusableServerWorkers(): Promise<DeviceRegistryWorkerEntry[]> {
+export async function listReusableServerWorkers(): Promise<
+  DeviceRegistryWorkerEntry[]
+> {
   const entries = await listDeviceRegistry();
   const inRegistry = new Set([...workerPool.workers.keys()]);
 
@@ -483,7 +533,7 @@ export async function listReusableServerWorkers(): Promise<DeviceRegistryWorkerE
       e.kind === "worker" &&
       !inRegistry.has(e.workerId) &&
       (e.status === "ready" || e.status === "busy") &&
-      isProcessAlive(e.pid)
+      isProcessAlive(e.pid),
   );
 }
 

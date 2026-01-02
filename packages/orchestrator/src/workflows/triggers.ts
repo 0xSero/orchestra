@@ -1,25 +1,40 @@
 import type { OrchestratorContext } from "../context/orchestrator-context";
 import { workerJobs } from "../core/jobs";
 import { normalizeForMemory } from "../memory/text";
-import { createMemoryTask, failMemoryTask, isMemoryTaskPending } from "../memory/tasks";
+import {
+  createMemoryTask,
+  failMemoryTask,
+  isMemoryTaskPending,
+} from "../memory/tasks";
 import { loadPromptFile } from "../prompts/load";
-import { extractImages, formatVisionAnalysis, hasImages, replaceImagesWithAnalysis } from "../vision/analyzer";
+import {
+  extractImages,
+  formatVisionAnalysis,
+  hasImages,
+  replaceImagesWithAnalysis,
+} from "../vision/analyzer";
 import { getWorkflow } from "./engine";
 import { resolveWorkflowLimits, runWorkflowWithContext } from "./runner";
 import type { WorkflowRunResult } from "./types";
 
-type ToastFn = (message: string, variant: "success" | "info" | "warning" | "error") => Promise<void>;
+type ToastFn = (
+  message: string,
+  variant: "success" | "info" | "warning" | "error",
+) => Promise<void>;
 type WorkflowTriggerOptions = {
   visionTimeoutMs: number;
   processedMessageIds?: Set<string>;
   showToast?: ToastFn;
-  runWorkflow?: (input: {
-    workflowId: string;
-    task: string;
-    attachments?: any[];
-    autoSpawn?: boolean;
-    limits?: ReturnType<typeof resolveWorkflowLimits>;
-  }, options?: { sessionId?: string }) => Promise<WorkflowRunResult>;
+  runWorkflow?: (
+    input: {
+      workflowId: string;
+      task: string;
+      attachments?: any[];
+      autoSpawn?: boolean;
+      limits?: ReturnType<typeof resolveWorkflowLimits>;
+    },
+    options?: { sessionId?: string },
+  ) => Promise<WorkflowRunResult>;
 };
 
 type TriggerConfig = {
@@ -29,11 +44,15 @@ type TriggerConfig = {
   blocking?: boolean;
 };
 
-function resolveTriggerConfig(overrides: TriggerConfig | undefined, defaults: TriggerConfig): Required<TriggerConfig> {
+function resolveTriggerConfig(
+  overrides: TriggerConfig | undefined,
+  defaults: TriggerConfig,
+): Required<TriggerConfig> {
   const workflowId =
-    typeof overrides?.workflowId === "string" && overrides.workflowId.trim().length > 0
+    typeof overrides?.workflowId === "string" &&
+    overrides.workflowId.trim().length > 0
       ? overrides.workflowId
-      : defaults.workflowId ?? "unknown";
+      : (defaults.workflowId ?? "unknown");
   return {
     enabled: overrides?.enabled ?? defaults.enabled ?? true,
     workflowId,
@@ -56,11 +75,19 @@ function extractTextFromMessage(msg: any): string {
   if (typeof msg.message === "string") return msg.message;
   if (typeof msg.content === "string") return msg.content;
   if (typeof msg.text === "string") return msg.text;
-  const parts = Array.isArray(msg.parts) ? msg.parts : Array.isArray(msg.content?.parts) ? msg.content.parts : [];
+  const parts = Array.isArray(msg.parts)
+    ? msg.parts
+    : Array.isArray(msg.content?.parts)
+      ? msg.content.parts
+      : [];
   return extractTextFromParts(parts);
 }
 
-function extractSectionItems(text: string, headings: string[], limit = 6): string[] {
+function extractSectionItems(
+  text: string,
+  headings: string[],
+  limit = 6,
+): string[] {
   const lines = text.split(/\r?\n/);
   const normalizedHeadings = headings.map((h) => h.toLowerCase());
   const items: string[] = [];
@@ -74,7 +101,9 @@ function extractSectionItems(text: string, headings: string[], limit = 6): strin
     }
 
     const lower = trimmed.toLowerCase();
-    const headingIndex = normalizedHeadings.findIndex((h) => lower === h || lower.startsWith(`${h}:`));
+    const headingIndex = normalizedHeadings.findIndex(
+      (h) => lower === h || lower.startsWith(`${h}:`),
+    );
     if (headingIndex >= 0) {
       collecting = true;
       const inline = trimmed.split(":").slice(1).join(":").trim();
@@ -99,7 +128,11 @@ function extractSectionItems(text: string, headings: string[], limit = 6): strin
   return deduped.slice(0, limit);
 }
 
-function selectWorkflowWorker(context: OrchestratorContext, workflowId: string, fallback: string): string {
+function selectWorkflowWorker(
+  context: OrchestratorContext,
+  workflowId: string,
+  fallback: string,
+): string {
   const workflow = getWorkflow(workflowId);
   const workerId = workflow?.steps[0]?.workerId ?? fallback;
   if (context.profiles[workerId]) return workerId;
@@ -109,7 +142,7 @@ function selectWorkflowWorker(context: OrchestratorContext, workflowId: string, 
 async function buildVisionPlaceholder(
   workerName: string,
   workerModel: string,
-  jobId: string
+  jobId: string,
 ): Promise<string> {
   const asyncContract = await loadPromptFile("snippets/async-contract.md");
   // Simple, clean markdown format that renders well in terminals
@@ -135,10 +168,14 @@ function buildVisionWakeup(
   jobId: string,
   success: boolean,
   summary: string,
-  analysisText?: string
+  analysisText?: string,
 ): string {
-  const header = success ? "**[VISION ANALYSIS READY]**" : "**[VISION ANALYSIS FAILED]**";
-  const statusLine = success ? "Vision analysis ready" : `Vision analysis failed: ${summary}`;
+  const header = success
+    ? "**[VISION ANALYSIS READY]**"
+    : "**[VISION ANALYSIS FAILED]**";
+  const statusLine = success
+    ? "Vision analysis ready"
+    : `Vision analysis failed: ${summary}`;
   const bodyText = success ? analysisText : undefined;
 
   return [
@@ -148,19 +185,14 @@ function buildVisionWakeup(
     `> **Task ID:** \`${jobId}\``,
     ...(bodyText
       ? [``, bodyText]
-      : [
-          ``,
-          `\`\`\``,
-          `task_await({ taskId: "${jobId}" })`,
-          `\`\`\``,
-        ]),
+      : [``, `\`\`\``, `task_await({ taskId: "${jobId}" })`, `\`\`\``]),
   ].join("\n");
 }
 
 async function injectOrchestratorNotice(
   context: OrchestratorContext,
   sessionId: string,
-  text: string
+  text: string,
 ): Promise<void> {
   if (!context.client?.session) return;
   try {
@@ -190,12 +222,20 @@ function isVisionErrorResponse(text: string): boolean {
   return VISION_ERROR_PATTERNS.some((pattern) => pattern.test(text));
 }
 
-function pickWorkflowResponse(result: WorkflowRunResult): { success: boolean; response?: string; error?: string } {
+function pickWorkflowResponse(result: WorkflowRunResult): {
+  success: boolean;
+  response?: string;
+  error?: string;
+} {
   const errorStep = result.steps.find((step) => step.status === "error");
   if (errorStep) {
     return { success: false, error: errorStep.error ?? "workflow step failed" };
   }
-  const responseStep = [...result.steps].reverse().find((step) => typeof step.response === "string" && step.response.length > 0);
+  const responseStep = [...result.steps]
+    .reverse()
+    .find(
+      (step) => typeof step.response === "string" && step.response.length > 0,
+    );
   if (!responseStep) {
     return { success: false, error: "workflow produced no response" };
   }
@@ -205,24 +245,51 @@ function pickWorkflowResponse(result: WorkflowRunResult): { success: boolean; re
   const responseText = responseStep.response ?? "";
   if (isVisionErrorResponse(responseText)) {
     // Extract a clean error message from the response
-    const cleanError = responseText.replace(/^ERROR:\s*/i, "").split("\n")[0].trim();
-    return { success: false, error: cleanError || "Model cannot process images" };
+    const cleanError = responseText
+      .replace(/^ERROR:\s*/i, "")
+      .split("\n")[0]
+      .trim();
+    return {
+      success: false,
+      error: cleanError || "Model cannot process images",
+    };
   }
 
   return { success: true, response: responseStep.response };
 }
 
-export function createWorkflowTriggers(context: OrchestratorContext, options: WorkflowTriggerOptions) {
+export function createWorkflowTriggers(
+  context: OrchestratorContext,
+  options: WorkflowTriggerOptions,
+) {
   const processedMessageIds = options.processedMessageIds ?? new Set<string>();
   const showToast = options.showToast ?? (async () => {});
-  const runWorkflow = options.runWorkflow ?? ((input, runOptions) => runWorkflowWithContext(context, input, runOptions));
+  const runWorkflow =
+    options.runWorkflow ??
+    ((input, runOptions) => runWorkflowWithContext(context, input, runOptions));
 
-  const visionDefaults: TriggerConfig = { enabled: true, workflowId: "vision", autoSpawn: true, blocking: false };
-  const memoryDefaults: TriggerConfig = { enabled: true, workflowId: "memory", autoSpawn: true, blocking: false };
+  const visionDefaults: TriggerConfig = {
+    enabled: true,
+    workflowId: "vision",
+    autoSpawn: true,
+    blocking: false,
+  };
+  const memoryDefaults: TriggerConfig = {
+    enabled: true,
+    workflowId: "memory",
+    autoSpawn: true,
+    blocking: false,
+  };
 
-  const handleVisionMessage = async (input: any, output: any): Promise<void> => {
+  const handleVisionMessage = async (
+    input: any,
+    output: any,
+  ): Promise<void> => {
     if (context.workflows?.enabled === false) return;
-    const trigger = resolveTriggerConfig(context.workflows?.triggers?.visionOnImage, visionDefaults);
+    const trigger = resolveTriggerConfig(
+      context.workflows?.triggers?.visionOnImage,
+      visionDefaults,
+    );
     if (!trigger.enabled) return;
 
     // CRITICAL: Use output.parts directly (like v0.2.3), NOT input.parts.
@@ -231,18 +298,24 @@ export function createWorkflowTriggers(context: OrchestratorContext, options: Wo
     const originalParts = Array.isArray(output.parts) ? output.parts : [];
     if (!hasImages(originalParts)) return;
 
-    const messageId = typeof input.messageID === "string" ? input.messageID : undefined;
+    const messageId =
+      typeof input.messageID === "string" ? input.messageID : undefined;
     if (messageId && processedMessageIds.has(messageId)) return;
 
     const agentId = typeof input.agent === "string" ? input.agent : undefined;
-    const sessionId = typeof input.sessionID === "string" ? input.sessionID : undefined;
+    const sessionId =
+      typeof input.sessionID === "string" ? input.sessionID : undefined;
     if (!sessionId) return;
     const agentProfile = agentId ? context.profiles[agentId] : undefined;
-    const agentSupportsVision = Boolean(agentProfile?.supportsVision) || agentId === "vision";
+    const agentSupportsVision =
+      Boolean(agentProfile?.supportsVision) || agentId === "vision";
     if (agentSupportsVision) return;
 
     const alreadyInjected = originalParts.some(
-      (p: any) => p?.type === "text" && typeof p.text === "string" && p.text.includes("[VISION ANALYSIS")
+      (p: any) =>
+        p?.type === "text" &&
+        typeof p.text === "string" &&
+        p.text.includes("[VISION ANALYSIS"),
     );
     if (alreadyInjected) {
       if (messageId) processedMessageIds.add(messageId);
@@ -266,7 +339,11 @@ export function createWorkflowTriggers(context: OrchestratorContext, options: Wo
     // Inject placeholder immediately (like v0.2.3) so orchestrator can await the job
     const workerName = workerProfile?.name ?? "Vision Worker";
     const workerModel = workerProfile?.model ?? "vision model";
-    const placeholder = await buildVisionPlaceholder(workerName, workerModel, job.id);
+    const placeholder = await buildVisionPlaceholder(
+      workerName,
+      workerModel,
+      job.id,
+    );
 
     output.parts = replaceImagesWithAnalysis(originalParts, placeholder, {
       sessionID: sessionId,
@@ -282,15 +359,25 @@ export function createWorkflowTriggers(context: OrchestratorContext, options: Wo
           workerJobs.setError(job.id, { error });
 
           // Inject wakeup message on error
-          const wakeupMessage = buildVisionWakeup(workerId, job.id, false, error);
+          const wakeupMessage = buildVisionWakeup(
+            workerId,
+            job.id,
+            false,
+            error,
+          );
           void injectOrchestratorNotice(context, sessionId, wakeupMessage);
           await showToast(`Vision analysis failed: ${error}`, "warning");
           return;
         }
 
-        const taskText = extractTextFromParts(originalParts) || "Analyze the attached image(s).";
+        const taskText =
+          extractTextFromParts(originalParts) ||
+          "Analyze the attached image(s).";
         const limits = resolveWorkflowLimits(context, workflowId);
-        const perStepTimeoutMs = Math.min(options.visionTimeoutMs, limits.perStepTimeoutMs);
+        const perStepTimeoutMs = Math.min(
+          options.visionTimeoutMs,
+          limits.perStepTimeoutMs,
+        );
         const result = await runWorkflow(
           {
             workflowId,
@@ -299,7 +386,7 @@ export function createWorkflowTriggers(context: OrchestratorContext, options: Wo
             autoSpawn: trigger.autoSpawn,
             limits: { ...limits, perStepTimeoutMs },
           },
-          { sessionId }
+          { sessionId },
         );
 
         const picked = pickWorkflowResponse(result);
@@ -313,12 +400,22 @@ export function createWorkflowTriggers(context: OrchestratorContext, options: Wo
         if (analysisText) {
           workerJobs.setResult(job.id, { responseText: analysisText });
         } else {
-          workerJobs.setError(job.id, { error: picked.error ?? "Vision analysis failed" });
+          workerJobs.setError(job.id, {
+            error: picked.error ?? "Vision analysis failed",
+          });
         }
 
         // Inject wakeup message when analysis completes (v0.2.3 behavior)
-        const summary = picked.success ? "Vision analysis complete" : (picked.error ?? "Vision analysis failed");
-        const wakeupMessage = buildVisionWakeup(workerId, job.id, picked.success, summary, analysisText);
+        const summary = picked.success
+          ? "Vision analysis complete"
+          : (picked.error ?? "Vision analysis failed");
+        const wakeupMessage = buildVisionWakeup(
+          workerId,
+          job.id,
+          picked.success,
+          summary,
+          analysisText,
+        );
         void injectOrchestratorNotice(context, sessionId, wakeupMessage);
 
         if (!picked.success && picked.error) {
@@ -342,11 +439,21 @@ export function createWorkflowTriggers(context: OrchestratorContext, options: Wo
     }
   };
 
-  const handleMemoryTurnEnd = async (input: any, _output: any): Promise<void> => {
+  const handleMemoryTurnEnd = async (
+    input: any,
+    _output: any,
+  ): Promise<void> => {
     if (context.workflows?.enabled === false) return;
-    if (context.config.memory?.enabled === false || context.config.memory?.autoRecord === false) return;
+    if (
+      context.config.memory?.enabled === false ||
+      context.config.memory?.autoRecord === false
+    )
+      return;
 
-    const trigger = resolveTriggerConfig(context.workflows?.triggers?.memoryOnTurnEnd, memoryDefaults);
+    const trigger = resolveTriggerConfig(
+      context.workflows?.triggers?.memoryOnTurnEnd,
+      memoryDefaults,
+    );
     if (!trigger.enabled) return;
 
     if (!getWorkflow(trigger.workflowId)) return;
@@ -355,22 +462,42 @@ export function createWorkflowTriggers(context: OrchestratorContext, options: Wo
     if (role !== "assistant") return;
 
     const agentId = typeof input.agent === "string" ? input.agent : undefined;
-    const sessionId = typeof input.sessionID === "string" ? input.sessionID : undefined;
+    const sessionId =
+      typeof input.sessionID === "string" ? input.sessionID : undefined;
     if (!sessionId) return;
-    const memoryWorkerId = selectWorkflowWorker(context, trigger.workflowId, "memory");
+    const memoryWorkerId = selectWorkflowWorker(
+      context,
+      trigger.workflowId,
+      "memory",
+    );
     if (agentId === memoryWorkerId) return;
 
     const text = extractTextFromMessage(input);
     if (!text) return;
 
-    const summary = normalizeForMemory(text, context.config.memory?.maxChars ?? 2000);
+    const summary = normalizeForMemory(
+      text,
+      context.config.memory?.maxChars ?? 2000,
+    );
     if (!summary) return;
 
     const decisions = extractSectionItems(text, ["decision", "decisions"]);
-    const todos = extractSectionItems(text, ["todo", "todos", "action items", "next steps"]);
-    const entities = extractSectionItems(text, ["entities", "entity", "people", "systems"]);
+    const todos = extractSectionItems(text, [
+      "todo",
+      "todos",
+      "action items",
+      "next steps",
+    ]);
+    const entities = extractSectionItems(text, [
+      "entities",
+      "entity",
+      "people",
+      "systems",
+    ]);
 
-    const scope = (context.config.memory?.scope ?? "project") as "project" | "global";
+    const scope = (context.config.memory?.scope ?? "project") as
+      | "project"
+      | "global";
     if (scope === "project" && !context.projectId) return;
 
     const payload = createMemoryTask({
@@ -380,7 +507,8 @@ export function createWorkflowTriggers(context: OrchestratorContext, options: Wo
       turn: {
         role,
         agent: agentId,
-        messageId: typeof input.messageID === "string" ? input.messageID : undefined,
+        messageId:
+          typeof input.messageID === "string" ? input.messageID : undefined,
         summary,
         ...(decisions.length ? { decisions } : {}),
         ...(todos.length ? { todos } : {}),
@@ -400,7 +528,7 @@ export function createWorkflowTriggers(context: OrchestratorContext, options: Wo
             autoSpawn: trigger.autoSpawn,
             limits,
           },
-          { sessionId }
+          { sessionId },
         );
 
         const picked = pickWorkflowResponse(result);

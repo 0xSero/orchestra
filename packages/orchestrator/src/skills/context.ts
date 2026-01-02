@@ -27,15 +27,22 @@ export function setWorkflowSkillContext(input: {
   }
 }
 
-export function clearWorkflowSkillContext(input: { workerId?: string; sessionId?: string }): void {
+export function clearWorkflowSkillContext(input: {
+  workerId?: string;
+  sessionId?: string;
+}): void {
   if (input.workerId) workerContext.delete(input.workerId);
   if (input.sessionId) sessionContext.delete(input.sessionId);
 }
 
-export function getWorkflowContextForSession(sessionId: string): WorkflowSkillContext | undefined {
+export function getWorkflowContextForSession(
+  sessionId: string,
+): WorkflowSkillContext | undefined {
   return sessionContext.get(sessionId);
 }
 
-export function getWorkflowContextForWorker(workerId: string): WorkflowSkillContext | undefined {
+export function getWorkflowContextForWorker(
+  workerId: string,
+): WorkflowSkillContext | undefined {
   return workerContext.get(workerId);
 }

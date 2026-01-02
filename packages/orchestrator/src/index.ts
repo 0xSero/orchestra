@@ -1,6 +1,10 @@
 import type { Plugin } from "@opencode-ai/plugin";
 import { loadOrchestratorConfig } from "./config/orchestrator";
-import { workerPool, removeSessionEntry, upsertSessionEntry } from "./core/worker-pool";
+import {
+  workerPool,
+  removeSessionEntry,
+  upsertSessionEntry,
+} from "./core/worker-pool";
 import {
   createCoreOrchestratorTools,
   setClient,
@@ -25,7 +29,12 @@ import { ensureRuntime, shutdownAllWorkers } from "./core/runtime";
 import { setLoggerConfig } from "./core/logger";
 import { loadWorkflows } from "./workflows";
 import { initTelemetry, flushTelemetry, trackSpawn } from "./core/telemetry";
-import { buildPassthroughSystemPrompt, clearPassthrough, getPassthrough, isPassthroughExitMessage } from "./core/passthrough";
+import {
+  buildPassthroughSystemPrompt,
+  clearPassthrough,
+  getPassthrough,
+  isPassthroughExitMessage,
+} from "./core/passthrough";
 import { buildMemoryInjection } from "./memory/inject";
 import { loadPromptFile } from "./prompts/load";
 import { createOrchestratorContext } from "./context/orchestrator-context";
@@ -41,7 +50,11 @@ import {
 import { getWorkflowContextForSession } from "./skills/context";
 import { publishOrchestratorEvent } from "./core/orchestrator-events";
 import { workerJobs } from "./core/jobs";
-import { buildLegacyToolCorrectionHint, buildPendingTaskReminder, needsLegacyToolCorrection } from "./core/guardrails";
+import {
+  buildLegacyToolCorrectionHint,
+  buildPendingTaskReminder,
+  needsLegacyToolCorrection,
+} from "./core/guardrails";
 import {
   buildDefaultOrchestratorPluginToolOverrides,
   DEFAULT_ORCHESTRATOR_AGENT_TOOL_FLAGS,
@@ -65,7 +78,10 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
   setWorktree(ctx.worktree);
   setProjectId(ctx.project.id);
   setClient(ctx.client);
-  setSpawnDefaults({ basePort: config.basePort, timeout: config.startupTimeout });
+  setSpawnDefaults({
+    basePort: config.basePort,
+    timeout: config.startupTimeout,
+  });
   setProfiles(config.profiles);
   setUiDefaults({ defaultListFormat: config.ui?.defaultListFormat });
   setLoggerConfig({ enabled: true });
@@ -82,14 +98,18 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
     runtime,
   });
 
-  const coreOrchestratorTools = createCoreOrchestratorTools(orchestratorContext);
+  const coreOrchestratorTools =
+    createCoreOrchestratorTools(orchestratorContext);
 
   // Initialize telemetry if enabled
   if (config.telemetry?.enabled !== false) {
     initTelemetry(config.telemetry?.apiKey, config.telemetry?.host);
   }
 
-  const showToast = async (message: string, variant: "success" | "info" | "warning" | "error"): Promise<void> => {
+  const showToast = async (
+    message: string,
+    variant: "success" | "info" | "warning" | "error",
+  ): Promise<void> => {
     if (config.ui?.toasts === false) return;
     if (!ctx.client?.tui) return;
     try {
@@ -121,7 +141,10 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
       }
     } else if (status === "error") {
       // Only toast errors - these are important
-      void showToast(`Worker "${instance.profile.name}" error: ${instance.error ?? "unknown"}`, "error");
+      void showToast(
+        `Worker "${instance.profile.name}" error: ${instance.error ?? "unknown"}`,
+        "error",
+      );
       trackSpawn(id, "error", { error: instance.error });
     }
   };
@@ -143,7 +166,8 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
       (part) =>
         part?.type === "text" &&
         typeof part.text === "string" &&
-        (part.text.includes("[VISION ANALYSIS]") || part.text.includes("[VISION ANALYSIS FAILED]"))
+        (part.text.includes("[VISION ANALYSIS]") ||
+          part.text.includes("[VISION ANALYSIS FAILED]")),
     );
   };
 
@@ -154,11 +178,12 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
   workerPool.on("spawn", onWorkerUpdate);
   workerPool.on("stop", onWorkerRemove);
 
-
   // Auto-spawn workers if configured - single toast at the end
   if (config.autoSpawn && config.spawn.length > 0) {
     void (async () => {
-      const profilesToSpawn = config.spawn.map((id) => config.profiles[id]).filter(Boolean);
+      const profilesToSpawn = config.spawn
+        .map((id) => config.profiles[id])
+        .filter(Boolean);
       const { succeeded, failed } = await spawnWorkers(profilesToSpawn, {
         basePort: config.basePort,
         timeout: config.startupTimeout,
@@ -170,15 +195,21 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
       } else {
         void showToast(
           `Spawned ${succeeded.length} worker(s), ${failed.length} failed`,
-          succeeded.length > 0 ? "warning" : "error"
+          succeeded.length > 0 ? "warning" : "error",
         );
       }
     })().catch((err) => {
-      void showToast(`Auto-spawn failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      void showToast(
+        `Auto-spawn failed: ${err instanceof Error ? err.message : String(err)}`,
+        "error",
+      );
     });
   }
 
-  const idleNotifier = createIdleNotifier(ctx, config.notifications?.idle ?? {});
+  const idleNotifier = createIdleNotifier(
+    ctx,
+    config.notifications?.idle ?? {},
+  );
   const pruneTransform = createPruningTransform(config.pruning);
   const visionProcessedMessageIds = new Set<string>();
   const workflowTriggers = createWorkflowTriggers(orchestratorContext, {
@@ -191,7 +222,7 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
   // It does NOT strip images or trigger analysis - that's handled in chat.message hook.
   const visionMessageTransform = async (
     _input: Record<string, unknown>,
-    output: { messages: Array<{ info: any; parts: any[] }> }
+    output: { messages: Array<{ info: any; parts: any[] }> },
   ) => {
     const messages = output.messages ?? [];
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -207,7 +238,10 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
 
       // Check if analysis was already injected (from previous session restore, etc.)
       const alreadyInjected = parts.some(
-        (p: any) => p?.type === "text" && typeof p.text === "string" && p.text.includes("[VISION ANALYSIS")
+        (p: any) =>
+          p?.type === "text" &&
+          typeof p.text === "string" &&
+          p.text.includes("[VISION ANALYSIS"),
       );
       if (alreadyInjected) {
         if (messageId) visionProcessedMessageIds.add(messageId);
@@ -265,8 +299,12 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
 
       const ctx = resolveSkillContext(input.sessionID);
       const isError =
-        (output?.metadata && typeof output.metadata === "object" && (output.metadata as any).error) ||
-        (output?.metadata && typeof output.metadata === "object" && (output.metadata as any).status === "error");
+        (output?.metadata &&
+          typeof output.metadata === "object" &&
+          (output.metadata as any).error) ||
+        (output?.metadata &&
+          typeof output.metadata === "object" &&
+          (output.metadata as any).status === "error");
       const payload = buildSkillCompletedPayload({
         sessionId: input.sessionID,
         callId: input.callID,
@@ -278,7 +316,12 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
         context: ctx,
         timestamp: Date.now(),
       });
-      publishOrchestratorEvent(isError ? "orchestra.skill.load.failed" : "orchestra.skill.load.completed", payload);
+      publishOrchestratorEvent(
+        isError
+          ? "orchestra.skill.load.failed"
+          : "orchestra.skill.load.completed",
+        payload,
+      );
     },
     "permission.ask": async (input, output) => {
       if (input.type !== "skill") return;
@@ -287,8 +330,12 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
       const skillName =
         (metadata && typeof metadata.name === "string" && metadata.name) ||
         (metadata && typeof metadata.skill === "string" && metadata.skill) ||
-        (metadata && typeof metadata.skillName === "string" && metadata.skillName) ||
-        (input.callID ? getSkillNameFromArgs(skillCalls.get(input.callID)?.args) : undefined);
+        (metadata &&
+          typeof metadata.skillName === "string" &&
+          metadata.skillName) ||
+        (input.callID
+          ? getSkillNameFromArgs(skillCalls.get(input.callID)?.args)
+          : undefined);
       const payload = buildSkillPermissionPayload({
         sessionId: input.sessionID,
         permissionId: input.id,
@@ -302,21 +349,32 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
       publishOrchestratorEvent("orchestra.skill.permission", payload);
     },
     config: async (opencodeConfig: Config) => {
-      const providersFromConfig = (): Array<{ id: string; models?: Record<string, unknown> }> => {
+      const providersFromConfig = (): Array<{
+        id: string;
+        models?: Record<string, unknown>;
+      }> => {
         const out: Array<{ id: string; models?: Record<string, unknown> }> = [];
-        const providerObj = (opencodeConfig as any).provider as Record<string, any> | undefined;
+        const providerObj = (opencodeConfig as any).provider as
+          | Record<string, any>
+          | undefined;
         if (!providerObj || typeof providerObj !== "object") return out;
         for (const [id, cfg] of Object.entries(providerObj)) {
           if (!cfg || typeof cfg !== "object") continue;
           const models = (cfg as any).models;
-          out.push({ id, models: (models && typeof models === "object") ? models : undefined });
+          out.push({
+            id,
+            models: models && typeof models === "object" ? models : undefined,
+          });
         }
         return out;
       };
 
-      const resolveInConfig = (model: string | undefined): string | undefined => {
+      const resolveInConfig = (
+        model: string | undefined,
+      ): string | undefined => {
         if (!model) return undefined;
-        if (model.startsWith("auto") || model.startsWith("node")) return undefined;
+        if (model.startsWith("auto") || model.startsWith("node"))
+          return undefined;
         if (model.startsWith("opencode/")) return model;
         const providers = providersFromConfig();
         const resolved = resolveModelRef(model, providers as any);
@@ -327,30 +385,44 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
       // macOS: ctrl+left/right are often reserved by Mission Control / desktop switching.
       // Override to alt+left/right by default to avoid a broken "child session switching" UX.
       if (process.platform === "darwin") {
-        const keybinds = ((opencodeConfig as any).keybinds ?? {}) as Record<string, unknown>;
+        const keybinds = ((opencodeConfig as any).keybinds ?? {}) as Record<
+          string,
+          unknown
+        >;
         const cycle = String(keybinds.session_child_cycle ?? "");
         const reverse = String(keybinds.session_child_cycle_reverse ?? "");
-        const isMacBlocked = (v: string) => v === "ctrl+right" || v === "ctrl+left";
-        if (!cycle || isMacBlocked(cycle)) keybinds.session_child_cycle = "alt+right";
-        if (!reverse || isMacBlocked(reverse)) keybinds.session_child_cycle_reverse = "alt+left";
+        const isMacBlocked = (v: string) =>
+          v === "ctrl+right" || v === "ctrl+left";
+        if (!cycle || isMacBlocked(cycle))
+          keybinds.session_child_cycle = "alt+right";
+        if (!reverse || isMacBlocked(reverse))
+          keybinds.session_child_cycle_reverse = "alt+left";
         (opencodeConfig as any).keybinds = keybinds;
       }
 
       const isFullModel = (m: unknown): m is string =>
-        typeof m === "string" && m.includes("/") && !m.startsWith("auto") && !m.startsWith("node");
-      const desiredOrchestratorModel = isFullModel(config.agent?.model) ? config.agent?.model : undefined;
-      const resolvedOrchestratorModel = resolveInConfig(desiredOrchestratorModel);
+        typeof m === "string" &&
+        m.includes("/") &&
+        !m.startsWith("auto") &&
+        !m.startsWith("node");
+      const desiredOrchestratorModel = isFullModel(config.agent?.model)
+        ? config.agent?.model
+        : undefined;
+      const resolvedOrchestratorModel = resolveInConfig(
+        desiredOrchestratorModel,
+      );
 
       if (config.agent?.enabled !== false) {
         const name = config.agent?.name ?? "orchestrator";
-        const agentPrompt = config.agent?.prompt ?? (await loadPromptFile("orchestrator.md"));
+        const agentPrompt =
+          config.agent?.prompt ?? (await loadPromptFile("orchestrator.md"));
 
         const existing = (opencodeConfig.agent ?? {}) as Record<string, any>;
         const prior = (existing[name] ?? {}) as Record<string, unknown>;
         const priorTools = (prior as any)?.tools;
         const priorPermission = (prior as any)?.permission;
         const pluginToolOverrides = buildDefaultOrchestratorPluginToolOverrides(
-          Object.keys(coreOrchestratorTools)
+          Object.keys(coreOrchestratorTools),
         );
         const agentTools = config.agent?.tools ?? {
           // Keep the orchestrator focused on delegation (workers do the actual work).
@@ -359,16 +431,29 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
           // Boil orchestrator plugin tools down to the async Task API by default.
           ...pluginToolOverrides,
         };
-        const agentPermission = config.agent?.permission ?? (priorPermission && typeof priorPermission === "object" ? priorPermission : undefined);
+        const agentPermission =
+          config.agent?.permission ??
+          (priorPermission && typeof priorPermission === "object"
+            ? priorPermission
+            : undefined);
         opencodeConfig.agent = {
           ...existing,
           [name]: {
             ...prior,
-            description: "Coordinates specialized workers for multi-agent workflows",
-            model: resolvedOrchestratorModel ?? desiredOrchestratorModel ?? (opencodeConfig as any).model,
+            description:
+              "Coordinates specialized workers for multi-agent workflows",
+            model:
+              resolvedOrchestratorModel ??
+              desiredOrchestratorModel ??
+              (opencodeConfig as any).model,
             prompt: agentPrompt,
             mode: config.agent?.mode ?? "primary",
-            tools: { ...(priorTools && typeof priorTools === "object" ? priorTools : {}), ...agentTools },
+            tools: {
+              ...(priorTools && typeof priorTools === "object"
+                ? priorTools
+                : {}),
+              ...agentTools,
+            },
             ...(agentPermission ? { permission: agentPermission } : {}),
             ...(config.agent?.color ? { color: config.agent.color } : {}),
           },
@@ -376,11 +461,15 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
       }
 
       // Optional: if enabled, also default the built-in `build` agent to the orchestrator model.
-      if (config.agent?.applyToBuild === true && (resolvedOrchestratorModel ?? desiredOrchestratorModel)) {
+      if (
+        config.agent?.applyToBuild === true &&
+        (resolvedOrchestratorModel ?? desiredOrchestratorModel)
+      ) {
         const agents = (opencodeConfig.agent ?? {}) as Record<string, any>;
         const buildAgent = agents.build;
         const target = resolvedOrchestratorModel ?? desiredOrchestratorModel!;
-        if (buildAgent && typeof buildAgent === "object") buildAgent.model = target;
+        if (buildAgent && typeof buildAgent === "object")
+          buildAgent.model = target;
         if (!buildAgent) agents.build = { model: target };
         (opencodeConfig as any).agent = agents;
       }
@@ -417,21 +506,25 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
           },
           [`${prefix}profiles`]: {
             description: "List available worker profiles",
-            template: "Call task_list({ view: 'profiles', format: 'markdown' }).",
+            template:
+              "Call task_list({ view: 'profiles', format: 'markdown' }).",
           },
           [`${prefix}workers`]: {
             description: "List running workers",
-            template: "Call task_list({ view: 'workers', format: 'markdown' }).",
+            template:
+              "Call task_list({ view: 'workers', format: 'markdown' }).",
           },
         };
 
         if (config.workflows?.enabled !== false) {
           baseCommands[`${prefix}workflows`] = {
             description: "List available workflows",
-            template: "Call task_list({ view: 'workflows', format: 'markdown' }).",
+            template:
+              "Call task_list({ view: 'workflows', format: 'markdown' }).",
           };
           baseCommands[`${prefix}boomerang`] = {
-            description: "Run the RooCode boomerang workflow (plan, implement, review, fix)",
+            description:
+              "Run the RooCode boomerang workflow (plan, implement, review, fix)",
             template:
               "Call task_start({ kind: 'workflow', workflowId: 'roocode-boomerang', task: '<task>' }) and then task_await({ taskId: '<returned taskId>' }).",
           };
@@ -449,7 +542,9 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
 
       const passthrough = getPassthrough(sessionId);
       if (passthrough && agent === orchestratorAgentName) {
-        output.system.push(await buildPassthroughSystemPrompt(passthrough.workerId));
+        output.system.push(
+          await buildPassthroughSystemPrompt(passthrough.workerId),
+        );
       }
 
       if (agent === orchestratorAgentName) {
@@ -457,7 +552,10 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
         if (reminder) output.system.push(reminder);
       }
 
-      if (config.memory?.enabled !== false && config.memory?.autoInject !== false) {
+      if (
+        config.memory?.enabled !== false &&
+        config.memory?.autoInject !== false
+      ) {
         const injected = await buildMemoryInjection({
           enabled: true,
           scope: (config.memory?.scope ?? "project") as any,
@@ -470,7 +568,11 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
 
       if (config.ui?.injectSystemContext === false) return;
       if (workerPool.workers.size === 0) return;
-      output.system.push(workerPool.getSummary({ maxWorkers: config.ui?.systemContextMaxWorkers ?? 12 }));
+      output.system.push(
+        workerPool.getSummary({
+          maxWorkers: config.ui?.systemContextMaxWorkers ?? 12,
+        }),
+      );
     },
     "experimental.chat.messages.transform": async (input, output) => {
       await visionMessageTransform(input as any, output as any);
@@ -478,13 +580,18 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
     },
     "chat.message": async (input, output) => {
       // Passthrough auto-exit (server-side): if the user issues an exit command, disable passthrough for this session.
-      const role = typeof (input as any)?.role === "string" ? String((input as any).role) : undefined;
+      const role =
+        typeof (input as any)?.role === "string"
+          ? String((input as any).role)
+          : undefined;
       if (role === "user") {
         const passthrough = getPassthrough(input.sessionID);
         if (passthrough) {
           const parts = Array.isArray(output.parts) ? output.parts : [];
           const text = parts
-            .filter((p: any) => p?.type === "text" && typeof p.text === "string")
+            .filter(
+              (p: any) => p?.type === "text" && typeof p.text === "string",
+            )
             .map((p: any) => p.text)
             .join("\n");
           if (isPassthroughExitMessage(text)) {
@@ -495,31 +602,51 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
       }
 
       if (role === "assistant") {
-        const agentId = typeof (input as any)?.agent === "string" ? String((input as any).agent) : undefined;
+        const agentId =
+          typeof (input as any)?.agent === "string"
+            ? String((input as any).agent)
+            : undefined;
         if (agentId === orchestratorAgentName) {
           const parts = Array.isArray(output.parts) ? output.parts : [];
           const text = parts
-            .filter((p: any) => p?.type === "text" && typeof p.text === "string")
+            .filter(
+              (p: any) => p?.type === "text" && typeof p.text === "string",
+            )
             .map((p: any) => p.text)
             .join("\n");
           const sessionId = (input as any)?.sessionID as string | undefined;
           if (sessionId && needsLegacyToolCorrection(text)) {
-            void injectSessionNotice(orchestratorContext, sessionId, buildLegacyToolCorrectionHint());
+            void injectSessionNotice(
+              orchestratorContext,
+              sessionId,
+              buildLegacyToolCorrectionHint(),
+            );
           }
         }
       }
 
       await workflowTriggers.handleVisionMessage(input, output);
-      const agentId = typeof (input as any)?.agent === "string" ? String((input as any).agent) : undefined;
+      const agentId =
+        typeof (input as any)?.agent === "string"
+          ? String((input as any).agent)
+          : undefined;
       const pendingTaskId = extractPendingVisionTaskId((output as any)?.parts);
-      if (pendingTaskId && agentId === orchestratorAgentName && !hasVisionAnalysis((output as any)?.parts)) {
+      if (
+        pendingTaskId &&
+        agentId === orchestratorAgentName &&
+        !hasVisionAnalysis((output as any)?.parts)
+      ) {
         try {
-          const job = await workerJobs.await(pendingTaskId, { timeoutMs: visionTimeoutMs });
+          const job = await workerJobs.await(pendingTaskId, {
+            timeoutMs: visionTimeoutMs,
+          });
           const analysisText =
             job?.responseText ??
             (job?.error ? `[VISION ANALYSIS FAILED]\n${job.error}` : undefined);
           if (analysisText) {
-            const parts = Array.isArray((output as any)?.parts) ? (output as any).parts : [];
+            const parts = Array.isArray((output as any)?.parts)
+              ? (output as any).parts
+              : [];
             parts.push({
               type: "text",
               text: analysisText,
@@ -545,21 +672,34 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
         await shutdownAllWorkers().catch(() => {});
         await flushTelemetry().catch(() => {});
       }
-      if (event.type === "session.created" || event.type === "session.updated") {
+      if (
+        event.type === "session.created" ||
+        event.type === "session.updated"
+      ) {
         const info = (event as any)?.properties?.info as any;
-        if (info?.id && typeof info.title === "string" && typeof info.directory === "string") {
+        if (
+          info?.id &&
+          typeof info.title === "string" &&
+          typeof info.directory === "string"
+        ) {
           await upsertSessionEntry({
             hostPid: process.pid,
             sessionId: info.id,
             title: info.title,
             directory: info.directory,
-            createdAt: typeof info?.time?.created === "number" ? info.time.created : Date.now(),
+            createdAt:
+              typeof info?.time?.created === "number"
+                ? info.time.created
+                : Date.now(),
           }).catch(() => {});
         }
       }
       if (event.type === "session.deleted") {
-        const sessionId = (event as any)?.properties?.info?.id as string | undefined;
-        if (sessionId) await removeSessionEntry(sessionId, process.pid).catch(() => {});
+        const sessionId = (event as any)?.properties?.info?.id as
+          | string
+          | undefined;
+        if (sessionId)
+          await removeSessionEntry(sessionId, process.pid).catch(() => {});
         if (sessionId) {
           clearPassthrough(sessionId);
           const owned = workerPool.getWorkersForSession(sessionId);

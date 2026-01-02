@@ -2,24 +2,26 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createOpencode } from "@opencode-ai/sdk";
 import { extractTextFromPromptResponse } from "../../src/workers/prompt";
 import { mergeOpenCodeConfig } from "../../src/config/opencode";
-import { setupE2eEnv } from "../helpers/e2e-env";
+import { createE2eEnv, type E2eEnv } from "../helpers/e2e-env";
 
 describe("e2e", () => {
-  let restoreEnv: (() => void) | undefined;
+  let env: E2eEnv;
   beforeAll(async () => {
-    const env = await setupE2eEnv();
-    restoreEnv = env.restore;
+    env = await createE2eEnv();
   });
 
-  afterAll(() => {
-    restoreEnv?.();
+  afterAll(async () => {
+    await env.restore();
   });
 
   test("can prompt a spawned opencode server and get text", async () => {
     const resolveModel = (config: Record<string, unknown>): string => {
       const envModel = process.env.OPENCODE_ORCH_E2E_MODEL;
       if (envModel && envModel.trim().length > 0) return envModel;
-      const configured = typeof (config as any).model === "string" ? String((config as any).model) : "";
+      const configured =
+        typeof (config as any).model === "string"
+          ? String((config as any).model)
+          : "";
       if (configured.includes("/")) return configured;
       const providers = (config as any).provider;
       if (providers && typeof providers === "object") {
@@ -34,7 +36,9 @@ describe("e2e", () => {
       return configured || "opencode/gpt-5-nano";
     };
 
-    const config = await mergeOpenCodeConfig(undefined, { dropOrchestratorPlugin: true });
+    const config = await mergeOpenCodeConfig(undefined, {
+      dropOrchestratorPlugin: true,
+    });
     config.model = resolveModel(config);
     const { client, server } = await createOpencode({
       hostname: "127.0.0.1",
@@ -44,13 +48,19 @@ describe("e2e", () => {
     });
 
     try {
-      const session = (await client.session.create({ body: { title: "e2e" }, query: { directory: process.cwd() } }))
-        .data;
+      const session = (
+        await client.session.create({
+          body: { title: "e2e" },
+          query: { directory: process.cwd() },
+        })
+      ).data;
       expect(session?.id).toBeTruthy();
 
       const res = await client.session.prompt({
         path: { id: session!.id },
-        body: { parts: [{ type: "text", text: "Reply with exactly: pong" }] as any },
+        body: {
+          parts: [{ type: "text", text: "Reply with exactly: pong" }] as any,
+        },
         query: { directory: process.cwd() },
       });
 

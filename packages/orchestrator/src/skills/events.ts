@@ -40,14 +40,22 @@ export type SkillPermissionPayload = {
   timestamp: number;
 };
 
-const normalizeSource = (context?: SkillEventContext): SkillEventSource => context?.source ?? "in-process";
+const normalizeSource = (context?: SkillEventContext): SkillEventSource =>
+  context?.source ?? "in-process";
 
-const normalizeWorker = (context?: SkillEventContext): SkillRequestedPayload["worker"] | undefined => {
+const normalizeWorker = (
+  context?: SkillEventContext,
+): SkillRequestedPayload["worker"] | undefined => {
   if (!context?.workerId) return undefined;
-  return { id: context.workerId, ...(context.workerKind ? { kind: context.workerKind } : {}) };
+  return {
+    id: context.workerId,
+    ...(context.workerKind ? { kind: context.workerKind } : {}),
+  };
 };
 
-const normalizeWorkflow = (context?: SkillEventContext): SkillRequestedPayload["workflow"] | undefined => {
+const normalizeWorkflow = (
+  context?: SkillEventContext,
+): SkillRequestedPayload["workflow"] | undefined => {
   if (!context?.workflowRunId && !context?.workflowStepId) return undefined;
   return {
     ...(context?.workflowRunId ? { runId: context.workflowRunId } : {}),
@@ -55,8 +63,11 @@ const normalizeWorkflow = (context?: SkillEventContext): SkillRequestedPayload["
   };
 };
 
-const sanitizeMetadata = (metadata: unknown): Record<string, unknown> | undefined => {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined;
+const sanitizeMetadata = (
+  metadata: unknown,
+): Record<string, unknown> | undefined => {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
+    return undefined;
   return { ...(metadata as Record<string, unknown>) };
 };
 
@@ -95,7 +106,10 @@ export const buildSkillCompletedPayload = (input: {
   context?: SkillEventContext;
   timestamp?: number;
 }): SkillCompletedPayload => {
-  const outputBytes = typeof input.output === "string" ? Buffer.byteLength(input.output) : undefined;
+  const outputBytes =
+    typeof input.output === "string"
+      ? Buffer.byteLength(input.output)
+      : undefined;
   const metadata = sanitizeMetadata(input.metadata);
   return {
     ...buildSkillRequestedPayload({

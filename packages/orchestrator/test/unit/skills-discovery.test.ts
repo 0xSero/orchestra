@@ -1,7 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { discoverSkills, getSkillSearchRoots } from "../../src/skills/discovery";
+import {
+  discoverSkills,
+  getSkillSearchRoots,
+} from "../../src/skills/discovery";
 
 describe("skills discovery", () => {
   let tmpDir: string;
@@ -55,10 +58,22 @@ describe("skills discovery", () => {
       mkdir(deltaDir, { recursive: true }),
     ]);
     await Promise.all([
-      writeFile(join(alphaDir, "SKILL.md"), "---\nname: alpha\ndescription: alpha\n---\n"),
-      writeFile(join(betaDir, "SKILL.md"), "---\nname: beta\ndescription: beta\n---\n"),
-      writeFile(join(gammaDir, "SKILL.md"), "---\nname: gamma\ndescription: gamma\n---\n"),
-      writeFile(join(deltaDir, "SKILL.md"), "---\nname: delta\ndescription: delta\n---\n"),
+      writeFile(
+        join(alphaDir, "SKILL.md"),
+        "---\nname: alpha\ndescription: alpha\n---\n",
+      ),
+      writeFile(
+        join(betaDir, "SKILL.md"),
+        "---\nname: beta\ndescription: beta\n---\n",
+      ),
+      writeFile(
+        join(gammaDir, "SKILL.md"),
+        "---\nname: gamma\ndescription: gamma\n---\n",
+      ),
+      writeFile(
+        join(deltaDir, "SKILL.md"),
+        "---\nname: delta\ndescription: delta\n---\n",
+      ),
     ]);
 
     const skills = await discoverSkills({
@@ -68,7 +83,8 @@ describe("skills discovery", () => {
       homeDir,
     });
 
-    const byName = (name: string) => skills.find((entry) => entry.name === name);
+    const byName = (name: string) =>
+      skills.find((entry) => entry.name === name);
 
     expect(byName("alpha")?.source).toBe("project");
     expect(byName("beta")?.source).toBe("project-claude");

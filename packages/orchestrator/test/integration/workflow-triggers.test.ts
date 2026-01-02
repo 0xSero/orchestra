@@ -19,8 +19,18 @@ const baseConfig: OrchestratorConfig = {
   workflows: {
     enabled: true,
     triggers: {
-      visionOnImage: { enabled: true, workflowId: "vision", autoSpawn: false, blocking: true },
-      memoryOnTurnEnd: { enabled: true, workflowId: "memory", autoSpawn: false, blocking: true },
+      visionOnImage: {
+        enabled: true,
+        workflowId: "vision",
+        autoSpawn: false,
+        blocking: true,
+      },
+      memoryOnTurnEnd: {
+        enabled: true,
+        workflowId: "memory",
+        autoSpawn: false,
+        blocking: true,
+      },
     },
   },
   memory: {
@@ -75,7 +85,12 @@ describe("workflow triggers", () => {
       showToast: async () => {},
     });
 
-    const input = { messageID: "m1", sessionID: "s1", agent: "orchestrator", role: "user" };
+    const input = {
+      messageID: "m1",
+      sessionID: "s1",
+      agent: "orchestrator",
+      role: "user",
+    };
     const output = {
       parts: [
         { type: "text", text: "Please analyze this screenshot." },
@@ -87,7 +102,9 @@ describe("workflow triggers", () => {
 
     expect(captured?.workflowId).toBe("vision");
     expect(Array.isArray(captured?.attachments)).toBe(true);
-    const combined = output.parts.map((p: any) => (p?.type === "text" ? p.text : "")).join("\n");
+    const combined = output.parts
+      .map((p: any) => (p?.type === "text" ? p.text : ""))
+      .join("\n");
     expect(combined.includes("[VISION ANALYSIS PENDING]")).toBe(true);
     expect(combined.includes("task_await")).toBe(true);
   });
@@ -146,11 +163,19 @@ describe("workflow triggers", () => {
 
     const tools = createTaskTools(context);
     const started = await tools.taskStart.execute(
-      { kind: "op", op: "memory.done", task: "memory.done", memory: { taskId: payload.taskId } } as any,
-      {} as any
+      {
+        kind: "op",
+        op: "memory.done",
+        task: "memory.done",
+        memory: { taskId: payload.taskId },
+      } as any,
+      {} as any,
     );
     const opJob = JSON.parse(String(started));
-    await tools.taskAwait.execute({ taskId: opJob.taskId, timeoutMs: 5000 } as any, {} as any);
+    await tools.taskAwait.execute(
+      { taskId: opJob.taskId, timeoutMs: 5000 } as any,
+      {} as any,
+    );
 
     const job = workerJobs.get(payload.taskId);
     expect(job?.status).toBe("succeeded");

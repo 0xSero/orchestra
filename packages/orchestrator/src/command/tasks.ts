@@ -8,13 +8,26 @@ import type { ToolContext } from "./state";
 import { getOrchestratorContext } from "./state";
 import { getWorkflow, listWorkflows } from "../workflows/engine";
 import type { WorkflowRunResult } from "../workflows/types";
-import { continueWorkflowWithContext, resolveWorkflowLimits, runWorkflowWithContext } from "../workflows/runner";
+import {
+  continueWorkflowWithContext,
+  resolveWorkflowLimits,
+  runWorkflowWithContext,
+} from "../workflows/runner";
 import { getLogBuffer } from "../core/logger";
-import { fetchOpencodeConfig, fetchProviders, filterProviders, flattenProviders } from "../models/catalog";
+import {
+  fetchOpencodeConfig,
+  fetchProviders,
+  filterProviders,
+  flattenProviders,
+} from "../models/catalog";
 import { resolveWorkerModel } from "../models/resolve";
 import { loadNeo4jConfigFromEnv } from "../memory/neo4j";
 import { linkMemory, upsertMemory, type MemoryScope } from "../memory/graph";
-import { completeMemoryTask, recordMemoryLink, recordMemoryPut } from "../memory/tasks";
+import {
+  completeMemoryTask,
+  recordMemoryLink,
+  recordMemoryPut,
+} from "../memory/tasks";
 import { publishOrchestratorEvent } from "../core/orchestrator-events";
 
 type TaskTools = {
@@ -58,19 +71,36 @@ type WorkerModelOpPayload = {
   respawn?: boolean;
 };
 
-function hasImageAttachment(attachments: ToolAttachment[] | undefined): boolean {
+function hasImageAttachment(
+  attachments: ToolAttachment[] | undefined,
+): boolean {
   return Boolean(attachments?.some((a) => a.type === "image"));
 }
 
 function guessWorkerId(task: string, attachments?: ToolAttachment[]): string {
   if (hasImageAttachment(attachments)) return "vision";
-  if (/\b(doc|docs|documentation|reference|api|example|examples|research|cite)\b/i.test(task)) return "docs";
-  if (/\b(architecture|architect|design|plan|approach|trade[- ]?off)\b/i.test(task)) return "architect";
-  if (/\b(search|find|locate|grep|ripgrep|scan|explore|where)\b/i.test(task)) return "explorer";
+  if (
+    /\b(doc|docs|documentation|reference|api|example|examples|research|cite)\b/i.test(
+      task,
+    )
+  )
+    return "docs";
+  if (
+    /\b(architecture|architect|design|plan|approach|trade[- ]?off)\b/i.test(
+      task,
+    )
+  )
+    return "architect";
+  if (/\b(search|find|locate|grep|ripgrep|scan|explore|where)\b/i.test(task))
+    return "explorer";
   return "coder";
 }
 
-function pickWorkflowResponse(result: WorkflowRunResult): { success: boolean; response?: string; error?: string } {
+function pickWorkflowResponse(result: WorkflowRunResult): {
+  success: boolean;
+  response?: string;
+  error?: string;
+} {
   const errorStep = result.steps.find((step) => step.status === "error");
   if (errorStep) {
     return { success: false, error: errorStep.error ?? "workflow step failed" };
@@ -78,14 +108,21 @@ function pickWorkflowResponse(result: WorkflowRunResult): { success: boolean; re
   if (result.status === "error") {
     return { success: false, error: "workflow failed" };
   }
-  const responseStep = [...result.steps].reverse().find((step) => typeof step.response === "string" && step.response.length > 0);
+  const responseStep = [...result.steps]
+    .reverse()
+    .find(
+      (step) => typeof step.response === "string" && step.response.length > 0,
+    );
   if (!responseStep) {
     return { success: false, error: "workflow produced no response" };
   }
   return { success: true, response: responseStep.response };
 }
 
-function resolveMemoryScope(context: OrchestratorContext, input?: string): MemoryScope {
+function resolveMemoryScope(
+  context: OrchestratorContext,
+  input?: string,
+): MemoryScope {
   if (input === "project" || input === "global") return input;
   return (context.config.memory?.scope ?? "project") as MemoryScope;
 }
@@ -93,7 +130,7 @@ function resolveMemoryScope(context: OrchestratorContext, input?: string): Memor
 async function runMemoryOp(
   context: OrchestratorContext,
   op: MemoryOpKind,
-  memory?: MemoryOpPayload
+  memory?: MemoryOpPayload,
 ): Promise<{ ok: boolean; response?: string; error?: string }> {
   if (op === "memory.put") {
     const cfg = loadNeo4jConfigFromEnv();
@@ -106,11 +143,16 @@ async function runMemoryOp(
     }
     const key = memory?.key?.trim();
     const value = memory?.value?.trim();
-    if (!key || !value) return { ok: false, error: "Missing memory.key/memory.value for op memory.put." };
+    if (!key || !value)
+      return {
+        ok: false,
+        error: "Missing memory.key/memory.value for op memory.put.",
+      };
 
     const scope = resolveMemoryScope(context, memory?.scope);
     const projectId = scope === "project" ? context.projectId : undefined;
-    if (scope === "project" && !projectId) return { ok: false, error: "Missing projectId; restart OpenCode." };
+    if (scope === "project" && !projectId)
+      return { ok: false, error: "Missing projectId; restart OpenCode." };
 
     const node = await upsertMemory({
       cfg,
@@ -145,11 +187,16 @@ async function runMemoryOp(
     }
     const fromKey = memory?.fromKey?.trim();
     const toKey = memory?.toKey?.trim();
-    if (!fromKey || !toKey) return { ok: false, error: "Missing memory.fromKey/memory.toKey for op memory.link." };
+    if (!fromKey || !toKey)
+      return {
+        ok: false,
+        error: "Missing memory.fromKey/memory.toKey for op memory.link.",
+      };
 
     const scope = resolveMemoryScope(context, memory?.scope);
     const projectId = scope === "project" ? context.projectId : undefined;
-    if (scope === "project" && !projectId) return { ok: false, error: "Missing projectId; restart OpenCode." };
+    if (scope === "project" && !projectId)
+      return { ok: false, error: "Missing projectId; restart OpenCode." };
 
     const relation = memory?.relation ?? "relates_to";
     const res = await linkMemory({
@@ -161,7 +208,8 @@ async function runMemoryOp(
       type: relation,
     });
 
-    if (memory?.taskId) recordMemoryLink(memory.taskId, fromKey, toKey, relation);
+    if (memory?.taskId)
+      recordMemoryLink(memory.taskId, fromKey, toKey, relation);
     publishOrchestratorEvent("orchestra.memory.written", {
       action: "link",
       scope,
@@ -176,7 +224,8 @@ async function runMemoryOp(
   }
 
   const taskId = memory?.taskId?.trim();
-  if (!taskId) return { ok: false, error: "Missing memory.taskId for op memory.done." };
+  if (!taskId)
+    return { ok: false, error: "Missing memory.taskId for op memory.done." };
 
   const result = completeMemoryTask(taskId, {
     summary: memory?.summary,
@@ -185,7 +234,9 @@ async function runMemoryOp(
     notes: memory?.notes,
   });
 
-  return result.ok ? { ok: true, response: result.message } : { ok: false, error: result.message };
+  return result.ok
+    ? { ok: true, response: result.message }
+    : { ok: false, error: result.message };
 }
 
 function isMemoryOp(op: TaskOpKind): op is MemoryOpKind {
@@ -196,19 +247,29 @@ async function runWorkerModelOp(
   context: OrchestratorContext,
   op: WorkerModelOpKind,
   worker?: WorkerModelOpPayload,
-  sessionId?: string
+  sessionId?: string,
 ): Promise<{ ok: boolean; response?: string; error?: string }> {
   const workerId = worker?.workerId?.trim();
-  if (!workerId) return { ok: false, error: `Missing worker.workerId for op ${op}.` };
+  if (!workerId)
+    return { ok: false, error: `Missing worker.workerId for op ${op}.` };
 
   const instance = context.workerPool.get(workerId);
-  if (!instance) return { ok: false, error: `Worker "${workerId}" is not running. Spawn it first.` };
+  if (!instance)
+    return {
+      ok: false,
+      error: `Worker "${workerId}" is not running. Spawn it first.`,
+    };
 
   const baseProfile = getProfile(workerId, context.profiles);
-  if (!baseProfile) return { ok: false, error: `Unknown worker "${workerId}".` };
+  if (!baseProfile)
+    return { ok: false, error: `Unknown worker "${workerId}".` };
 
   const client = context.client;
-  if (!client) return { ok: false, error: "OpenCode client not available; restart OpenCode." };
+  if (!client)
+    return {
+      ok: false,
+      error: "OpenCode client not available; restart OpenCode.",
+    };
 
   const [cfg, providersRes] = await Promise.all([
     fetchOpencodeConfig(client, context.directory),
@@ -218,7 +279,11 @@ async function runWorkerModelOp(
   let resolved: ReturnType<typeof resolveWorkerModel>;
   if (op === "worker.model.set") {
     const modelRef = worker?.model?.trim();
-    if (!modelRef) return { ok: false, error: "Missing worker.model for op worker.model.set." };
+    if (!modelRef)
+      return {
+        ok: false,
+        error: "Missing worker.model for op worker.model.set.",
+      };
     resolved = resolveWorkerModel({
       profile: instance.profile,
       overrideModelRef: modelRef,
@@ -235,13 +300,18 @@ async function runWorkerModelOp(
     });
   }
 
-  const modelPolicy = worker?.modelPolicy ?? (op === "worker.model.set" ? "sticky" : "dynamic");
+  const modelPolicy =
+    worker?.modelPolicy ?? (op === "worker.model.set" ? "sticky" : "dynamic");
   const respawn = worker?.respawn === true;
   const nextProfile = { ...instance.profile, model: resolved.resolvedModel };
 
   if (respawn) {
     const stopped = await stopWorker(workerId);
-    if (!stopped) return { ok: false, error: `Failed to stop worker "${workerId}" for respawn.` };
+    if (!stopped)
+      return {
+        ok: false,
+        error: `Failed to stop worker "${workerId}" for respawn.`,
+      };
 
     const { basePort, timeout } = context.spawnDefaults;
     const spawned = await spawnWorker(nextProfile, {
@@ -267,7 +337,7 @@ async function runWorkerModelOp(
           respawned: true,
         },
         null,
-        2
+        2,
       ),
     };
   }
@@ -288,20 +358,23 @@ async function runWorkerModelOp(
         respawned: false,
       },
       null,
-      2
+      2,
     ),
   };
 }
 
 async function ensureWorkerForTask(
   context: OrchestratorContext,
-  input: { workerId: string; autoSpawn: boolean; sessionId?: string }
+  input: { workerId: string; autoSpawn: boolean; sessionId?: string },
 ): Promise<{ ok: boolean; error?: string }> {
   const workerPool = context.workerPool;
   const existing = workerPool.get(input.workerId);
   if (existing && existing.status !== "stopped") return { ok: true };
   if (!input.autoSpawn) {
-    return { ok: false, error: `Worker "${input.workerId}" is not running. Set autoSpawn=true or spawn it first.` };
+    return {
+      ok: false,
+      error: `Worker "${input.workerId}" is not running. Set autoSpawn=true or spawn it first.`,
+    };
   }
 
   const profile = getProfile(input.workerId, context.profiles);
@@ -322,7 +395,10 @@ async function ensureWorkerForTask(
     parentSessionId: input.sessionId,
   });
 
-  if (input.sessionId && instance.modelResolution !== "reused existing worker") {
+  if (
+    input.sessionId &&
+    instance.modelResolution !== "reused existing worker"
+  ) {
     workerPool.trackOwnership(input.sessionId, instance.profile.id);
   }
 
@@ -337,24 +413,51 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
       kind: tool.schema
         .enum(["auto", "worker", "workflow", "op"])
         .optional()
-        .describe("Task kind (default: auto = pick a worker based on task/attachments)"),
-      task: tool.schema.string().describe("What to do (sent to worker/workflow; for op use a short label)"),
-      workerId: tool.schema.string().optional().describe("Worker id when kind=worker (e.g. 'docs', 'coder')"),
+        .describe(
+          "Task kind (default: auto = pick a worker based on task/attachments)",
+        ),
+      task: tool.schema
+        .string()
+        .describe(
+          "What to do (sent to worker/workflow; for op use a short label)",
+        ),
+      workerId: tool.schema
+        .string()
+        .optional()
+        .describe("Worker id when kind=worker (e.g. 'docs', 'coder')"),
       model: tool.schema
         .string()
         .optional()
-        .describe("Model override for kind=worker (tag like node:fast or provider/model)"),
+        .describe(
+          "Model override for kind=worker (tag like node:fast or provider/model)",
+        ),
       modelPolicy: tool.schema
         .enum(["dynamic", "sticky"])
         .optional()
-        .describe("Model override policy (dynamic = per-task, sticky = update worker default)"),
-      workflowId: tool.schema.string().optional().describe("Workflow id when kind=workflow (e.g. 'roocode-boomerang')"),
-      continueRunId: tool.schema.string().optional().describe("Continue a paused workflow run by runId (kind=workflow only)"),
-      op: tool.schema
-        .enum(["memory.put", "memory.link", "memory.done", "worker.model.set", "worker.model.reset"])
+        .describe(
+          "Model override policy (dynamic = per-task, sticky = update worker default)",
+        ),
+      workflowId: tool.schema
+        .string()
+        .optional()
+        .describe("Workflow id when kind=workflow (e.g. 'roocode-boomerang')"),
+      continueRunId: tool.schema
+        .string()
         .optional()
         .describe(
-          "Operation id when kind=op (memory.put/memory.link/memory.done/worker.model.set/worker.model.reset)"
+          "Continue a paused workflow run by runId (kind=workflow only)",
+        ),
+      op: tool.schema
+        .enum([
+          "memory.put",
+          "memory.link",
+          "memory.done",
+          "worker.model.set",
+          "worker.model.reset",
+        ])
+        .optional()
+        .describe(
+          "Operation id when kind=op (memory.put/memory.link/memory.done/worker.model.set/worker.model.reset)",
         ),
       memory: tool.schema
         .object({
@@ -374,7 +477,7 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
                 from: tool.schema.string(),
                 to: tool.schema.string(),
                 relation: tool.schema.string(),
-              })
+              }),
             )
             .optional(),
           notes: tool.schema.string().optional(),
@@ -397,13 +500,24 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
             path: tool.schema.string().optional(),
             base64: tool.schema.string().optional(),
             mimeType: tool.schema.string().optional(),
-          })
+          }),
         )
         .optional()
-        .describe("Optional attachments (images/files) to forward to the worker/workflow"),
-      autoSpawn: tool.schema.boolean().optional().describe("Auto-spawn missing workers (default: true)"),
-      timeoutMs: tool.schema.number().optional().describe("Timeout for the underlying work (default: 10 minutes)"),
-      from: tool.schema.string().optional().describe("Source worker id (for worker-to-worker communication)"),
+        .describe(
+          "Optional attachments (images/files) to forward to the worker/workflow",
+        ),
+      autoSpawn: tool.schema
+        .boolean()
+        .optional()
+        .describe("Auto-spawn missing workers (default: true)"),
+      timeoutMs: tool.schema
+        .number()
+        .optional()
+        .describe("Timeout for the underlying work (default: 10 minutes)"),
+      from: tool.schema
+        .string()
+        .optional()
+        .describe("Source worker id (for worker-to-worker communication)"),
     },
     async execute(args, ctx: ToolContext) {
       const kind = args.kind ?? "auto";
@@ -414,8 +528,11 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
 
       const resolvedKind = kind === "auto" ? "worker" : kind;
       const resolvedWorkerId =
-        resolvedKind === "worker" ? (args.workerId ?? guessWorkerId(args.task, args.attachments)) : undefined;
-      const resolvedWorkflowId = resolvedKind === "workflow" ? args.workflowId : undefined;
+        resolvedKind === "worker"
+          ? (args.workerId ?? guessWorkerId(args.task, args.attachments))
+          : undefined;
+      const resolvedWorkflowId =
+        resolvedKind === "workflow" ? args.workflowId : undefined;
 
       const jobWorkerId =
         resolvedKind === "workflow"
@@ -435,18 +552,27 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
         try {
           if (resolvedKind === "workflow") {
             if (context.workflows?.enabled === false) {
-              workerJobs.setError(job.id, { error: "Workflows are disabled. Enable workflows.enabled in orchestrator.json." });
+              workerJobs.setError(job.id, {
+                error:
+                  "Workflows are disabled. Enable workflows.enabled in orchestrator.json.",
+              });
               return;
             }
 
             if (args.continueRunId) {
-              const result = await continueWorkflowWithContext(context, args.continueRunId, { sessionId });
+              const result = await continueWorkflowWithContext(
+                context,
+                args.continueRunId,
+                { sessionId },
+              );
 
               const picked = pickWorkflowResponse(result);
               if (picked.success && picked.response) {
                 workerJobs.setResult(job.id, { responseText: picked.response });
               } else {
-                workerJobs.setError(job.id, { error: picked.error ?? "workflow failed" });
+                workerJobs.setError(job.id, {
+                  error: picked.error ?? "workflow failed",
+                });
               }
 
               workerJobs.attachReport(job.id, {
@@ -466,7 +592,7 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
                     })),
                   },
                   null,
-                  2
+                  2,
                 ),
               });
               return;
@@ -474,13 +600,18 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
 
             const workflowId = resolvedWorkflowId;
             if (!workflowId) {
-              workerJobs.setError(job.id, { error: "Missing workflowId for kind=workflow (or set continueRunId)." });
+              workerJobs.setError(job.id, {
+                error:
+                  "Missing workflowId for kind=workflow (or set continueRunId).",
+              });
               return;
             }
 
             const workflow = getWorkflow(workflowId);
             if (!workflow) {
-              workerJobs.setError(job.id, { error: `Unknown workflow "${workflowId}".` });
+              workerJobs.setError(job.id, {
+                error: `Unknown workflow "${workflowId}".`,
+              });
               return;
             }
 
@@ -494,14 +625,16 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
                 autoSpawn,
                 limits,
               },
-              { sessionId }
+              { sessionId },
             );
 
             const picked = pickWorkflowResponse(result);
             if (picked.success && picked.response) {
               workerJobs.setResult(job.id, { responseText: picked.response });
             } else {
-              workerJobs.setError(job.id, { error: picked.error ?? "workflow failed" });
+              workerJobs.setError(job.id, {
+                error: picked.error ?? "workflow failed",
+              });
             }
 
             workerJobs.attachReport(job.id, {
@@ -521,7 +654,7 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
                   })),
                 },
                 null,
-                2
+                2,
               ),
             });
             return;
@@ -537,8 +670,12 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
             const result = isMemoryOp(op)
               ? await runMemoryOp(context, op, args.memory)
               : await runWorkerModelOp(context, op, args.worker, sessionId);
-            if (result.ok && result.response) workerJobs.setResult(job.id, { responseText: result.response });
-            else workerJobs.setError(job.id, { error: result.error ?? "op failed" });
+            if (result.ok && result.response)
+              workerJobs.setResult(job.id, { responseText: result.response });
+            else
+              workerJobs.setError(job.id, {
+                error: result.error ?? "op failed",
+              });
             return;
           }
 
@@ -548,9 +685,15 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
             return;
           }
 
-          const ensured = await ensureWorkerForTask(context, { workerId, autoSpawn, sessionId });
+          const ensured = await ensureWorkerForTask(context, {
+            workerId,
+            autoSpawn,
+            sessionId,
+          });
           if (!ensured.ok) {
-            workerJobs.setError(job.id, { error: ensured.error ?? "failed to ensure worker" });
+            workerJobs.setError(job.id, {
+              error: ensured.error ?? "failed to ensure worker",
+            });
             return;
           }
 
@@ -558,14 +701,19 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
           if (args.model) {
             const client = context.client;
             if (!client) {
-              workerJobs.setError(job.id, { error: "OpenCode client not available; restart OpenCode." });
+              workerJobs.setError(job.id, {
+                error: "OpenCode client not available; restart OpenCode.",
+              });
               return;
             }
 
             const instance = context.workerPool.get(workerId);
-            const profile = instance?.profile ?? getProfile(workerId, context.profiles);
+            const profile =
+              instance?.profile ?? getProfile(workerId, context.profiles);
             if (!profile) {
-              workerJobs.setError(job.id, { error: `Unknown worker "${workerId}".` });
+              workerJobs.setError(job.id, {
+                error: `Unknown worker "${workerId}".`,
+              });
               return;
             }
 
@@ -585,7 +733,10 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
             resolvedModelOverride = resolved.resolvedModel;
 
             if (instance && modelPolicy === "sticky") {
-              instance.profile = { ...instance.profile, model: resolved.resolvedModel };
+              instance.profile = {
+                ...instance.profile,
+                model: resolved.resolvedModel,
+              };
               instance.modelRef = resolved.modelRef;
               instance.modelPolicy = "sticky";
               instance.modelResolution = resolved.reason;
@@ -601,10 +752,16 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
             model: resolvedModelOverride,
           });
 
-          if (res.success && res.response) workerJobs.setResult(job.id, { responseText: res.response });
-          else workerJobs.setError(job.id, { error: res.error ?? "unknown_error" });
+          if (res.success && res.response)
+            workerJobs.setResult(job.id, { responseText: res.response });
+          else
+            workerJobs.setError(job.id, {
+              error: res.error ?? "unknown_error",
+            });
         } catch (err) {
-          workerJobs.setError(job.id, { error: err instanceof Error ? err.message : String(err) });
+          workerJobs.setError(job.id, {
+            error: err instanceof Error ? err.message : String(err),
+          });
         }
       };
 
@@ -615,7 +772,10 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
           taskId: job.id,
           kind: resolvedKind,
           ...(resolvedKind === "workflow"
-            ? { workflowId: resolvedWorkflowId, continueRunId: args.continueRunId }
+            ? {
+                workflowId: resolvedWorkflowId,
+                continueRunId: args.continueRunId,
+              }
             : resolvedKind === "op"
               ? { op: args.op }
               : { workerId: resolvedWorkerId }),
@@ -623,21 +783,31 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
           next: "task_await",
         },
         null,
-        2
+        2,
       );
     },
   });
 
   const taskAwait: ToolDefinition = tool({
-    description: "Wait for one (or many) task(s) to finish and return the final job record(s).",
+    description:
+      "Wait for one (or many) task(s) to finish and return the final job record(s).",
     args: {
-      taskId: tool.schema.string().optional().describe("Task id from task_start"),
-      taskIds: tool.schema.array(tool.schema.string()).optional().describe("Multiple task ids to await"),
-      timeoutMs: tool.schema.number().optional().describe("Timeout in ms (default: 10 minutes)"),
+      taskId: tool.schema
+        .string()
+        .optional()
+        .describe("Task id from task_start"),
+      taskIds: tool.schema
+        .array(tool.schema.string())
+        .optional()
+        .describe("Multiple task ids to await"),
+      timeoutMs: tool.schema
+        .number()
+        .optional()
+        .describe("Timeout in ms (default: 10 minutes)"),
     },
     async execute(args) {
       const timeoutMs = args.timeoutMs ?? 600_000;
-      const ids = args.taskId ? [args.taskId] : args.taskIds ?? [];
+      const ids = args.taskId ? [args.taskId] : (args.taskIds ?? []);
       if (ids.length === 0) return "Missing taskId/taskIds.";
 
       const results = await Promise.all(
@@ -651,7 +821,7 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
               error: err instanceof Error ? err.message : String(err),
             };
           }
-        })
+        }),
       );
 
       return JSON.stringify(ids.length === 1 ? results[0] : results, null, 2);
@@ -659,15 +829,21 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
   });
 
   const taskPeek: ToolDefinition = tool({
-    description: "Get the current status/result of one (or many) task(s) without waiting.",
+    description:
+      "Get the current status/result of one (or many) task(s) without waiting.",
     args: {
       taskId: tool.schema.string().optional().describe("Task id"),
-      taskIds: tool.schema.array(tool.schema.string()).optional().describe("Multiple task ids"),
+      taskIds: tool.schema
+        .array(tool.schema.string())
+        .optional()
+        .describe("Multiple task ids"),
     },
     async execute(args) {
-      const ids = args.taskId ? [args.taskId] : args.taskIds ?? [];
+      const ids = args.taskId ? [args.taskId] : (args.taskIds ?? []);
       if (ids.length === 0) return "Missing taskId/taskIds.";
-      const results = ids.map((id) => workerJobs.get(id) ?? { id, status: "unknown" });
+      const results = ids.map(
+        (id) => workerJobs.get(id) ?? { id, status: "unknown" },
+      );
       return JSON.stringify(ids.length === 1 ? results[0] : results, null, 2);
     },
   });
@@ -677,25 +853,50 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
       "List tasks (default) or other orchestrator resources via view=workers|profiles|models|workflows|status|output.",
     args: {
       view: tool.schema
-        .enum(["tasks", "workers", "profiles", "models", "workflows", "status", "output"])
+        .enum([
+          "tasks",
+          "workers",
+          "profiles",
+          "models",
+          "workflows",
+          "status",
+          "output",
+        ])
         .optional()
         .describe("What to list (default: tasks)"),
       workerId: tool.schema.string().optional().describe("Filter by worker id"),
-      limit: tool.schema.number().optional().describe("Max tasks to return (default: 20)"),
-      after: tool.schema.number().optional().describe("Only include events after this unix-ms timestamp (output view)"),
+      limit: tool.schema
+        .number()
+        .optional()
+        .describe("Max tasks to return (default: 20)"),
+      after: tool.schema
+        .number()
+        .optional()
+        .describe(
+          "Only include events after this unix-ms timestamp (output view)",
+        ),
       scope: tool.schema
         .enum(["configured", "all"])
         .optional()
-        .describe("models view: which providers to include (default: configured)"),
+        .describe(
+          "models view: which providers to include (default: configured)",
+        ),
       providers: tool.schema
         .array(tool.schema.string())
         .optional()
         .describe("models view: explicit provider allowlist (overrides scope)"),
-      query: tool.schema.string().optional().describe("models view: filter by substring"),
-      format: tool.schema.enum(["markdown", "json"]).optional().describe("Output format (default: markdown)"),
+      query: tool.schema
+        .string()
+        .optional()
+        .describe("models view: filter by substring"),
+      format: tool.schema
+        .enum(["markdown", "json"])
+        .optional()
+        .describe("Output format (default: markdown)"),
     },
     async execute(args) {
-      const format: "markdown" | "json" = args.format ?? context.defaultListFormat;
+      const format: "markdown" | "json" =
+        args.format ?? context.defaultListFormat;
       const view = args.view ?? "tasks";
 
       if (view === "workers") {
@@ -715,8 +916,19 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
           String(w.purpose ?? ""),
         ]);
         return renderMarkdownTable(
-          ["Worker", "Status", "Model Ref", "Model", "Policy", "Reason", "Vision", "Web", "Port", "Purpose"],
-          rows
+          [
+            "Worker",
+            "Status",
+            "Model Ref",
+            "Model",
+            "Policy",
+            "Reason",
+            "Vision",
+            "Web",
+            "Port",
+            "Purpose",
+          ],
+          rows,
         );
       }
 
@@ -741,16 +953,28 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
           p.supportsWeb ? "yes" : "no",
           p.purpose,
         ]);
-        return renderMarkdownTable(["ID", "Name", "Model", "Vision", "Web", "Purpose"], rows);
+        return renderMarkdownTable(
+          ["ID", "Name", "Model", "Vision", "Web", "Purpose"],
+          rows,
+        );
       }
 
       if (view === "workflows") {
-        if (context.workflows?.enabled === false) return "Workflows are disabled. Enable workflows.enabled in orchestrator.json.";
+        if (context.workflows?.enabled === false)
+          return "Workflows are disabled. Enable workflows.enabled in orchestrator.json.";
         const workflows = listWorkflows();
         if (format === "json") return JSON.stringify(workflows, null, 2);
         if (workflows.length === 0) return "No workflows registered.";
-        const rows = workflows.map((w) => [w.id, w.name, String(w.steps.length), w.description]);
-        return renderMarkdownTable(["ID", "Name", "Steps", "Description"], rows);
+        const rows = workflows.map((w) => [
+          w.id,
+          w.name,
+          String(w.steps.length),
+          w.description,
+        ]);
+        return renderMarkdownTable(
+          ["ID", "Name", "Steps", "Description"],
+          rows,
+        );
       }
 
       if (view === "models") {
@@ -760,7 +984,11 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
         const { providers } = await fetchProviders(client, context.directory);
         const scoped =
           args.providers && args.providers.length > 0
-            ? providers.filter((p) => args.providers!.some((id) => id.toLowerCase() === p.id.toLowerCase()))
+            ? providers.filter((p) =>
+                args.providers!.some(
+                  (id) => id.toLowerCase() === p.id.toLowerCase(),
+                ),
+              )
             : filterProviders(providers, args.scope ?? "configured");
 
         let models = flattenProviders(scoped);
@@ -771,7 +999,7 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
               m.full.toLowerCase().includes(q) ||
               m.providerID.toLowerCase().includes(q) ||
               m.modelID.toLowerCase().includes(q) ||
-              m.name.toLowerCase().includes(q)
+              m.name.toLowerCase().includes(q),
           );
         }
 
@@ -792,7 +1020,19 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
         ]);
 
         return [
-          renderMarkdownTable(["Model (provider/model)", "Name", "Ctx", "Vision", "Attach", "Tools", "Reason", "Status"], rows),
+          renderMarkdownTable(
+            [
+              "Model (provider/model)",
+              "Name",
+              "Ctx",
+              "Vision",
+              "Attach",
+              "Tools",
+              "Reason",
+              "Status",
+            ],
+            rows,
+          ),
           "",
           "Tip: You can pin a specific model in your profile config.",
         ].join("\n");
@@ -800,13 +1040,20 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
 
       if (view === "output") {
         const limit = Math.max(1, args.limit ?? 20);
-        const after = typeof args.after === "number" && Number.isFinite(args.after) ? args.after : 0;
+        const after =
+          typeof args.after === "number" && Number.isFinite(args.after)
+            ? args.after
+            : 0;
 
         const tasks = workerJobs
           .list({ limit: Math.max(limit, 50) })
-          .filter((t) => (after ? t.startedAt > after || (t.finishedAt ?? 0) > after : true))
+          .filter((t) =>
+            after ? t.startedAt > after || (t.finishedAt ?? 0) > after : true,
+          )
           .slice(0, limit);
-        const logs = getLogBuffer(Math.max(limit * 2, 50)).filter((l) => (after ? l.at > after : true));
+        const logs = getLogBuffer(Math.max(limit * 2, 50)).filter((l) =>
+          after ? l.at > after : true,
+        );
 
         const payload = { tasks, logs };
         if (format === "json") return JSON.stringify(payload, null, 2);
@@ -824,16 +1071,27 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
           .reverse()
           .slice(0, limit)
           .reverse()
-          .map((l) => [new Date(l.at).toISOString(), l.level, l.message.slice(0, 200)]);
+          .map((l) => [
+            new Date(l.at).toISOString(),
+            l.level,
+            l.message.slice(0, 200),
+          ]);
 
         return [
           "# Orchestrator Output",
           "",
           "## Tasks",
-          taskRows.length ? renderMarkdownTable(["Task", "Worker", "Status", "Started", "ms", "Message"], taskRows) : "(none)",
+          taskRows.length
+            ? renderMarkdownTable(
+                ["Task", "Worker", "Status", "Started", "ms", "Message"],
+                taskRows,
+              )
+            : "(none)",
           "",
           "## Logs",
-          logRows.length ? renderMarkdownTable(["Time", "Level", "Message"], logRows) : "(none)",
+          logRows.length
+            ? renderMarkdownTable(["Time", "Level", "Message"], logRows)
+            : "(none)",
         ].join("\n");
       }
 
@@ -865,12 +1123,18 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
           "",
           "## Workers",
           workerRows.length
-            ? renderMarkdownTable(["Worker", "Status", "Model", "Vision", "Web", "Port"], workerRows)
+            ? renderMarkdownTable(
+                ["Worker", "Status", "Model", "Vision", "Web", "Port"],
+                workerRows,
+              )
             : "(none)",
           "",
           "## Recent Tasks",
           taskRows.length
-            ? renderMarkdownTable(["Task", "Worker", "Status", "Started", "ms", "Message"], taskRows)
+            ? renderMarkdownTable(
+                ["Task", "Worker", "Status", "Started", "ms", "Message"],
+                taskRows,
+              )
             : "(none)",
         ].join("\n");
       }
@@ -888,24 +1152,36 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
         t.durationMs ? `${t.durationMs}` : "",
         (t.message ?? "").slice(0, 60).replace(/\s+/g, " "),
       ]);
-      return renderMarkdownTable(["Task", "Worker", "Status", "Started", "ms", "Message"], rows);
+      return renderMarkdownTable(
+        ["Task", "Worker", "Status", "Started", "ms", "Message"],
+        rows,
+      );
     },
   });
 
   const taskCancel: ToolDefinition = tool({
-    description: "Cancel a running task (best-effort; may not stop underlying worker execution).",
+    description:
+      "Cancel a running task (best-effort; may not stop underlying worker execution).",
     args: {
       taskId: tool.schema.string().optional().describe("Task id"),
-      taskIds: tool.schema.array(tool.schema.string()).optional().describe("Multiple task ids"),
-      reason: tool.schema.string().optional().describe("Optional cancel reason"),
+      taskIds: tool.schema
+        .array(tool.schema.string())
+        .optional()
+        .describe("Multiple task ids"),
+      reason: tool.schema
+        .string()
+        .optional()
+        .describe("Optional cancel reason"),
     },
     async execute(args) {
-      const ids = args.taskId ? [args.taskId] : args.taskIds ?? [];
+      const ids = args.taskId ? [args.taskId] : (args.taskIds ?? []);
       if (ids.length === 0) return "Missing taskId/taskIds.";
       for (const id of ids) {
         workerJobs.cancel(id, { reason: args.reason });
       }
-      return ids.length === 1 ? `Canceled task "${ids[0]}"` : `Canceled ${ids.length} task(s)`;
+      return ids.length === 1
+        ? `Canceled task "${ids[0]}"`
+        : `Canceled ${ids.length} task(s)`;
     },
   });
 

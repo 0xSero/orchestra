@@ -1,19 +1,34 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 import { createOpencode } from "@opencode-ai/sdk";
 import { mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
-import { setupE2eEnv } from "../helpers/e2e-env";
+import { createE2eEnv, type E2eEnv } from "../helpers/e2e-env";
 import { mergeOpenCodeConfig } from "../../src/config/opencode";
-import { spawnWorker, sendToWorker, stopWorker } from "../../src/workers/spawner";
+import {
+  spawnWorker,
+  sendToWorker,
+  stopWorker,
+} from "../../src/workers/spawner";
 import { workerPool } from "../../src/core/worker-pool";
 import type { WorkerProfile } from "../../src/types";
 
-const ORCH_MODEL = process.env.OPENCODE_ORCH_E2E_MODEL ?? "opencode/glm-4.7";
-const VISION_MODEL = process.env.OPENCODE_ORCH_E2E_MODEL ?? "opencode/gpt-5-nano";
+const ORCH_MODEL = process.env.OPENCODE_ORCH_E2E_MODEL ?? "opencode/gpt-5-nano";
+const VISION_MODEL =
+  process.env.OPENCODE_ORCH_E2E_MODEL ?? "opencode/gpt-5-nano";
 
-function createSolidPng(width: number, height: number, rgba: [number, number, number, number]) {
+function createSolidPng(
+  width: number,
+  height: number,
+  rgba: [number, number, number, number],
+) {
   const rowSize = 1 + width * 4;
   const raw = Buffer.alloc(rowSize * height);
   for (let y = 0; y < height; y += 1) {
@@ -51,7 +66,9 @@ function createSolidPng(width: number, height: number, rgba: [number, number, nu
     return Buffer.concat([len, typeBuf, data, crc]);
   };
 
-  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const signature = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  ]);
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
@@ -62,22 +79,30 @@ function createSolidPng(width: number, height: number, rgba: [number, number, nu
   ihdr[12] = 0; // interlace
 
   const idat = deflateSync(raw);
-  return Buffer.concat([signature, chunk("IHDR", ihdr), chunk("IDAT", idat), chunk("IEND", Buffer.alloc(0))]);
+  return Buffer.concat([
+    signature,
+    chunk("IHDR", ihdr),
+    chunk("IDAT", idat),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
 }
 
 const TEST_PNG_BUFFER = createSolidPng(64, 64, [255, 0, 0, 255]);
 const TEST_PNG_BASE64 = TEST_PNG_BUFFER.toString("base64");
 
 describe("vision worker integration", () => {
-  let restoreEnv: (() => void) | undefined;
+  let env: E2eEnv;
   let tempDir: string;
   let server: { close: () => void };
 
   beforeAll(async () => {
-    const env = await setupE2eEnv();
-    restoreEnv = env.restore;
-    tempDir = await mkdtemp(join(tmpdir(), "vision-e2e-"));
-    const config = await mergeOpenCodeConfig({ model: ORCH_MODEL }, { dropOrchestratorPlugin: true });
+    env = await createE2eEnv();
+    tempDir = await mkdtemp(join(env.root, "vision-e2e-"));
+    env.cleanup.registerDirectory(tempDir);
+    const config = await mergeOpenCodeConfig(
+      { model: ORCH_MODEL },
+      { dropOrchestratorPlugin: true },
+    );
     const opencode = await createOpencode({
       hostname: "127.0.0.1",
       port: 0,
@@ -87,9 +112,9 @@ describe("vision worker integration", () => {
     server = opencode.server;
   });
 
-  afterAll(() => {
+  afterAll(async () => {
     server?.close();
-    restoreEnv?.();
+    await env.restore();
   });
 
   afterEach(async () => {
@@ -99,70 +124,72 @@ describe("vision worker integration", () => {
     }
   });
 
-  test(
-    "spawns a vision worker and handles an image file",
-    async () => {
-      const profile: WorkerProfile = {
-        id: "vision",
-        name: "Vision",
-        model: VISION_MODEL,
-        purpose: "Image analysis",
-        whenToUse: "Testing vision flow",
-        supportsVision: true,
-      };
+  test("spawns a vision worker and handles an image file", async () => {
+    const profile: WorkerProfile = {
+      id: "vision",
+      name: "Vision",
+      model: VISION_MODEL,
+      purpose: "Image analysis",
+      whenToUse: "Testing vision flow",
+      supportsVision: true,
+    };
 
-      const imgPath = join(tempDir, "test-image.png");
-      await writeFile(imgPath, TEST_PNG_BUFFER);
+    const imgPath = join(tempDir, "test-image.png");
+    await writeFile(imgPath, TEST_PNG_BUFFER);
 
-      const worker = await spawnWorker(profile, {
-        basePort: 0,
-        timeout: 30_000,
-        directory: process.cwd(),
-      });
+    const worker = await spawnWorker(profile, {
+      basePort: 0,
+      timeout: 30_000,
+      directory: process.cwd(),
+    });
 
-      const result = await sendToWorker(worker.profile.id, "Describe what you see in this image.", {
+    const result = await sendToWorker(
+      worker.profile.id,
+      "Describe what you see in this image.",
+      {
         attachments: [{ type: "image", path: imgPath }],
         timeout: 120_000,
-      });
+      },
+    );
 
-      if (result.success) {
-        expect(result.response && result.response.length > 0).toBe(true);
-      } else {
-        expect(result.error && result.error.length > 0).toBe(true);
-      }
-    },
-    240_000
-  );
+    if (result.success) {
+      expect(result.response && result.response.length > 0).toBe(true);
+    } else {
+      expect(result.error && result.error.length > 0).toBe(true);
+    }
+  }, 240_000);
 
-  test(
-    "spawns a vision worker and handles a base64 image",
-    async () => {
-      const profile: WorkerProfile = {
-        id: "vision-b64",
-        name: "Vision Base64",
-        model: VISION_MODEL,
-        purpose: "Image analysis (base64)",
-        whenToUse: "Testing vision base64 flow",
-        supportsVision: true,
-      };
+  test("spawns a vision worker and handles a base64 image", async () => {
+    const profile: WorkerProfile = {
+      id: "vision-b64",
+      name: "Vision Base64",
+      model: VISION_MODEL,
+      purpose: "Image analysis (base64)",
+      whenToUse: "Testing vision base64 flow",
+      supportsVision: true,
+    };
 
-      const worker = await spawnWorker(profile, {
-        basePort: 0,
-        timeout: 30_000,
-        directory: process.cwd(),
-      });
+    const worker = await spawnWorker(profile, {
+      basePort: 0,
+      timeout: 30_000,
+      directory: process.cwd(),
+    });
 
-      const result = await sendToWorker(worker.profile.id, "What color is this image?", {
-        attachments: [{ type: "image", base64: TEST_PNG_BASE64, mimeType: "image/png" }],
+    const result = await sendToWorker(
+      worker.profile.id,
+      "What color is this image?",
+      {
+        attachments: [
+          { type: "image", base64: TEST_PNG_BASE64, mimeType: "image/png" },
+        ],
         timeout: 120_000,
-      });
+      },
+    );
 
-      if (result.success) {
-        expect(result.response && result.response.length > 0).toBe(true);
-      } else {
-        expect(result.error && result.error.length > 0).toBe(true);
-      }
-    },
-    240_000
-  );
+    if (result.success) {
+      expect(result.response && result.response.length > 0).toBe(true);
+    } else {
+      expect(result.error && result.error.length > 0).toBe(true);
+    }
+  }, 240_000);
 });

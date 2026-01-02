@@ -17,8 +17,16 @@ export type WorkflowRunDependencies = {
   sendToWorker: (
     workerId: string,
     message: string,
-    options: { attachments?: WorkflowRunInput["attachments"]; timeoutMs: number }
-  ) => Promise<{ success: boolean; response?: string; warning?: string; error?: string }>;
+    options: {
+      attachments?: WorkflowRunInput["attachments"];
+      timeoutMs: number;
+    },
+  ) => Promise<{
+    success: boolean;
+    response?: string;
+    warning?: string;
+    error?: string;
+  }>;
 };
 
 export function registerWorkflow(def: WorkflowDefinition) {
@@ -41,11 +49,19 @@ function applyTemplate(template: string, vars: Record<string, string>): string {
   return out;
 }
 
-const handoffSections = ["Summary", "Actions", "Artifacts", "Risks", "Next"] as const;
+const handoffSections = [
+  "Summary",
+  "Actions",
+  "Artifacts",
+  "Risks",
+  "Next",
+] as const;
 const carrySections = ["Summary", "Artifacts", "Risks", "Next"] as const;
 type HandoffSection = (typeof handoffSections)[number];
 type CarrySection = (typeof carrySections)[number];
-const handoffSectionMap = new Map(handoffSections.map((section) => [section.toLowerCase(), section]));
+const handoffSectionMap = new Map(
+  handoffSections.map((section) => [section.toLowerCase(), section]),
+);
 const carrySectionCaps: Record<CarrySection, number> = {
   Summary: 900,
   Artifacts: 1600,
@@ -79,7 +95,8 @@ function extractHandoffSections(text: string): Record<HandoffSection, string> {
   const lines = trimmed.split(/\r?\n/);
   let current: HandoffSection | undefined;
   let sawHeading = false;
-  const headingRegex = /^\s*(#{1,3}\s*)?(Summary|Actions|Artifacts|Risks|Next)\s*:?\s*$/i;
+  const headingRegex =
+    /^\s*(#{1,3}\s*)?(Summary|Actions|Artifacts|Risks|Next)\s*:?\s*$/i;
 
   for (const line of lines) {
     const match = line.match(headingRegex);
@@ -122,9 +139,15 @@ function truncateText(text: string, maxChars: number): string {
 
 function compactCarrySections(
   sections: Record<HandoffSection, string>,
-  maxCarryChars: number
-): { sections: Record<CarrySection, string>; truncatedSections: CarrySection[] } {
-  const totalCaps = Object.values(carrySectionCaps).reduce((sum, value) => sum + value, 0);
+  maxCarryChars: number,
+): {
+  sections: Record<CarrySection, string>;
+  truncatedSections: CarrySection[];
+} {
+  const totalCaps = Object.values(carrySectionCaps).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
   const scale = Math.min(1, maxCarryChars / (totalCaps + 200));
   const compacted = {} as Record<CarrySection, string>;
   const truncatedSections: CarrySection[] = [];
@@ -143,7 +166,7 @@ function compactCarrySections(
 function formatCarryBlock(
   stepTitle: string,
   responseText: string,
-  maxCarryChars: number
+  maxCarryChars: number,
 ): { text: string; truncated: boolean; truncatedSections: CarrySection[] } {
   const sections = extractHandoffSections(responseText);
   const compacted = compactCarrySections(sections, maxCarryChars);
@@ -159,7 +182,10 @@ function formatCarryBlock(
     .filter(Boolean);
 
   if (blocks.length === 0) {
-    const fallback = truncateText(responseText, Math.max(240, Math.floor(maxCarryChars / 4)));
+    const fallback = truncateText(
+      responseText,
+      Math.max(240, Math.floor(maxCarryChars / 4)),
+    );
     if (fallback.length < responseText.trim().length) truncated = true;
     blocks.push(`#### Summary\n${fallback || "None"}`);
   }
@@ -169,13 +195,19 @@ function formatCarryBlock(
     return { text: block, truncated, truncatedSections };
   }
 
-  const reducedCap = Math.max(60, Math.floor(maxCarryChars / (blocks.length * 2)));
+  const reducedCap = Math.max(
+    60,
+    Math.floor(maxCarryChars / (blocks.length * 2)),
+  );
   const reducedBlocks = blocks
     .map((sectionBlock) => truncateText(sectionBlock, reducedCap))
     .join("\n\n");
   const reduced = `### ${stepTitle}\n${reducedBlocks}`;
   truncated = true;
-  const finalText = reduced.length <= maxCarryChars ? reduced : truncateText(reduced, maxCarryChars);
+  const finalText =
+    reduced.length <= maxCarryChars
+      ? reduced
+      : truncateText(reduced, maxCarryChars);
   return { text: finalText, truncated, truncatedSections };
 }
 
@@ -183,16 +215,20 @@ function splitCarryBlocks(carry: string): string[] {
   const trimmed = carry.trim();
   if (!trimmed) return [];
   if (!trimmed.includes("### ")) return [trimmed];
-  return trimmed.split(/\n(?=###\s)/g).map((block) => block.trim()).filter(Boolean);
+  return trimmed
+    .split(/\n(?=###\s)/g)
+    .map((block) => block.trim())
+    .filter(Boolean);
 }
 
 function appendCarry(
   existing: string,
   next: string,
-  maxChars: number
+  maxChars: number,
 ): { text: string; droppedBlocks: number; truncated: boolean } {
   const blocks = [...splitCarryBlocks(existing), next].filter(Boolean);
-  if (blocks.length === 0) return { text: "", droppedBlocks: 0, truncated: false };
+  if (blocks.length === 0)
+    return { text: "", droppedBlocks: 0, truncated: false };
 
   const originalCount = blocks.length;
   while (blocks.join("\n\n").length > maxChars && blocks.length > 1) {
@@ -211,34 +247,56 @@ function appendCarry(
   };
 }
 
-function truncateResponse(text: string, maxChars = 1200): { value: string; truncated: boolean } {
+function truncateResponse(
+  text: string,
+  maxChars = 1200,
+): { value: string; truncated: boolean } {
   if (text.length <= maxChars) return { value: text, truncated: false };
   return { value: text.slice(0, maxChars), truncated: true };
 }
 
-async function buildStepPrompt(step: WorkflowStepDefinition, task: string, carry: string): Promise<string> {
+async function buildStepPrompt(
+  step: WorkflowStepDefinition,
+  task: string,
+  carry: string,
+): Promise<string> {
   const base = applyTemplate(step.prompt, { task, carry });
   return await expandPromptSnippets(base);
 }
 
-function resolveStepTimeout(step: WorkflowStepDefinition, limits: WorkflowRunInput["limits"]): number {
+function resolveStepTimeout(
+  step: WorkflowStepDefinition,
+  limits: WorkflowRunInput["limits"],
+): number {
   const requested =
-    typeof step.timeoutMs === "number" && Number.isFinite(step.timeoutMs) && step.timeoutMs > 0
+    typeof step.timeoutMs === "number" &&
+    Number.isFinite(step.timeoutMs) &&
+    step.timeoutMs > 0
       ? step.timeoutMs
       : limits.perStepTimeoutMs;
-  if (typeof limits.perStepTimeoutMs !== "number" || !Number.isFinite(limits.perStepTimeoutMs)) {
+  if (
+    typeof limits.perStepTimeoutMs !== "number" ||
+    !Number.isFinite(limits.perStepTimeoutMs)
+  ) {
     return requested;
   }
   return Math.min(requested, limits.perStepTimeoutMs);
 }
 
-export function validateWorkflowInput(input: WorkflowRunInput, workflow: WorkflowDefinition): void {
+export function validateWorkflowInput(
+  input: WorkflowRunInput,
+  workflow: WorkflowDefinition,
+): void {
   if (input.task.length > input.limits.maxTaskChars) {
-    throw new Error(`Task exceeds maxTaskChars (${input.limits.maxTaskChars}).`);
+    throw new Error(
+      `Task exceeds maxTaskChars (${input.limits.maxTaskChars}).`,
+    );
   }
 
   if (workflow.steps.length > input.limits.maxSteps) {
-    throw new Error(`Workflow has ${workflow.steps.length} steps (maxSteps=${input.limits.maxSteps}).`);
+    throw new Error(
+      `Workflow has ${workflow.steps.length} steps (maxSteps=${input.limits.maxSteps}).`,
+    );
   }
 }
 
@@ -253,7 +311,7 @@ export async function executeWorkflowStep(
     limits: WorkflowRunInput["limits"];
     attachments?: WorkflowRunInput["attachments"];
   },
-  deps: WorkflowRunDependencies
+  deps: WorkflowRunDependencies,
 ): Promise<{ step: WorkflowStepResult; response?: string; carry: string }> {
   const step = input.workflow.steps[input.stepIndex];
   const stepStarted = Date.now();
@@ -321,18 +379,25 @@ export async function executeWorkflowStep(
   });
 
   if (step.carry) {
-    const carryBlock = formatCarryBlock(step.title, response, input.limits.maxCarryChars);
-    const appended = appendCarry(input.carry, carryBlock.text, input.limits.maxCarryChars);
+    const carryBlock = formatCarryBlock(
+      step.title,
+      response,
+      input.limits.maxCarryChars,
+    );
+    const appended = appendCarry(
+      input.carry,
+      carryBlock.text,
+      input.limits.maxCarryChars,
+    );
 
     const trimmed =
-      carryBlock.truncated ||
-      appended.truncated ||
-      appended.droppedBlocks > 0;
+      carryBlock.truncated || appended.truncated || appended.droppedBlocks > 0;
 
     if (trimmed) {
-      const trimmedSections = carryBlock.truncatedSections.join(", ") || "summary";
+      const trimmedSections =
+        carryBlock.truncatedSections.join(", ") || "summary";
       logger.warn(
-        `[workflow] carry trimmed run=${input.runId} step=${step.id} dropped=${appended.droppedBlocks} sections=${trimmedSections}`
+        `[workflow] carry trimmed run=${input.runId} step=${step.id} dropped=${appended.droppedBlocks} sections=${trimmedSections}`,
       );
       publishOrchestratorEvent("orchestra.workflow.carry.trimmed", {
         runId: input.runId,
@@ -354,7 +419,7 @@ export async function executeWorkflowStep(
 
 export async function runWorkflow(
   input: WorkflowRunInput,
-  deps: WorkflowRunDependencies
+  deps: WorkflowRunDependencies,
 ): Promise<WorkflowRunResult> {
   const workflow = getWorkflow(input.workflowId);
   if (!workflow) {
@@ -389,7 +454,7 @@ export async function runWorkflow(
         limits: input.limits,
         attachments: input.attachments,
       },
-      deps
+      deps,
     );
     steps.push(executed.step);
     if (executed.step.status === "error") {
@@ -409,7 +474,11 @@ export async function runWorkflow(
     startedAt,
     finishedAt,
     durationMs: finishedAt - startedAt,
-    steps: { total: steps.length, success: steps.length - errorCount, error: errorCount },
+    steps: {
+      total: steps.length,
+      success: steps.length - errorCount,
+      error: errorCount,
+    },
   });
 
   return {

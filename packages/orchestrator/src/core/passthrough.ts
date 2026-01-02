@@ -8,12 +8,17 @@ export type PassthroughState = {
 
 const passthroughBySession = new Map<string, PassthroughState>();
 
-export function getPassthrough(sessionId: string | undefined): PassthroughState | undefined {
+export function getPassthrough(
+  sessionId: string | undefined,
+): PassthroughState | undefined {
   if (!sessionId) return undefined;
   return passthroughBySession.get(sessionId);
 }
 
-export function setPassthrough(sessionId: string, workerId: string): PassthroughState {
+export function setPassthrough(
+  sessionId: string,
+  workerId: string,
+): PassthroughState {
   const existing = passthroughBySession.get(sessionId);
   const next: PassthroughState = {
     workerId,
@@ -51,7 +56,9 @@ export function isPassthroughExitMessage(text: string): boolean {
   return exact.has(normalized);
 }
 
-export async function buildPassthroughSystemPrompt(workerId: string): Promise<string> {
+export async function buildPassthroughSystemPrompt(
+  workerId: string,
+): Promise<string> {
   const asyncContract = await loadPromptFile("snippets/async-contract.md");
   return (
     `<orchestrator-passthrough enabled="true" worker="${workerId}">\n` +

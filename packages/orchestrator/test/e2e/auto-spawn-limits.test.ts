@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { taskAwait, taskStart } from "../../src/command/tasks";
-import { setDirectory, setProfiles, setSpawnDefaults } from "../../src/command/state";
+import {
+  setDirectory,
+  setProfiles,
+  setSpawnDefaults,
+} from "../../src/command/state";
 import { shutdownAllWorkers } from "../../src/core/runtime";
 import type { WorkerProfile } from "../../src/types";
 
@@ -49,23 +53,26 @@ describe("task_start auto e2e", () => {
     await shutdownAllWorkers().catch(() => {});
   });
 
-  test(
-    "auto-spawns a worker and returns a real response",
-    async () => {
-      const ctx = { agent: "test", sessionID: "test-session", messageID: "msg" };
-      const started = await taskStart.execute(
-        { kind: "auto", task: "Reply with exactly: DELEGATE_OK", autoSpawn: true },
-        ctx as any
-      );
-      const { taskId } = JSON.parse(String(started));
-      expect(typeof taskId).toBe("string");
+  test("auto-spawns a worker and returns a real response", async () => {
+    const ctx = { agent: "test", sessionID: "test-session", messageID: "msg" };
+    const started = await taskStart.execute(
+      {
+        kind: "auto",
+        task: "Reply with exactly: DELEGATE_OK",
+        autoSpawn: true,
+      },
+      ctx as any,
+    );
+    const { taskId } = JSON.parse(String(started));
+    expect(typeof taskId).toBe("string");
 
-      const jobJson = await taskAwait.execute({ taskId, timeoutMs: 120_000 } as any, ctx as any);
-      const job = JSON.parse(String(jobJson));
-      expect(job.id).toBe(taskId);
-      expect(job.status).toBe("succeeded");
-      expect(job.responseText).toContain("DELEGATE_OK");
-    },
-    180_000
-  );
+    const jobJson = await taskAwait.execute(
+      { taskId, timeoutMs: 120_000 } as any,
+      ctx as any,
+    );
+    const job = JSON.parse(String(jobJson));
+    expect(job.id).toBe(taskId);
+    expect(job.status).toBe("succeeded");
+    expect(job.responseText).toContain("DELEGATE_OK");
+  }, 180_000);
 });

@@ -1,6 +1,6 @@
 /**
  * Repo Context - Gathers context about the repository for worker injection
- * 
+ *
  * Used primarily for the docs worker to understand the project it's helping with.
  */
 
@@ -34,9 +34,15 @@ export type RepoContext = {
   markdown: string;
 };
 
-function clampText(input: string, maxChars: number): { text: string; truncated: boolean } {
+function clampText(
+  input: string,
+  maxChars: number,
+): { text: string; truncated: boolean } {
   if (input.length <= maxChars) return { text: input, truncated: false };
-  return { text: input.slice(0, Math.max(0, maxChars)) + "\n\n...(truncated)\n", truncated: true };
+  return {
+    text: input.slice(0, Math.max(0, maxChars)) + "\n\n...(truncated)\n",
+    truncated: true,
+  };
 }
 
 function getGitInfo(directory: string): RepoContext["git"] | undefined {
@@ -108,7 +114,8 @@ function getDirectoryStructure(directory: string, maxItems = 30): string[] {
     for (const entry of sorted) {
       if (result.length >= maxItems) break;
       if (entry.startsWith(".") && entry !== ".github") continue;
-      if (entry === "node_modules" || entry === "dist" || entry === "build") continue;
+      if (entry === "node_modules" || entry === "dist" || entry === "build")
+        continue;
 
       try {
         const stat = statSync(join(directory, entry));
@@ -146,8 +153,10 @@ export async function getRepoContext(options: {
     try {
       const raw = await readFile(pkgPath, "utf8");
       packageJson = JSON.parse(raw);
-      if (packageJson && typeof packageJson.name === "string") name = packageJson.name;
-      if (packageJson && typeof packageJson.description === "string") description = packageJson.description;
+      if (packageJson && typeof packageJson.name === "string")
+        name = packageJson.name;
+      if (packageJson && typeof packageJson.description === "string")
+        description = packageJson.description;
     } catch {
       // Ignore parse errors
     }
@@ -204,18 +213,30 @@ export async function getRepoContext(options: {
 
   if (packageJson) {
     sections.push("## package.json (summary)");
-    const deps = Object.keys((packageJson.dependencies as Record<string, string>) ?? {});
-    const devDeps = Object.keys((packageJson.devDependencies as Record<string, string>) ?? {});
-    const scripts = Object.keys((packageJson.scripts as Record<string, string>) ?? {});
-    
+    const deps = Object.keys(
+      (packageJson.dependencies as Record<string, string>) ?? {},
+    );
+    const devDeps = Object.keys(
+      (packageJson.devDependencies as Record<string, string>) ?? {},
+    );
+    const scripts = Object.keys(
+      (packageJson.scripts as Record<string, string>) ?? {},
+    );
+
     if (scripts.length > 0) {
-      sections.push(`- Scripts: ${scripts.slice(0, 10).join(", ")}${scripts.length > 10 ? "..." : ""}`);
+      sections.push(
+        `- Scripts: ${scripts.slice(0, 10).join(", ")}${scripts.length > 10 ? "..." : ""}`,
+      );
     }
     if (deps.length > 0) {
-      sections.push(`- Dependencies: ${deps.slice(0, 10).join(", ")}${deps.length > 10 ? "..." : ""}`);
+      sections.push(
+        `- Dependencies: ${deps.slice(0, 10).join(", ")}${deps.length > 10 ? "..." : ""}`,
+      );
     }
     if (devDeps.length > 0) {
-      sections.push(`- Dev dependencies: ${devDeps.slice(0, 10).join(", ")}${devDeps.length > 10 ? "..." : ""}`);
+      sections.push(
+        `- Dev dependencies: ${devDeps.slice(0, 10).join(", ")}${devDeps.length > 10 ? "..." : ""}`,
+      );
     }
     sections.push("");
   }
@@ -253,7 +274,9 @@ export async function getRepoContext(options: {
  * Get repo context formatted for worker prompt injection.
  * Returns undefined if no context can be gathered.
  */
-export async function getRepoContextForWorker(directory: string): Promise<string | undefined> {
+export async function getRepoContextForWorker(
+  directory: string,
+): Promise<string | undefined> {
   const context = await getRepoContext({
     directory,
     maxReadmeChars: 6000,

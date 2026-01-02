@@ -20,7 +20,10 @@ import { join } from "node:path";
 import { writeJsonAtomic } from "../helpers/fs";
 import { getUserConfigDir } from "../helpers/format";
 import { isProcessAlive } from "../helpers/process";
-import { publishErrorEvent, publishWorkerStatusEvent } from "./orchestrator-events";
+import {
+  publishErrorEvent,
+  publishWorkerStatusEvent,
+} from "./orchestrator-events";
 import { fetchOpencodeConfig, fetchProviders } from "../models/catalog";
 import { resolveWorkerModel } from "../models/resolve";
 
@@ -28,7 +31,13 @@ import { resolveWorkerModel } from "../models/resolve";
 // Types
 // =============================================================================
 
-export type WorkerPoolEvent = "spawn" | "ready" | "busy" | "error" | "stop" | "update";
+export type WorkerPoolEvent =
+  | "spawn"
+  | "ready"
+  | "busy"
+  | "error"
+  | "stop"
+  | "update";
 export type WorkerPoolCallback = (instance: WorkerInstance) => void;
 
 export interface SpawnOptions {
@@ -87,7 +96,9 @@ export type DeviceRegistrySessionEntry = {
   updatedAt: number;
 };
 
-export type DeviceRegistryEntry = DeviceRegistryWorkerEntry | DeviceRegistrySessionEntry;
+export type DeviceRegistryEntry =
+  | DeviceRegistryWorkerEntry
+  | DeviceRegistrySessionEntry;
 
 type DeviceRegistryFile = {
   version: 1;
@@ -100,7 +111,11 @@ type DeviceRegistryFile = {
 // =============================================================================
 
 export function getDeviceRegistryPath(): string {
-  return join(getUserConfigDir(), "opencode", "orchestrator-device-registry.json");
+  return join(
+    getUserConfigDir(),
+    "opencode",
+    "orchestrator-device-registry.json",
+  );
 }
 
 async function readRegistryFile(path: string): Promise<DeviceRegistryFile> {
@@ -108,8 +123,12 @@ async function readRegistryFile(path: string): Promise<DeviceRegistryFile> {
     return { version: 1, updatedAt: Date.now(), entries: [] };
   }
   try {
-    const raw = JSON.parse(await readFile(path, "utf8")) as Partial<DeviceRegistryFile>;
-    const entries = Array.isArray(raw.entries) ? (raw.entries as DeviceRegistryEntry[]) : [];
+    const raw = JSON.parse(
+      await readFile(path, "utf8"),
+    ) as Partial<DeviceRegistryFile>;
+    const entries = Array.isArray(raw.entries)
+      ? (raw.entries as DeviceRegistryEntry[])
+      : [];
     return {
       version: 1,
       updatedAt: typeof raw.updatedAt === "number" ? raw.updatedAt : Date.now(),
@@ -120,11 +139,16 @@ async function readRegistryFile(path: string): Promise<DeviceRegistryFile> {
   }
 }
 
-async function writeRegistryFile(path: string, file: DeviceRegistryFile): Promise<void> {
+async function writeRegistryFile(
+  path: string,
+  file: DeviceRegistryFile,
+): Promise<void> {
   await writeJsonAtomic(path, file, { tmpPrefix: "opencode-orch-registry" });
 }
 
-export async function pruneDeadEntries(path = getDeviceRegistryPath()): Promise<void> {
+export async function pruneDeadEntries(
+  path = getDeviceRegistryPath(),
+): Promise<void> {
   const file = await readRegistryFile(path);
   const alive = file.entries.filter((e) => {
     if (e.kind === "worker") return isProcessAlive(e.pid);
@@ -132,22 +156,30 @@ export async function pruneDeadEntries(path = getDeviceRegistryPath()): Promise<
     return true;
   });
   if (alive.length === file.entries.length) return;
-  await writeRegistryFile(path, { version: 1, updatedAt: Date.now(), entries: alive });
+  await writeRegistryFile(path, {
+    version: 1,
+    updatedAt: Date.now(),
+    entries: alive,
+  });
 }
 
 export async function upsertWorkerEntry(
   entry: Omit<DeviceRegistryWorkerEntry, "kind" | "updatedAt">,
-  path = getDeviceRegistryPath()
+  path = getDeviceRegistryPath(),
 ): Promise<void> {
   const file = await readRegistryFile(path);
   const now = Date.now();
-  const next: DeviceRegistryWorkerEntry = { kind: "worker", updatedAt: now, ...entry };
+  const next: DeviceRegistryWorkerEntry = {
+    kind: "worker",
+    updatedAt: now,
+    ...entry,
+  };
   const idx = file.entries.findIndex(
     (e) =>
       e.kind === "worker" &&
       e.orchestratorInstanceId === entry.orchestratorInstanceId &&
       e.workerId === entry.workerId &&
-      e.pid === entry.pid
+      e.pid === entry.pid,
   );
   const entries = [...file.entries];
   if (idx >= 0) entries[idx] = next;
@@ -155,22 +187,34 @@ export async function upsertWorkerEntry(
   await writeRegistryFile(path, { version: 1, updatedAt: now, entries });
 }
 
-export async function removeWorkerEntriesByPid(pid: number, path = getDeviceRegistryPath()): Promise<void> {
+export async function removeWorkerEntriesByPid(
+  pid: number,
+  path = getDeviceRegistryPath(),
+): Promise<void> {
   const file = await readRegistryFile(path);
-  const entries = file.entries.filter((e) => !(e.kind === "worker" && e.pid === pid));
+  const entries = file.entries.filter(
+    (e) => !(e.kind === "worker" && e.pid === pid),
+  );
   if (entries.length === file.entries.length) return;
   await writeRegistryFile(path, { version: 1, updatedAt: Date.now(), entries });
 }
 
 export async function upsertSessionEntry(
   entry: Omit<DeviceRegistrySessionEntry, "kind" | "updatedAt">,
-  path = getDeviceRegistryPath()
+  path = getDeviceRegistryPath(),
 ): Promise<void> {
   const file = await readRegistryFile(path);
   const now = Date.now();
-  const next: DeviceRegistrySessionEntry = { kind: "session", updatedAt: now, ...entry };
+  const next: DeviceRegistrySessionEntry = {
+    kind: "session",
+    updatedAt: now,
+    ...entry,
+  };
   const idx = file.entries.findIndex(
-    (e) => e.kind === "session" && e.hostPid === entry.hostPid && e.sessionId === entry.sessionId
+    (e) =>
+      e.kind === "session" &&
+      e.hostPid === entry.hostPid &&
+      e.sessionId === entry.sessionId,
   );
   const entries = [...file.entries];
   if (idx >= 0) entries[idx] = next;
@@ -178,16 +222,27 @@ export async function upsertSessionEntry(
   await writeRegistryFile(path, { version: 1, updatedAt: now, entries });
 }
 
-export async function removeSessionEntry(sessionId: string, hostPid: number, path = getDeviceRegistryPath()): Promise<void> {
+export async function removeSessionEntry(
+  sessionId: string,
+  hostPid: number,
+  path = getDeviceRegistryPath(),
+): Promise<void> {
   const file = await readRegistryFile(path);
   const entries = file.entries.filter(
-    (e) => !(e.kind === "session" && e.hostPid === hostPid && e.sessionId === sessionId)
+    (e) =>
+      !(
+        e.kind === "session" &&
+        e.hostPid === hostPid &&
+        e.sessionId === sessionId
+      ),
   );
   if (entries.length === file.entries.length) return;
   await writeRegistryFile(path, { version: 1, updatedAt: Date.now(), entries });
 }
 
-export async function listDeviceRegistry(path = getDeviceRegistryPath()): Promise<DeviceRegistryEntry[]> {
+export async function listDeviceRegistry(
+  path = getDeviceRegistryPath(),
+): Promise<DeviceRegistryEntry[]> {
   await pruneDeadEntries(path).catch(() => {});
   const file = await readRegistryFile(path);
   return file.entries;
@@ -223,12 +278,13 @@ export class WorkerPool {
 
   private async resolveReuseFingerprint(
     profile: WorkerProfile,
-    options: SpawnOptions
+    options: SpawnOptions,
   ): Promise<{ model: string; policy: "dynamic" | "sticky" } | undefined> {
     const modelRef = profile.model?.trim();
     if (!modelRef) return undefined;
     const policy: "dynamic" | "sticky" = "dynamic";
-    const isNodeTag = modelRef.startsWith("auto") || modelRef.startsWith("node");
+    const isNodeTag =
+      modelRef.startsWith("auto") || modelRef.startsWith("node");
     if (!options.client) {
       if (modelRef.includes("/") && !isNodeTag) {
         return { model: modelRef, policy };
@@ -259,11 +315,18 @@ export class WorkerPool {
   async getOrSpawn(
     profile: WorkerProfile,
     options: SpawnOptions,
-    spawnFn: (profile: WorkerProfile, options: SpawnOptions) => Promise<WorkerInstance>
+    spawnFn: (
+      profile: WorkerProfile,
+      options: SpawnOptions,
+    ) => Promise<WorkerInstance>,
   ): Promise<WorkerInstance> {
     // Check in-memory registry first
     const existing = this.workers.get(profile.id);
-    if (existing && existing.status !== "error" && existing.status !== "stopped") {
+    if (
+      existing &&
+      existing.status !== "error" &&
+      existing.status !== "stopped"
+    ) {
       return existing;
     }
 
@@ -305,7 +368,7 @@ export class WorkerPool {
    */
   private async tryReuseFromDeviceRegistry(
     profile: WorkerProfile,
-    options: SpawnOptions
+    options: SpawnOptions,
   ): Promise<WorkerInstance | undefined> {
     try {
       const path = getDeviceRegistryPath();
@@ -322,7 +385,7 @@ export class WorkerPool {
           (e.status === "ready" || e.status === "busy") &&
           isProcessAlive(e.pid) &&
           e.model === expected.model &&
-          (e.modelPolicy ?? "dynamic") === expected.policy
+          (e.modelPolicy ?? "dynamic") === expected.policy,
       );
 
       if (candidates.length === 0) return undefined;
@@ -340,7 +403,7 @@ export class WorkerPool {
       const sessionsResult = await Promise.race([
         client.session.list({ query: { directory: options.directory } } as any),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Health check timeout")), 3000)
+          setTimeout(() => reject(new Error("Health check timeout")), 3000),
         ),
       ]);
 
@@ -355,15 +418,22 @@ export class WorkerPool {
         const fullSessions = await Promise.all(
           sessions.slice(0, 50).map(async (s) => {
             try {
-              const detail = await client.session.get({ path: { id: s.id }, query: { directory: options.directory } });
+              const detail = await client.session.get({
+                path: { id: s.id },
+                query: { directory: options.directory },
+              });
               return detail.data as { id: string; title?: string } | undefined;
             } catch {
               return undefined;
             }
-          })
-        ).then((results) => results.filter((s): s is { id: string; title?: string } => !!s));
+          }),
+        ).then((results) =>
+          results.filter((s): s is { id: string; title?: string } => !!s),
+        );
 
-        const workerSession = fullSessions.find((s) => s.title === workerSessionTitle);
+        const workerSession = fullSessions.find(
+          (s) => s.title === workerSessionTitle,
+        );
         if (workerSession) {
           sessionId = workerSession.id;
         } else {
@@ -378,7 +448,8 @@ export class WorkerPool {
 
       const instance: WorkerInstance = {
         profile: { ...profile, model: existing.model ?? profile.model },
-        kind: profile.kind ?? (profile.backend === "server" ? "server" : "agent"),
+        kind:
+          profile.kind ?? (profile.backend === "server" ? "server" : "agent"),
         execution: profile.execution,
         status: existing.status === "busy" ? "busy" : "ready",
         port: existing.port ?? 0,
@@ -449,13 +520,15 @@ export class WorkerPool {
 
   getVisionWorkers(): WorkerInstance[] {
     return Array.from(this.workers.values()).filter(
-      (w) => w.profile.supportsVision && (w.status === "ready" || w.status === "busy")
+      (w) =>
+        w.profile.supportsVision &&
+        (w.status === "ready" || w.status === "busy"),
     );
   }
 
   getActiveWorkers(): WorkerInstance[] {
     return Array.from(this.workers.values()).filter(
-      (w) => w.status === "ready" || w.status === "busy"
+      (w) => w.status === "ready" || w.status === "busy",
     );
   }
 
@@ -470,7 +543,8 @@ export class WorkerPool {
         w.profile.purpose.toLowerCase().includes(lowerCap) ||
         w.profile.whenToUse.toLowerCase().includes(lowerCap) ||
         w.profile.id.toLowerCase().includes(lowerCap) ||
-        (w.profile.tags?.some((t) => t.toLowerCase().includes(lowerCap)) ?? false)
+        (w.profile.tags?.some((t) => t.toLowerCase().includes(lowerCap)) ??
+          false),
     );
   }
 
@@ -568,7 +642,7 @@ export class WorkerPool {
           e.kind === "worker" &&
           e.orchestratorInstanceId === this.instanceId &&
           e.workerId === instance.profile.id &&
-          e.pid === instance.pid
+          e.pid === instance.pid,
       );
 
       const entries = [...file.entries];
@@ -585,9 +659,15 @@ export class WorkerPool {
     try {
       const path = getDeviceRegistryPath();
       const file = await readRegistryFile(path);
-      const entries = file.entries.filter((e) => !(e.kind === "worker" && e.pid === pid));
+      const entries = file.entries.filter(
+        (e) => !(e.kind === "worker" && e.pid === pid),
+      );
       if (entries.length === file.entries.length) return;
-      await writeRegistryFile(path, { version: 1, updatedAt: Date.now(), entries });
+      await writeRegistryFile(path, {
+        version: 1,
+        updatedAt: Date.now(),
+        entries,
+      });
     } catch {
       // Silent fail
     }
@@ -652,8 +732,12 @@ export class WorkerPool {
     }
 
     lines.push("## How to Use Workers");
-    lines.push("Use `task_start` to delegate work, then `task_await` to get results.");
-    lines.push("Example: task_start({ kind: 'worker', workerId: 'docs', task: 'Find docs for X' })");
+    lines.push(
+      "Use `task_start` to delegate work, then `task_await` to get results.",
+    );
+    lines.push(
+      "Example: task_start({ kind: 'worker', workerId: 'docs', task: 'Find docs for X' })",
+    );
     lines.push("");
 
     return lines.join("\n");
@@ -710,7 +794,7 @@ export class WorkerPool {
         } catch {
           // Ignore shutdown errors
         }
-      })
+      }),
     );
     this.workers.clear();
     this.sessionWorkers.clear();
@@ -747,8 +831,10 @@ export const registry = {
   register: (instance: WorkerInstance) => workerPool.register(instance),
   unregister: (id: string) => workerPool.unregister(id),
   getWorker: (id: string) => workerPool.get(id),
-  getWorkersByCapability: (cap: string) => workerPool.getWorkersByCapability(cap),
-  getWorkersByStatus: (status: WorkerStatus) => workerPool.getWorkersByStatus(status),
+  getWorkersByCapability: (cap: string) =>
+    workerPool.getWorkersByCapability(cap),
+  getWorkersByStatus: (status: WorkerStatus) =>
+    workerPool.getWorkersByStatus(status),
   getActiveWorkers: () => workerPool.getActiveWorkers(),
   getVisionWorkers: () => workerPool.getVisionWorkers(),
   updateStatus: (id: string, status: WorkerStatus, error?: string) =>
@@ -761,6 +847,8 @@ export const registry = {
     workerPool.off(event as WorkerPoolEvent, cb),
   trackOwnership: (sessionId: string | undefined, workerId: string) =>
     workerPool.trackOwnership(sessionId, workerId),
-  getWorkersForSession: (sessionId: string) => workerPool.getWorkersForSession(sessionId),
-  clearSessionOwnership: (sessionId: string) => workerPool.clearSessionOwnership(sessionId),
+  getWorkersForSession: (sessionId: string) =>
+    workerPool.getWorkersForSession(sessionId),
+  clearSessionOwnership: (sessionId: string) =>
+    workerPool.clearSessionOwnership(sessionId),
 };

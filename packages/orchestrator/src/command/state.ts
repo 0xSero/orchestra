@@ -2,7 +2,10 @@ import type { PluginInput } from "@opencode-ai/plugin";
 import type { OrchestratorConfig, WorkerProfile } from "../types";
 import { builtInProfiles } from "../config/profiles";
 import { workerPool } from "../core/worker-pool";
-import type { OrchestratorContext, ToolExecutionContext } from "../context/orchestrator-context";
+import type {
+  OrchestratorContext,
+  ToolExecutionContext,
+} from "../context/orchestrator-context";
 
 export type ToolContext = ToolExecutionContext;
 
@@ -21,7 +24,10 @@ const defaultContext: OrchestratorContext = {
   projectId: undefined,
   client: undefined,
   config: fallbackConfig,
-  spawnDefaults: { basePort: fallbackConfig.basePort, timeout: fallbackConfig.startupTimeout },
+  spawnDefaults: {
+    basePort: fallbackConfig.basePort,
+    timeout: fallbackConfig.startupTimeout,
+  },
   profiles: fallbackConfig.profiles,
   defaultListFormat: "markdown",
   workflows: undefined,
@@ -62,11 +68,15 @@ export function getDefaultListFormat(): "markdown" | "json" {
   return defaultContext.defaultListFormat;
 }
 
-export function getWorkflowsConfig(): OrchestratorConfig["workflows"] | undefined {
+export function getWorkflowsConfig():
+  | OrchestratorConfig["workflows"]
+  | undefined {
   return defaultContext.workflows;
 }
 
-export function getSecurityConfig(): OrchestratorConfig["security"] | undefined {
+export function getSecurityConfig():
+  | OrchestratorConfig["security"]
+  | undefined {
   return defaultContext.security;
 }
 
@@ -103,17 +113,24 @@ export function setProfiles(next: Record<string, WorkerProfile>) {
   };
 }
 
-export function setUiDefaults(input: { defaultListFormat?: "markdown" | "json" }) {
+export function setUiDefaults(input: {
+  defaultListFormat?: "markdown" | "json";
+}) {
   if (input.defaultListFormat) {
     defaultContext.defaultListFormat = input.defaultListFormat;
     defaultContext.config = {
       ...defaultContext.config,
-      ui: { ...(defaultContext.config.ui ?? {}), defaultListFormat: input.defaultListFormat },
+      ui: {
+        ...(defaultContext.config.ui ?? {}),
+        defaultListFormat: input.defaultListFormat,
+      },
     };
   }
 }
 
-export function setWorkflowConfig(next: OrchestratorConfig["workflows"] | undefined) {
+export function setWorkflowConfig(
+  next: OrchestratorConfig["workflows"] | undefined,
+) {
   defaultContext.workflows = next;
   defaultContext.config = {
     ...defaultContext.config,
@@ -121,7 +138,9 @@ export function setWorkflowConfig(next: OrchestratorConfig["workflows"] | undefi
   };
 }
 
-export function setSecurityConfig(next: OrchestratorConfig["security"] | undefined) {
+export function setSecurityConfig(
+  next: OrchestratorConfig["security"] | undefined,
+) {
   defaultContext.security = next;
   defaultContext.config = {
     ...defaultContext.config,

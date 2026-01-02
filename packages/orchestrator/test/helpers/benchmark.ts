@@ -1,6 +1,6 @@
 /**
  * Benchmark harness for performance testing
- * 
+ *
  * Provides utilities for running benchmarks with warmup iterations,
  * statistical analysis, and comparison capabilities.
  */
@@ -114,19 +114,19 @@ export interface PerformanceBaseline {
 
 /**
  * Run a benchmark with warmup and measurement iterations
- * 
+ *
  * @param name - Name of the benchmark
  * @param fn - Function to benchmark
  * @param options - Benchmark options
  * @returns Benchmark results with statistics
- * 
+ *
  * @example
  * ```typescript
  * const result = await benchmark('spawnWorker', async () => {
  *   const worker = await spawnWorker(profile);
  *   await stopWorker(worker.profile.id);
  * }, { iterations: 50, warmup: 5 });
- * 
+ *
  * console.log(`Mean: ${result.mean.toFixed(2)}ms`);
  * console.log(`P95: ${result.p95.toFixed(2)}ms`);
  * ```
@@ -134,7 +134,7 @@ export interface PerformanceBaseline {
 export async function benchmark(
   name: string,
   fn: () => Promise<void> | void,
-  options?: BenchmarkOptions
+  options?: BenchmarkOptions,
 ): Promise<BenchmarkResult> {
   const iterations = options?.iterations ?? 100;
   const warmup = options?.warmup ?? 5;
@@ -150,7 +150,10 @@ export async function benchmark(
       await Promise.race([
         result,
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error(`Warmup iteration ${i} timed out`)), timeout)
+          setTimeout(
+            () => reject(new Error(`Warmup iteration ${i} timed out`)),
+            timeout,
+          ),
         ),
       ]);
     }
@@ -165,7 +168,10 @@ export async function benchmark(
       await Promise.race([
         result,
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error(`Iteration ${i} timed out`)), timeout)
+          setTimeout(
+            () => reject(new Error(`Iteration ${i} timed out`)),
+            timeout,
+          ),
         ),
       ]);
     }
@@ -196,11 +202,11 @@ export async function benchmark(
 
 /**
  * Run a benchmark with full configuration including setup/teardown
- * 
+ *
  * @param config - Benchmark configuration
  * @param fn - Function to benchmark
  * @returns Benchmark results with statistics
- * 
+ *
  * @example
  * ```typescript
  * const result = await benchmarkWithConfig({
@@ -216,7 +222,7 @@ export async function benchmark(
  */
 export async function benchmarkWithConfig(
   config: BenchmarkConfig,
-  fn: () => Promise<void> | void
+  fn: () => Promise<void> | void,
 ): Promise<BenchmarkResult> {
   const warmupIterations = config.warmupIterations ?? 5;
   const measureIterations = config.measureIterations ?? 100;
@@ -295,12 +301,12 @@ export async function benchmarkWithConfig(
 
 /**
  * Compare two benchmark results and detect regression
- * 
+ *
  * @param baseline - Baseline benchmark result
  * @param current - Current benchmark result
  * @param options - Comparison options
  * @returns Comparison analysis
- * 
+ *
  * @example
  * ```typescript
  * const comparison = compareBenchmarks(baselineResult, currentResult);
@@ -317,7 +323,7 @@ export function compareBenchmarks(
     regressionThreshold?: number;
     /** Whether to use p95 instead of mean for comparison (default: true) */
     useP95?: boolean;
-  }
+  },
 ): BenchmarkComparison {
   const threshold = options?.regressionThreshold ?? 10;
   const useP95 = options?.useP95 ?? true;
@@ -325,7 +331,8 @@ export function compareBenchmarks(
   const baselineValue = useP95 ? baseline.p95 : baseline.mean;
   const currentValue = useP95 ? current.p95 : current.mean;
 
-  const improvementPercent = ((baselineValue - currentValue) / baselineValue) * 100;
+  const improvementPercent =
+    ((baselineValue - currentValue) / baselineValue) * 100;
   const regression = improvementPercent < -threshold;
 
   // Simple significance calculation based on standard deviation overlap
@@ -339,8 +346,8 @@ export function compareBenchmarks(
   };
 
   // Check for overlap
-  const overlap = 
-    currentRange.low <= baselineRange.high && 
+  const overlap =
+    currentRange.low <= baselineRange.high &&
     currentRange.high >= baselineRange.low;
 
   // Rough significance level (lower = more significant difference)
@@ -369,12 +376,12 @@ export function compareBenchmarks(
 
 /**
  * Run multiple benchmarks in a suite
- * 
+ *
  * @param name - Suite name
  * @param benchmarks - Map of benchmark names to functions
  * @param options - Shared options for all benchmarks
  * @returns Record of all benchmark results
- * 
+ *
  * @example
  * ```typescript
  * const results = await benchmarkSuite('io-operations', {
@@ -387,7 +394,7 @@ export function compareBenchmarks(
 export async function benchmarkSuite(
   name: string,
   benchmarks: Record<string, () => Promise<void> | void>,
-  options?: BenchmarkOptions
+  options?: BenchmarkOptions,
 ): Promise<Record<string, BenchmarkResult>> {
   const results: Record<string, BenchmarkResult> = {};
 
@@ -399,9 +406,9 @@ export async function benchmarkSuite(
     results[benchName] = result;
     console.log(
       `  Mean: ${result.mean.toFixed(2)}ms | ` +
-      `Median: ${result.median.toFixed(2)}ms | ` +
-      `P95: ${result.p95.toFixed(2)}ms | ` +
-      `Ops/s: ${result.opsPerSecond.toFixed(1)}`
+        `Median: ${result.median.toFixed(2)}ms | ` +
+        `P95: ${result.p95.toFixed(2)}ms | ` +
+        `Ops/s: ${result.opsPerSecond.toFixed(1)}`,
     );
   }
 
@@ -462,7 +469,7 @@ export function formatBenchmarkTable(results: BenchmarkResult[]): string {
  */
 export function createBaseline(
   version: string,
-  benchmarks: Record<string, BenchmarkResult>
+  benchmarks: Record<string, BenchmarkResult>,
 ): PerformanceBaseline {
   const spawnLatency = benchmarks["spawn-worker"];
   const registryRead = benchmarks["device-registry-read"];
@@ -498,7 +505,7 @@ export function createBaseline(
 export function detectRegressions(
   baseline: PerformanceBaseline,
   current: Record<string, BenchmarkResult>,
-  thresholdPercent = 10
+  thresholdPercent = 10,
 ): BenchmarkComparison[] {
   const regressions: BenchmarkComparison[] = [];
 

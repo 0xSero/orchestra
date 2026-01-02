@@ -1,4 +1,11 @@
-import { basename, extname, isAbsolute, join, relative, resolve } from "node:path";
+import {
+  basename,
+  extname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+} from "node:path";
 import { pathToFileURL } from "node:url";
 import { copyFile, mkdir, unlink, writeFile } from "node:fs/promises";
 
@@ -27,14 +34,18 @@ export async function buildPromptParts(input: {
   message: string;
   attachments?: WorkerAttachment[];
 }): Promise<Array<Record<string, unknown>>> {
-  const parts: Array<Record<string, unknown>> = [{ type: "text", text: input.message }];
+  const parts: Array<Record<string, unknown>> = [
+    { type: "text", text: input.message },
+  ];
 
   if (!input.attachments || input.attachments.length === 0) return parts;
 
   for (const attachment of input.attachments) {
     if (attachment.type !== "image") continue;
 
-    const mimeType = attachment.mimeType ?? (attachment.path ? inferImageMimeType(attachment.path) : "image/png");
+    const mimeType =
+      attachment.mimeType ??
+      (attachment.path ? inferImageMimeType(attachment.path) : "image/png");
     const filename = attachment.path ? basename(attachment.path) : undefined;
 
     // OpenCode message inputs accept images as FilePartInput:
@@ -43,13 +54,25 @@ export async function buildPromptParts(input: {
       const url = attachment.path.startsWith("file://")
         ? attachment.path
         : pathToFileURL(resolve(attachment.path)).toString();
-      parts.push({ type: "file", mime: mimeType, url, ...(filename ? { filename } : {}) });
+      parts.push({
+        type: "file",
+        mime: mimeType,
+        url,
+        ...(filename ? { filename } : {}),
+      });
       continue;
     }
 
-    const base64 = attachment.base64 ? normalizeBase64Image(attachment.base64) : undefined;
+    const base64 = attachment.base64
+      ? normalizeBase64Image(attachment.base64)
+      : undefined;
     if (!base64) continue;
-    parts.push({ type: "file", mime: mimeType, url: `data:${mimeType};base64,${base64}`, ...(filename ? { filename } : {}) });
+    parts.push({
+      type: "file",
+      mime: mimeType,
+      url: `data:${mimeType};base64,${base64}`,
+      ...(filename ? { filename } : {}),
+    });
   }
 
   return parts;
@@ -66,7 +89,10 @@ export async function prepareWorkerAttachments(input: {
   attachments?: WorkerAttachment[];
   baseDir: string;
   workerId: string;
-}): Promise<{ attachments?: WorkerAttachment[]; cleanup: () => Promise<void> }> {
+}): Promise<{
+  attachments?: WorkerAttachment[];
+  cleanup: () => Promise<void>;
+}> {
   if (!input.attachments || input.attachments.length === 0) {
     return { attachments: input.attachments, cleanup: async () => {} };
   }
@@ -106,7 +132,10 @@ export async function prepareWorkerAttachments(input: {
       }
       await ensureTempDir();
       const ext = extForMime(attachment.mimeType, attachment.path);
-      const dest = join(tempDir, `${input.workerId}-${Date.now()}-${counter++}${ext}`);
+      const dest = join(
+        tempDir,
+        `${input.workerId}-${Date.now()}-${counter++}${ext}`,
+      );
       await copyFile(attachment.path, dest);
       created.push(dest);
       normalized.push({ ...attachment, path: dest, base64: undefined });
@@ -116,11 +145,21 @@ export async function prepareWorkerAttachments(input: {
     if (attachment.base64) {
       await ensureTempDir();
       const ext = extForMime(attachment.mimeType);
-      const dest = join(tempDir, `${input.workerId}-${Date.now()}-${counter++}${ext}`);
-      const decoded = Buffer.from(normalizeBase64Image(attachment.base64), "base64");
+      const dest = join(
+        tempDir,
+        `${input.workerId}-${Date.now()}-${counter++}${ext}`,
+      );
+      const decoded = Buffer.from(
+        normalizeBase64Image(attachment.base64),
+        "base64",
+      );
       await writeFile(dest, decoded);
       created.push(dest);
-      normalized.push({ type: "image", path: dest, mimeType: attachment.mimeType });
+      normalized.push({
+        type: "image",
+        path: dest,
+        mimeType: attachment.mimeType,
+      });
       continue;
     }
 
@@ -137,7 +176,7 @@ export async function prepareWorkerAttachments(input: {
           } catch {
             // ignore
           }
-        })
+        }),
       );
     },
   };

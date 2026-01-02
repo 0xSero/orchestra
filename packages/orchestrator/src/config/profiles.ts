@@ -29,7 +29,8 @@ export const builtInProfiles: Record<string, WorkerProfile> = {
     name: "Documentation Librarian",
     backend: "server",
     model: "node:docs",
-    purpose: "Research documentation, find examples, explain APIs and libraries",
+    purpose:
+      "Research documentation, find examples, explain APIs and libraries",
     whenToUse:
       "When you need to look up official documentation, find code examples, understand library APIs, or research best practices",
     supportsWeb: true,
@@ -59,7 +60,8 @@ export const builtInProfiles: Record<string, WorkerProfile> = {
     name: "System Architect",
     backend: "server",
     model: "node",
-    purpose: "Design systems, plan implementations, review architecture decisions",
+    purpose:
+      "Design systems, plan implementations, review architecture decisions",
     whenToUse:
       "When you need to plan a complex feature, design system architecture, or make high-level technical decisions",
     tools: {
@@ -93,11 +95,18 @@ export const builtInProfiles: Record<string, WorkerProfile> = {
     name: "Memory Graph Curator",
     backend: "agent",
     model: "node",
-    purpose: "Maintain a Neo4j-backed memory graph (project + global) and advise on context pruning",
+    purpose:
+      "Maintain a Neo4j-backed memory graph (project + global) and advise on context pruning",
     whenToUse:
       "When you want to record durable project knowledge, track decisions and entities over time, or decide what context can be safely pruned",
     supportsWeb: true,
-    tags: ["memory", "neo4j", "knowledge-graph", "context-pruning", "summarization"],
+    tags: [
+      "memory",
+      "neo4j",
+      "knowledge-graph",
+      "context-pruning",
+      "summarization",
+    ],
     promptFile: "workers/memory.md",
   },
 };
@@ -107,7 +116,7 @@ export const builtInProfiles: Record<string, WorkerProfile> = {
  */
 export function getProfile(
   id: string,
-  customProfiles?: Record<string, WorkerProfile>
+  customProfiles?: Record<string, WorkerProfile>,
 ): WorkerProfile | undefined {
   return customProfiles?.[id] ?? builtInProfiles[id];
 }
@@ -117,7 +126,7 @@ export function getProfile(
  */
 export function mergeProfile(
   baseId: string,
-  overrides: Partial<WorkerProfile>
+  overrides: Partial<WorkerProfile>,
 ): WorkerProfile {
   const base = builtInProfiles[baseId];
   if (!base) {

@@ -3,7 +3,16 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 
 const ROOT = process.cwd();
-const includeExt = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".rs", ".css"]);
+const includeExt = new Set([
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+  ".rs",
+  ".css",
+]);
 const excludeDirs = new Set([
   "node_modules",
   "dist",
@@ -48,10 +57,7 @@ const walk = (dir) => {
 
 const countLines = (file) => {
   const data = fs.readFileSync(file, "utf8");
-  return data
-    .split(/\r?\n/)
-    .filter((line) => line.trim().length > 0)
-    .length;
+  return data.split(/\r?\n/).filter((line) => line.trim().length > 0).length;
 };
 
 const countTarget = (target) => {
@@ -59,7 +65,9 @@ const countTarget = (target) => {
   for (const rel of target.paths) {
     const abs = path.join(ROOT, rel);
     if (!fs.existsSync(abs)) continue;
-    const files = walk(abs).filter((file) => includeExt.has(path.extname(file)));
+    const files = walk(abs).filter((file) =>
+      includeExt.has(path.extname(file)),
+    );
     for (const file of files) total += countLines(file);
   }
   return total;
@@ -96,10 +104,13 @@ const tryPrintDiff = () => {
   for (const target of targets) {
     const diffArgs = target.paths.map((p) => `"${p}"`).join(" ");
     try {
-      const output = execSync(`git diff --numstat ${base}...HEAD -- ${diffArgs}`, {
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "ignore"],
-      });
+      const output = execSync(
+        `git diff --numstat ${base}...HEAD -- ${diffArgs}`,
+        {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        },
+      );
       let added = 0;
       let removed = 0;
       for (const line of output.trim().split("\n")) {

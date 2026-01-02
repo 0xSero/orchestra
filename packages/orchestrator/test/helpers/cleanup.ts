@@ -1,6 +1,6 @@
 /**
  * Test cleanup utilities
- * 
+ *
  * Provides robust cleanup management for test resources including
  * worker processes, temporary files, and directories.
  */
@@ -114,19 +114,19 @@ export interface CleanupError {
 
 /**
  * Create a new CleanupManager instance
- * 
+ *
  * @example
  * ```typescript
  * const cleanup = createCleanupManager();
- * 
+ *
  * // Register resources during test
  * const worker = await spawnWorker(profile);
  * cleanup.registerWorker(worker.pid!);
- * 
+ *
  * const tempFile = '/tmp/test.txt';
  * await writeFile(tempFile, 'test');
  * cleanup.registerFile(tempFile);
- * 
+ *
  * // Cleanup after test
  * const result = await cleanup.cleanupAll();
  * console.log(`Cleaned up ${result.killedWorkers.length} workers`);
@@ -203,7 +203,7 @@ export function createCleanupManager(): CleanupManager {
 
       // Sort by path length descending to remove nested dirs first
       const sortedDirs = Array.from(directories).sort(
-        (a, b) => b.length - a.length
+        (a, b) => b.length - a.length,
       );
 
       for (const path of sortedDirs) {
@@ -268,7 +268,7 @@ export function createCleanupManager(): CleanupManager {
 
       // Remove directories (sorted by depth, deepest first)
       const sortedDirs = Array.from(directories).sort(
-        (a, b) => b.length - a.length
+        (a, b) => b.length - a.length,
       );
 
       for (const path of sortedDirs) {
@@ -337,7 +337,7 @@ export function createCleanupManager(): CleanupManager {
 
 /**
  * Check if a process is alive
- * 
+ *
  * @param pid - Process ID to check
  * @returns true if process is running
  */
@@ -352,7 +352,7 @@ export async function isProcessAlive(pid: number): Promise<boolean> {
 
 /**
  * Kill a process by PID
- * 
+ *
  * @param pid - Process ID to kill
  * @param signal - Signal to send (default: SIGTERM)
  * @param timeout - Timeout in ms before SIGKILL (default: 5000)
@@ -360,7 +360,7 @@ export async function isProcessAlive(pid: number): Promise<boolean> {
 export async function killProcess(
   pid: number,
   signal: NodeJS.Signals = "SIGTERM",
-  timeout = 5000
+  timeout = 5000,
 ): Promise<void> {
   try {
     process.kill(pid, signal);
@@ -387,7 +387,7 @@ export async function killProcess(
 
 /**
  * Kill all OpenCode serve processes
- * 
+ *
  * @returns Array of PIDs that were killed
  */
 export async function killAllOpencodeProcesses(): Promise<number[]> {
@@ -408,12 +408,12 @@ export async function killAllOpencodeProcesses(): Promise<number[]> {
 
 /**
  * Kill OpenCode processes matching a filter
- * 
+ *
  * @param filter - Function to filter processes by args
  * @returns Array of PIDs that were killed
  */
 export async function killOpencodeProcessesMatching(
-  filter: (args: string) => boolean
+  filter: (args: string) => boolean,
 ): Promise<number[]> {
   const procs = await listOpencodeServeProcesses();
   const killed: number[] = [];
@@ -434,12 +434,12 @@ export async function killOpencodeProcessesMatching(
 
 /**
  * Wait for all OpenCode processes to terminate
- * 
+ *
  * @param timeout - Maximum wait time in ms (default: 30000)
  * @returns true if all processes terminated, false if timeout
  */
 export async function waitForOpencodeProcessesToTerminate(
-  timeout = 30000
+  timeout = 30000,
 ): Promise<boolean> {
   const startTime = Date.now();
 
@@ -481,7 +481,7 @@ export function resetGlobalCleanupManager(): void {
 
 /**
  * Register process exit handler to run cleanup
- * 
+ *
  * @param cleanup - CleanupManager to use (default: global)
  */
 export function registerExitHandler(cleanup?: CleanupManager): void {
@@ -519,14 +519,14 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * Cleanup guard for use with try/finally patterns
- * 
+ *
  * @example
  * ```typescript
  * const guard = createCleanupGuard();
  * try {
  *   const worker = await spawnWorker(profile);
  *   guard.registerWorker(worker.pid!);
- *   
+ *
  *   // ... test code ...
  * } finally {
  *   await guard.cleanup();

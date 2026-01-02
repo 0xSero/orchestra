@@ -36,7 +36,10 @@ function asStringArray(value: unknown): string[] | undefined {
   return undefined;
 }
 
-function deepMerge(base: Record<string, unknown>, override: Record<string, unknown>): Record<string, unknown> {
+function deepMerge(
+  base: Record<string, unknown>,
+  override: Record<string, unknown>,
+): Record<string, unknown> {
   const out: Record<string, unknown> = { ...base };
   for (const [k, v] of Object.entries(override)) {
     if (Array.isArray(v)) {
@@ -58,4 +61,13 @@ function getUserConfigDir(): string {
   return process.env.XDG_CONFIG_HOME || join(homedir(), ".config");
 }
 
-export { isPlainObject, asBooleanRecord, asStringArray, deepMerge, getUserConfigDir, parseArg, toNumber, sleep };
+export {
+  isPlainObject,
+  asBooleanRecord,
+  asStringArray,
+  deepMerge,
+  getUserConfigDir,
+  parseArg,
+  toNumber,
+  sleep,
+};

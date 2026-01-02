@@ -5,9 +5,13 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { shutdownAllWorkers } from "../../src/core/runtime";
 import { mergeOpenCodeConfig } from "../../src/config/opencode";
-import { spawnWorker, sendToWorker, stopWorker } from "../../src/workers/spawner";
+import {
+  spawnWorker,
+  sendToWorker,
+  stopWorker,
+} from "../../src/workers/spawner";
 import type { WorkerProfile } from "../../src/types";
-import { setupE2eEnv } from "../helpers/e2e-env";
+import { createE2eEnv, type E2eEnv } from "../helpers/e2e-env";
 
 const MODEL = process.env.OPENCODE_ORCH_E2E_MODEL ?? "opencode/gpt-5-nano";
 
@@ -17,7 +21,7 @@ const strictPrompt =
   "Reply with only the token.";
 
 describe("e2e (skills load)", () => {
-  let restoreEnv: (() => void) | undefined;
+  let env: E2eEnv;
   let tmpDir: string;
   let projectDir: string;
   let workDir: string;
@@ -29,8 +33,7 @@ describe("e2e (skills load)", () => {
   let originalHome: string | undefined;
 
   beforeAll(async () => {
-    const env = await setupE2eEnv();
-    restoreEnv = env.restore;
+    env = await createE2eEnv();
     originalHome = process.env.HOME;
     process.env.HOME = env.root;
 
@@ -39,7 +42,11 @@ describe("e2e (skills load)", () => {
       await mkdir(opencodeConfigDir, { recursive: true });
       await writeFile(
         join(opencodeConfigDir, "opencode.json"),
-        JSON.stringify({ permission: { skill: { "*": "allow" } }, tools: { skill: true } }, null, 2)
+        JSON.stringify(
+          { permission: { skill: { "*": "allow" } }, tools: { skill: true } },
+          null,
+          2,
+        ),
       );
     }
 
@@ -53,8 +60,18 @@ describe("e2e (skills load)", () => {
     tokenProject = randomUUID();
     tokenClaude = randomUUID();
 
-    const projectSkillDir = join(projectDir, ".opencode", "skill", "skill-project");
-    const claudeSkillDir = join(projectDir, ".claude", "skills", "skill-claude");
+    const projectSkillDir = join(
+      projectDir,
+      ".opencode",
+      "skill",
+      "skill-project",
+    );
+    const claudeSkillDir = join(
+      projectDir,
+      ".claude",
+      "skills",
+      "skill-claude",
+    );
     await Promise.all([
       mkdir(projectSkillDir, { recursive: true }),
       mkdir(claudeSkillDir, { recursive: true }),
@@ -63,11 +80,11 @@ describe("e2e (skills load)", () => {
     await Promise.all([
       writeFile(
         join(projectSkillDir, "SKILL.md"),
-        `---\nname: skill-project\ndescription: project skill\n---\nTOKEN: ${tokenProject}\n`
+        `---\nname: skill-project\ndescription: project skill\n---\nTOKEN: ${tokenProject}\n`,
       ),
       writeFile(
         join(claudeSkillDir, "SKILL.md"),
-        `---\nname: skill-claude\ndescription: claude skill\n---\nTOKEN: ${tokenClaude}\n`
+        `---\nname: skill-claude\ndescription: claude skill\n---\nTOKEN: ${tokenClaude}\n`,
       ),
     ]);
 
@@ -77,7 +94,7 @@ describe("e2e (skills load)", () => {
         permission: { skill: { "*": "allow" } },
         tools: { skill: true },
       },
-      { dropOrchestratorPlugin: true }
+      { dropOrchestratorPlugin: true },
     );
 
     const serverResult = await createOpencode({
@@ -89,10 +106,12 @@ describe("e2e (skills load)", () => {
     server = serverResult.server;
     client = serverResult.client;
 
-    const session = (await client!.session.create({
-      body: { title: "skills-parent" },
-      query: { directory: workDir },
-    })).data;
+    const session = (
+      await client!.session.create({
+        body: { title: "skills-parent" },
+        query: { directory: workDir },
+      })
+    ).data;
     if (!session?.id) throw new Error("Failed to create parent session");
     parentSessionId = session.id;
   }, 180_000);
@@ -101,7 +120,7 @@ describe("e2e (skills load)", () => {
     await shutdownAllWorkers().catch(() => {});
     await server?.close?.();
     if (tmpDir) await rm(tmpDir, { recursive: true, force: true });
-    restoreEnv?.();
+    await env.restore();
     if (originalHome === undefined) {
       process.env.HOME = undefined;
     } else {
@@ -109,83 +128,75 @@ describe("e2e (skills load)", () => {
     }
   }, 180_000);
 
-  test(
-    "subagent loads .opencode skill and returns token",
-    async () => {
-      const profile: WorkerProfile = {
-        id: "skill-subagent",
-        name: "Skill Subagent",
-        model: MODEL,
-        kind: "subagent",
-        purpose: "E2E skill test",
-        whenToUse: "E2E tests",
-        systemPrompt: strictPrompt,
-      };
+  test("subagent loads .opencode skill and returns token", async () => {
+    const profile: WorkerProfile = {
+      id: "skill-subagent",
+      name: "Skill Subagent",
+      model: MODEL,
+      kind: "subagent",
+      purpose: "E2E skill test",
+      whenToUse: "E2E tests",
+      systemPrompt: strictPrompt,
+    };
 
-      await spawnWorker(profile, {
-        basePort: 0,
-        timeout: 60_000,
-        directory: workDir,
-        client: client!,
-        parentSessionId,
-      });
+    await spawnWorker(profile, {
+      basePort: 0,
+      timeout: 60_000,
+      directory: workDir,
+      client: client!,
+      parentSessionId,
+    });
 
-      const res = await sendToWorker(
-        profile.id,
-        'Load skill "skill-project" and reply with the TOKEN exactly.',
-        { directory: workDir }
-      );
+    const res = await sendToWorker(
+      profile.id,
+      'Load skill "skill-project" and reply with the TOKEN exactly.',
+      { directory: workDir },
+    );
 
-      await stopWorker(profile.id);
+    await stopWorker(profile.id);
 
-      if (res.success) {
-        expect(res.response?.trim()).toBe(tokenProject);
-      } else {
-        expect(res.error && res.error.length > 0).toBe(true);
+    if (res.success) {
+      expect(res.response?.trim()).toBe(tokenProject);
+    } else {
+      expect(res.error && res.error.length > 0).toBe(true);
+    }
+  }, 180_000);
+
+  test("server worker loads .claude skill and returns token", async () => {
+    const profile: WorkerProfile = {
+      id: "skill-server",
+      name: "Skill Server",
+      model: MODEL,
+      kind: "server",
+      purpose: "E2E skill test",
+      whenToUse: "E2E tests",
+      systemPrompt: strictPrompt,
+      tools: { skill: true },
+    };
+
+    await spawnWorker(profile, {
+      basePort: 0,
+      timeout: 60_000,
+      directory: projectDir,
+      client: client!,
+    });
+
+    const res = await sendToWorker(
+      profile.id,
+      'Load skill "skill-claude" and reply with the TOKEN exactly.',
+      { directory: projectDir },
+    );
+
+    await stopWorker(profile.id);
+
+    if (res.success) {
+      const responseToken = res.response?.trim();
+      if (!responseToken) {
+        throw new Error("Missing response token from server worker");
       }
-    },
-    180_000
-  );
-
-  test(
-    "server worker loads .claude skill and returns token",
-    async () => {
-      const profile: WorkerProfile = {
-        id: "skill-server",
-        name: "Skill Server",
-        model: MODEL,
-        kind: "server",
-        purpose: "E2E skill test",
-        whenToUse: "E2E tests",
-        systemPrompt: strictPrompt,
-        tools: { skill: true },
-      };
-
-      await spawnWorker(profile, {
-        basePort: 0,
-        timeout: 60_000,
-        directory: projectDir,
-        client: client!,
-      });
-
-      const res = await sendToWorker(
-        profile.id,
-        'Load skill "skill-claude" and reply with the TOKEN exactly.',
-        { directory: projectDir }
-      );
-
-      await stopWorker(profile.id);
-
-      if (res.success) {
-        const responseToken = res.response?.trim();
-        if (!responseToken) {
-          throw new Error("Missing response token from server worker");
-        }
-        expect([tokenProject, tokenClaude]).toContain(responseToken);
-      } else {
-        expect(res.error && res.error.length > 0).toBe(true);
-      }
-    },
-    180_000
-  );
+      expect([tokenProject, tokenClaude]).toContain(responseToken);
+    } else {
+      expect(res.error && res.error.length > 0).toBe(true);
+    }
+  }, 180_000);
 });

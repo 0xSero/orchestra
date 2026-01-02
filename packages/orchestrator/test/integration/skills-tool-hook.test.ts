@@ -50,7 +50,7 @@ describe("skills event streaming", () => {
             source: "in-process",
             timestamp: Date.now(),
           });
-        }
+        },
       );
       req.on("error", reject);
       req.end();

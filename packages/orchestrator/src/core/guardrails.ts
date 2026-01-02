@@ -4,7 +4,7 @@ const DEFAULT_PENDING_TASK_LIMIT = 5;
 
 export function buildPendingTaskReminder(
   sessionId: string | undefined,
-  options?: { limit?: number }
+  options?: { limit?: number },
 ): string | undefined {
   if (!sessionId) return undefined;
   const pending = workerJobs.list({
@@ -35,14 +35,21 @@ export function buildPendingTaskReminder(
   ].join("\n");
 }
 
-const legacyToolPattern = /\b(run_workflow|list_workflows|continue_workflow|ask_worker_async|ask_worker|await_worker_job|get_worker_job|list_worker_jobs|spawn_worker|delegate_task|list_workers|list_profiles|list_models|orchestrator_output|orchestrator_results|orchestrator_status)\s*\(/i;
-const legacyToolMentionPattern = /\b(run_workflow|list_workflows|continue_workflow|ask_worker_async|ask_worker|await_worker_job|get_worker_job|list_worker_jobs|spawn_worker|delegate_task|list_workers|list_profiles|list_models|orchestrator_output|orchestrator_results|orchestrator_status)\b/i;
-const deniedToolPattern = /\b(unknown tool|tool not found|not allowed|permission denied|access denied)\b/i;
+const legacyToolPattern =
+  /\b(run_workflow|list_workflows|continue_workflow|ask_worker_async|ask_worker|await_worker_job|get_worker_job|list_worker_jobs|spawn_worker|delegate_task|list_workers|list_profiles|list_models|orchestrator_output|orchestrator_results|orchestrator_status)\s*\(/i;
+const legacyToolMentionPattern =
+  /\b(run_workflow|list_workflows|continue_workflow|ask_worker_async|ask_worker|await_worker_job|get_worker_job|list_worker_jobs|spawn_worker|delegate_task|list_workers|list_profiles|list_models|orchestrator_output|orchestrator_results|orchestrator_status)\b/i;
+const deniedToolPattern =
+  /\b(unknown tool|tool not found|not allowed|permission denied|access denied)\b/i;
 
 export function needsLegacyToolCorrection(text: string | undefined): boolean {
   if (!text) return false;
   if (text.includes("[ORCHESTRATOR GUARDRAIL]")) return false;
-  return legacyToolPattern.test(text) || legacyToolMentionPattern.test(text) || deniedToolPattern.test(text);
+  return (
+    legacyToolPattern.test(text) ||
+    legacyToolMentionPattern.test(text) ||
+    deniedToolPattern.test(text)
+  );
 }
 
 export function buildLegacyToolCorrectionHint(): string {

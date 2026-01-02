@@ -3,7 +3,11 @@ import { createServer } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { upsertWorkerEntry, workerPool, type SpawnOptions } from "../../src/core/worker-pool";
+import {
+  upsertWorkerEntry,
+  workerPool,
+  type SpawnOptions,
+} from "../../src/core/worker-pool";
 import type { WorkerInstance, WorkerProfile } from "../../src/types";
 
 const createProfile = (id: string, model: string): WorkerProfile => ({
@@ -89,11 +93,15 @@ describe("worker reuse model compatibility", () => {
       });
 
       const { spawnFn, wasSpawned } = createSpawnFn();
-      const instance = await workerPool.getOrSpawn(profile, {
-        basePort: 0,
-        timeout: 1000,
-        directory: process.cwd(),
-      }, spawnFn);
+      const instance = await workerPool.getOrSpawn(
+        profile,
+        {
+          basePort: 0,
+          timeout: 1000,
+          directory: process.cwd(),
+        },
+        spawnFn,
+      );
 
       expect(wasSpawned()).toBe(false);
       expect(instance.serverUrl).toBe(server.url);
@@ -130,11 +138,15 @@ describe("worker reuse model compatibility", () => {
       });
 
       const { spawnFn, wasSpawned } = createSpawnFn();
-      const instance = await workerPool.getOrSpawn(profile, {
-        basePort: 0,
-        timeout: 1000,
-        directory: process.cwd(),
-      }, spawnFn);
+      const instance = await workerPool.getOrSpawn(
+        profile,
+        {
+          basePort: 0,
+          timeout: 1000,
+          directory: process.cwd(),
+        },
+        spawnFn,
+      );
 
       expect(wasSpawned()).toBe(true);
       expect(instance.profile.model).toBe(profile.model);
@@ -170,12 +182,16 @@ describe("worker reuse model compatibility", () => {
       });
 
       const { spawnFn, wasSpawned } = createSpawnFn();
-      const instance = await workerPool.getOrSpawn(profile, {
-        basePort: 0,
-        timeout: 1000,
-        directory: process.cwd(),
-        forceNew: true,
-      }, spawnFn);
+      const instance = await workerPool.getOrSpawn(
+        profile,
+        {
+          basePort: 0,
+          timeout: 1000,
+          directory: process.cwd(),
+          forceNew: true,
+        },
+        spawnFn,
+      );
 
       expect(wasSpawned()).toBe(true);
       expect(instance.profile.model).toBe(profile.model);

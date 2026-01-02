@@ -42,13 +42,22 @@ describe("hydrateProfileModelsFromOpencode", () => {
       id: "cfg",
       source: "config",
       models: {
-        "fast-small": { name: "fast-small", cost: { input: 5, output: 0, cache: { read: 0, write: 0 } } },
-        "fast-ultra": { name: "fast-ultra", limit: { context: 128000, output: 0 } },
+        "fast-small": {
+          name: "fast-small",
+          cost: { input: 5, output: 0, cache: { read: 0, write: 0 } },
+        },
+        "fast-ultra": {
+          name: "fast-ultra",
+          limit: { context: 128000, output: 0 },
+        },
       },
     });
 
     const client = createClient({
-      config: { model: "cfg/fast-ultra", small_model: "cfg/fast-small" } as Config,
+      config: {
+        model: "cfg/fast-ultra",
+        small_model: "cfg/fast-small",
+      } as Config,
       providersConfig: [configured],
       providersList: [configured],
     });
@@ -77,8 +86,14 @@ describe("hydrateProfileModelsFromOpencode", () => {
       id: "cfg",
       source: "config",
       models: {
-        "fast-small": { name: "fast-small", cost: { input: 5, output: 0, cache: { read: 0, write: 0 } } },
-        "fast-ultra": { name: "fast-ultra", limit: { context: 128000, output: 0 } },
+        "fast-small": {
+          name: "fast-small",
+          cost: { input: 5, output: 0, cache: { read: 0, write: 0 } },
+        },
+        "fast-ultra": {
+          name: "fast-ultra",
+          limit: { context: 128000, output: 0 },
+        },
       },
     });
 
@@ -112,7 +127,12 @@ describe("hydrateProfileModelsFromOpencode", () => {
       id: "api",
       source: "api",
       key: "token",
-      models: { "fast-ultra": { name: "fast-ultra", limit: { context: 128000, output: 0 } } },
+      models: {
+        "fast-ultra": {
+          name: "fast-ultra",
+          limit: { context: 128000, output: 0 },
+        },
+      },
     });
 
     const client = createClient({
@@ -144,13 +164,21 @@ describe("hydrateProfileModelsFromOpencode", () => {
       id: "cfg",
       source: "config",
       models: {
-        "steady-large": { name: "steady-large", cost: { input: 10, output: 0, cache: { read: 0, write: 0 } } },
+        "steady-large": {
+          name: "steady-large",
+          cost: { input: 10, output: 0, cache: { read: 0, write: 0 } },
+        },
       },
     });
     const api = makeProvider({
       id: "api",
       source: "api",
-      models: { "fast-ultra": { name: "fast-ultra", limit: { context: 128000, output: 0 } } },
+      models: {
+        "fast-ultra": {
+          name: "fast-ultra",
+          limit: { context: 128000, output: 0 },
+        },
+      },
     });
 
     const client = createClient({
@@ -189,7 +217,10 @@ describe("hydrateProfileModelsFromOpencode", () => {
       source: "api",
       key: "token",
       models: {
-        "slow-ultra": { name: "slow-ultra", cost: { input: 10, output: 0, cache: { read: 0, write: 0 } } },
+        "slow-ultra": {
+          name: "slow-ultra",
+          cost: { input: 10, output: 0, cache: { read: 0, write: 0 } },
+        },
       },
     });
 

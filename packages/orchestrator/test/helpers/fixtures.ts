@@ -1,6 +1,6 @@
 /**
  * Test fixtures management utilities
- * 
+ *
  * Provides loading, creation, and cleanup of test fixtures including
  * configuration files, worker profiles, and temporary directories.
  */
@@ -83,17 +83,17 @@ export const DEFAULT_TEST_PROFILE: WorkerProfile = {
 
 /**
  * Create a test fixtures manager
- * 
+ *
  * @example
  * ```typescript
  * const fixtures = createTestFixtures();
- * 
+ *
  * // Load a config
  * const config = await fixtures.loadConfig('default');
- * 
+ *
  * // Create a temp dir for test files
  * const tempDir = await fixtures.createTempDir();
- * 
+ *
  * // Cleanup after test
  * await fixtures.cleanup();
  * ```
@@ -104,12 +104,16 @@ export function createTestFixtures(): TestFixtures {
 
   return {
     async loadConfig(name: string): Promise<OrchestratorConfig> {
-      const configPath = join(fixturesDir, "orchestrator-configs", `${name}.json`);
-      
+      const configPath = join(
+        fixturesDir,
+        "orchestrator-configs",
+        `${name}.json`,
+      );
+
       try {
         const content = await readFile(configPath, "utf-8");
         const parsed = JSON.parse(content);
-        
+
         // Merge with defaults to ensure all required fields exist
         return {
           ...DEFAULT_TEST_CONFIG,
@@ -133,11 +137,11 @@ export function createTestFixtures(): TestFixtures {
 
     async loadProfile(name: string): Promise<WorkerProfile> {
       const profilePath = join(fixturesDir, "profiles", `${name}.json`);
-      
+
       try {
         const content = await readFile(profilePath, "utf-8");
         const parsed = JSON.parse(content);
-        
+
         // Merge with defaults to ensure all required fields exist
         return {
           ...DEFAULT_TEST_PROFILE,
@@ -154,10 +158,10 @@ export function createTestFixtures(): TestFixtures {
     async createTempDir(): Promise<string> {
       const tempBase = join(process.cwd(), ".tmp");
       await mkdir(tempBase, { recursive: true });
-      
+
       const tempDir = await mkdtemp(join(tempBase, "test-fixture-"));
       tempDirs.push(tempDir);
-      
+
       return tempDir;
     },
 
@@ -167,7 +171,7 @@ export function createTestFixtures(): TestFixtures {
 
     async listConfigs(): Promise<string[]> {
       const configDir = join(fixturesDir, "orchestrator-configs");
-      
+
       try {
         const files = await readdir(configDir);
         return files
@@ -180,7 +184,7 @@ export function createTestFixtures(): TestFixtures {
 
     async listProfiles(): Promise<string[]> {
       const profileDir = join(fixturesDir, "profiles");
-      
+
       try {
         const files = await readdir(profileDir);
         return files
@@ -193,7 +197,7 @@ export function createTestFixtures(): TestFixtures {
 
     async cleanup(): Promise<void> {
       const errors: Error[] = [];
-      
+
       for (const dir of tempDirs) {
         try {
           if (existsSync(dir)) {
@@ -203,10 +207,10 @@ export function createTestFixtures(): TestFixtures {
           errors.push(error as Error);
         }
       }
-      
+
       // Clear the array
       tempDirs.length = 0;
-      
+
       if (errors.length > 0) {
         console.warn(`Fixture cleanup had ${errors.length} errors:`, errors);
       }
@@ -216,11 +220,11 @@ export function createTestFixtures(): TestFixtures {
 
 /**
  * Create a test worker profile with custom overrides
- * 
+ *
  * @param id - Profile ID
  * @param overrides - Optional overrides for profile properties
  * @returns A complete WorkerProfile
- * 
+ *
  * @example
  * ```typescript
  * const profile = createTestProfile('my-worker', {
@@ -231,7 +235,7 @@ export function createTestFixtures(): TestFixtures {
  */
 export function createTestProfile(
   id: string,
-  overrides?: Partial<WorkerProfile>
+  overrides?: Partial<WorkerProfile>,
 ): WorkerProfile {
   return {
     ...DEFAULT_TEST_PROFILE,
@@ -243,10 +247,10 @@ export function createTestProfile(
 
 /**
  * Create a test configuration with custom overrides
- * 
+ *
  * @param overrides - Optional overrides for config properties
  * @returns A complete OrchestratorConfig
- * 
+ *
  * @example
  * ```typescript
  * const config = createTestConfig({
@@ -256,7 +260,7 @@ export function createTestProfile(
  * ```
  */
 export function createTestConfig(
-  overrides?: Partial<OrchestratorConfig>
+  overrides?: Partial<OrchestratorConfig>,
 ): OrchestratorConfig {
   return {
     ...DEFAULT_TEST_CONFIG,
@@ -285,7 +289,7 @@ export type ProviderScenario =
 
 /**
  * Create mock providers for different test scenarios
- * 
+ *
  * @param scenario - The provider scenario to create
  * @returns Array of mock provider configurations
  */
@@ -419,7 +423,7 @@ export function createMockProviders(scenario: ProviderScenario): Array<{
 
 /**
  * Create sample device registry entries for testing
- * 
+ *
  * @param count - Number of entries to create
  * @returns Array of mock device registry entries
  */
@@ -455,7 +459,7 @@ export function createMockDeviceRegistryEntries(count: number): Array<{
 
 /**
  * Create mock job entries for testing job registry
- * 
+ *
  * @param count - Number of jobs to create
  * @param options - Optional configuration
  * @returns Array of mock job entries
@@ -465,7 +469,7 @@ export function createMockJobs(
   options?: {
     completed?: boolean;
     olderThanHours?: number;
-  }
+  },
 ): Array<{
   id: string;
   workerId: string;
@@ -490,7 +494,7 @@ export function createMockJobs(
 
   for (let i = 0; i < count; i++) {
     const createdAt = new Date(
-      now.getTime() - (hoursOffset + i) * 60 * 60 * 1000
+      now.getTime() - (hoursOffset + i) * 60 * 60 * 1000,
     );
 
     const job: {
@@ -510,9 +514,7 @@ export function createMockJobs(
     };
 
     if (options?.completed) {
-      job.completedAt = new Date(
-        createdAt.getTime() + 5000
-      ).toISOString();
+      job.completedAt = new Date(createdAt.getTime() + 5000).toISOString();
       job.result = `Result for task ${i}`;
     }
 

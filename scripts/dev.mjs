@@ -4,7 +4,10 @@ import path from "node:path";
 const root = process.cwd();
 const desktopArg = process.argv.includes("--desktop");
 const shouldStartDesktop =
-  desktopArg || ["1", "true", "yes"].includes(String(process.env.DESKTOP || "").toLowerCase());
+  desktopArg ||
+  ["1", "true", "yes"].includes(
+    String(process.env.DESKTOP || "").toLowerCase(),
+  );
 
 const processes = [];
 let shuttingDown = false;
@@ -44,5 +47,7 @@ run("control-panel", "bun", ["run", "dev"], "apps/control-panel");
 if (shouldStartDesktop) {
   run("desktop", "bun", ["run", "tauri", "dev"], "apps/desktop");
 } else {
-  console.log("[dev] Desktop not started. Run with DESKTOP=1 or --desktop to launch Tauri.");
+  console.log(
+    "[dev] Desktop not started. Run with DESKTOP=1 or --desktop to launch Tauri.",
+  );
 }

@@ -33,14 +33,23 @@ describe("resolveWorkerModel", () => {
       id: "cfg",
       source: "config",
       models: {
-        "fast-small": { name: "fast-small", cost: { input: 5, output: 0, cache: { read: 0, write: 0 } } },
-        "fast-ultra": { name: "fast-ultra", limit: { context: 128000, output: 0 } },
+        "fast-small": {
+          name: "fast-small",
+          cost: { input: 5, output: 0, cache: { read: 0, write: 0 } },
+        },
+        "fast-ultra": {
+          name: "fast-ultra",
+          limit: { context: 128000, output: 0 },
+        },
       },
     });
 
     const resolved = resolveWorkerModel({
       profile: makeProfile("node:fast"),
-      config: { model: "cfg/fast-ultra", small_model: "cfg/fast-small" } as Config,
+      config: {
+        model: "cfg/fast-ultra",
+        small_model: "cfg/fast-small",
+      } as Config,
       providers: [configured],
     });
 
@@ -52,7 +61,12 @@ describe("resolveWorkerModel", () => {
     const configured = makeProvider({
       id: "cfg",
       source: "config",
-      models: { "fast-ultra": { name: "fast-ultra", limit: { context: 128000, output: 0 } } },
+      models: {
+        "fast-ultra": {
+          name: "fast-ultra",
+          limit: { context: 128000, output: 0 },
+        },
+      },
     });
 
     const resolved = resolveWorkerModel({
@@ -62,7 +76,9 @@ describe("resolveWorkerModel", () => {
     });
 
     expect(resolved.resolvedModel).toBe("cfg/fast-ultra");
-    expect(resolved.reason).toBe("auto-selected from configured models (node:fast)");
+    expect(resolved.reason).toBe(
+      "auto-selected from configured models (node:fast)",
+    );
   });
 
   test("accepts explicit api provider models without key", () => {

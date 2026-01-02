@@ -19,13 +19,20 @@ function escapeAppleScriptString(input: string): string {
   return input.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-async function sendNotification(ctx: PluginInput, platform: Platform, title: string, message: string): Promise<void> {
+async function sendNotification(
+  ctx: PluginInput,
+  platform: Platform,
+  title: string,
+  message: string,
+): Promise<void> {
   if (platform === "unsupported") return;
 
   if (platform === "darwin") {
     const t = escapeAppleScriptString(title);
     const m = escapeAppleScriptString(message);
-    await ctx.$`osascript -e ${`display notification "${m}" with title "${t}"`}`.catch(() => {});
+    await ctx.$`osascript -e ${`display notification "${m}" with title "${t}"`}`.catch(
+      () => {},
+    );
     return;
   }
 
@@ -48,11 +55,16 @@ $SerializedXml.LoadXml($RawXml.OuterXml)
 $Toast = [Windows.UI.Notifications.ToastNotification]::new($SerializedXml)
 $Notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('OpenCode')
 $Notifier.Show($Toast)
-`.trim().replace(/\n/g, "; ");
+`
+    .trim()
+    .replace(/\n/g, "; ");
   await ctx.$`powershell -Command ${toastScript}`.catch(() => {});
 }
 
-export function createIdleNotifier(ctx: PluginInput, config: IdleNotificationConfig) {
+export function createIdleNotifier(
+  ctx: PluginInput,
+  config: IdleNotificationConfig,
+) {
   const platform = detectPlatform();
   const delayMs = config.delayMs ?? 1500;
   const title = config.title ?? "OpenCode";
@@ -81,7 +93,9 @@ export function createIdleNotifier(ctx: PluginInput, config: IdleNotificationCon
     await sendNotification(ctx, platform, title, message);
   }
 
-  return async ({ event }: { event: { type: string; properties?: unknown } }) => {
+  return async ({
+    event,
+  }: { event: { type: string; properties?: unknown } }) => {
     if (platform === "unsupported") return;
     if (config.enabled !== true) return;
 
@@ -111,4 +125,3 @@ export function createIdleNotifier(ctx: PluginInput, config: IdleNotificationCon
     pending.set(sessionID, timer);
   };
 }
-

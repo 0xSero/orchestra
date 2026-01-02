@@ -8,7 +8,13 @@ import type { WorkerProfile } from "../types";
 
 export type SkillPermission = "allow" | "ask" | "deny";
 
-export type SkillStatus = "ok" | "missing" | "invalid" | "deny" | "ask" | "disabled";
+export type SkillStatus =
+  | "ok"
+  | "missing"
+  | "invalid"
+  | "deny"
+  | "ask"
+  | "disabled";
 
 export type SkillDescriptor = {
   name: string;
@@ -43,7 +49,9 @@ const isPermission = (value: unknown): value is SkillPermission =>
 const matchPattern = (pattern: string, name: string): boolean => {
   if (pattern === "*") return true;
   if (!pattern.includes("*")) return pattern === name;
-  const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\*/g, ".*");
+  const escaped = pattern
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\\\*/g, ".*");
   return new RegExp(`^${escaped}$`).test(name);
 };
 
@@ -66,7 +74,9 @@ const parseFrontmatter = (content: string): Frontmatter | undefined => {
   return out;
 };
 
-const loadFrontmatter = async (entry: SkillEntry): Promise<Frontmatter | undefined> => {
+const loadFrontmatter = async (
+  entry: SkillEntry,
+): Promise<Frontmatter | undefined> => {
   try {
     const content = await readFile(entry.skillPath, "utf8");
     return parseFrontmatter(content);
@@ -75,11 +85,16 @@ const loadFrontmatter = async (entry: SkillEntry): Promise<Frontmatter | undefin
   }
 };
 
-export async function loadSkillConfig(context: Pick<OrchestratorContext, "client" | "directory">): Promise<Record<string, unknown>> {
+export async function loadSkillConfig(
+  context: Pick<OrchestratorContext, "client" | "directory">,
+): Promise<Record<string, unknown>> {
   if (context.client?.config?.get) {
     try {
-      const res = await context.client.config.get({ query: { directory: context.directory } } as any);
-      if (res?.data && typeof res.data === "object") return res.data as Record<string, unknown>;
+      const res = await context.client.config.get({
+        query: { directory: context.directory },
+      } as any);
+      if (res?.data && typeof res.data === "object")
+        return res.data as Record<string, unknown>;
     } catch {
       // fall back to disk
     }
@@ -87,9 +102,14 @@ export async function loadSkillConfig(context: Pick<OrchestratorContext, "client
   return await loadOpenCodeConfig();
 }
 
-export function resolveSkillPermissionMap(config: Record<string, unknown>, agentId?: string): Record<string, SkillPermission> | undefined {
+export function resolveSkillPermissionMap(
+  config: Record<string, unknown>,
+  agentId?: string,
+): Record<string, SkillPermission> | undefined {
   const globalRaw = (config as any)?.permission?.skill;
-  const agentRaw = agentId ? (config as any)?.agent?.[agentId]?.permission?.skill : undefined;
+  const agentRaw = agentId
+    ? (config as any)?.agent?.[agentId]?.permission?.skill
+    : undefined;
 
   const toMap = (raw: unknown): Record<string, SkillPermission> => {
     if (!isRecord(raw)) return {};
@@ -106,15 +126,23 @@ export function resolveSkillPermissionMap(config: Record<string, unknown>, agent
   return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
-export function resolveSkillToolEnabled(config: Record<string, unknown>, agentId?: string): boolean {
+export function resolveSkillToolEnabled(
+  config: Record<string, unknown>,
+  agentId?: string,
+): boolean {
   const global = (config as any)?.tools?.skill;
   if (global === false) return false;
-  const agent = agentId ? (config as any)?.agent?.[agentId]?.tools?.skill : undefined;
+  const agent = agentId
+    ? (config as any)?.agent?.[agentId]?.tools?.skill
+    : undefined;
   if (agent === false) return false;
   return true;
 }
 
-export function resolveSkillPermission(name: string, map?: Record<string, SkillPermission>): SkillPermission {
+export function resolveSkillPermission(
+  name: string,
+  map?: Record<string, SkillPermission>,
+): SkillPermission {
   if (!map) return "allow";
   if (map[name]) return map[name];
   const matches = Object.keys(map)
@@ -219,7 +247,11 @@ export async function validateSkills(input: {
       continue;
     }
 
-    skills.push({ ...entry, status: permission === "ask" ? "ask" : "ok", permission });
+    skills.push({
+      ...entry,
+      status: permission === "ask" ? "ask" : "ok",
+      permission,
+    });
   }
 
   return { ok: errors.length === 0, skills, errors };
@@ -227,7 +259,7 @@ export async function validateSkills(input: {
 
 export function collectWorkflowSkillRequirements(
   workflow: WorkflowDefinition,
-  profiles: Record<string, WorkerProfile>
+  profiles: Record<string, WorkerProfile>,
 ): SkillRequirement[] {
   const requirements: SkillRequirement[] = [];
   for (const step of workflow.steps) {

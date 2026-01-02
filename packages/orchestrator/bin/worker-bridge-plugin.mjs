@@ -15,15 +15,25 @@ function getBridgeTimeoutMs() {
 
 async function postJson(path, body) {
   const { url, token } = getBridgeConfig();
-  if (!url || !token) throw new Error("Missing orchestrator bridge env (OPENCODE_ORCH_BRIDGE_URL/OPENCODE_ORCH_BRIDGE_TOKEN)");
+  if (!url || !token)
+    throw new Error(
+      "Missing orchestrator bridge env (OPENCODE_ORCH_BRIDGE_URL/OPENCODE_ORCH_BRIDGE_TOKEN)",
+    );
   const timeoutMs = getBridgeTimeoutMs();
   const abort = new AbortController();
-  const timer = setTimeout(() => abort.abort(new Error(`Bridge request timed out after ${timeoutMs}ms`)), timeoutMs);
+  const timer = setTimeout(
+    () =>
+      abort.abort(new Error(`Bridge request timed out after ${timeoutMs}ms`)),
+    timeoutMs,
+  );
   let res;
   try {
     res = await fetch(`${url}${path}`, {
       method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
       body: JSON.stringify(body),
       signal: abort.signal,
     });
@@ -45,9 +55,17 @@ Use this to provide incremental output as you work, enabling the user to see you
 Call this multiple times during your response to stream output progressively.
 Set final=true on the last chunk to indicate completion.`,
     args: {
-      chunk: tool.schema.string().describe("The text chunk to stream (partial response)"),
-      jobId: tool.schema.string().optional().describe("Optional job ID if this is related to an async job"),
-      final: tool.schema.boolean().optional().describe("Set to true for the final chunk"),
+      chunk: tool.schema
+        .string()
+        .describe("The text chunk to stream (partial response)"),
+      jobId: tool.schema
+        .string()
+        .optional()
+        .describe("Optional job ID if this is related to an async job"),
+      final: tool.schema
+        .boolean()
+        .optional()
+        .describe("Set to true for the final chunk"),
     },
     async execute(args) {
       const { workerId } = getBridgeConfig();
@@ -101,13 +119,18 @@ Set final=true on the last chunk to indicate completion.`,
       const durationMs = startedAt ? Date.now() - startedAt : undefined;
       const args = entry?.args ?? output?.args;
       const skillName = args?.name;
-      const outputText = typeof output?.output === "string" ? output.output : "";
-      const outputBytes = outputText ? Buffer.byteLength(outputText) : undefined;
+      const outputText =
+        typeof output?.output === "string" ? output.output : "";
+      const outputBytes = outputText
+        ? Buffer.byteLength(outputText)
+        : undefined;
       const metadata = output?.metadata;
       const isError = metadata?.error || metadata?.status === "error";
       try {
         await postJson("/v1/events", {
-          type: isError ? "orchestra.skill.load.failed" : "orchestra.skill.load.completed",
+          type: isError
+            ? "orchestra.skill.load.failed"
+            : "orchestra.skill.load.completed",
           data: {
             sessionId: input.sessionID,
             callId: input.callID,
@@ -129,7 +152,9 @@ Set final=true on the last chunk to indicate completion.`,
       const { workerId } = getBridgeConfig();
       if (!workerId) return;
       const skillName =
-        input.metadata?.name || input.metadata?.skill || input.metadata?.skillName;
+        input.metadata?.name ||
+        input.metadata?.skill ||
+        input.metadata?.skillName;
       try {
         await postJson("/v1/events", {
           type: "orchestra.skill.permission",

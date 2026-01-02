@@ -27,9 +27,13 @@ describe("filterProviders", () => {
       makeProvider({ id: "api-no-key", source: "api" }),
     ];
 
-    const filtered = filterProviders(providers, "configured").map((p) => p.id).sort();
+    const filtered = filterProviders(providers, "configured")
+      .map((p) => p.id)
+      .sort();
 
-    expect(filtered).toEqual(["api-key", "cfg", "custom", "env", "opencode"].sort());
+    expect(filtered).toEqual(
+      ["api-key", "cfg", "custom", "env", "opencode"].sort(),
+    );
   });
 
   test("returns all providers for all scope", () => {

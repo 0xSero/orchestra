@@ -54,19 +54,30 @@ const defaultSteps: WorkflowStepDefinition[] = [
   },
 ];
 
-function resolveStep(base: WorkflowStepDefinition | undefined, override: WorkflowStepConfig): WorkflowStepDefinition {
+function resolveStep(
+  base: WorkflowStepDefinition | undefined,
+  override: WorkflowStepConfig,
+): WorkflowStepDefinition {
   const prompt = override.prompt ?? base?.prompt ?? "Task:\n{task}";
   return {
     id: override.id,
     title: override.title ?? base?.title ?? override.id,
     workerId: override.workerId ?? base?.workerId ?? "coder",
     prompt,
-    carry: typeof override.carry === "boolean" ? override.carry : base?.carry ?? true,
-    timeoutMs: typeof override.timeoutMs === "number" ? override.timeoutMs : base?.timeoutMs,
+    carry:
+      typeof override.carry === "boolean"
+        ? override.carry
+        : (base?.carry ?? true),
+    timeoutMs:
+      typeof override.timeoutMs === "number"
+        ? override.timeoutMs
+        : base?.timeoutMs,
   };
 }
 
-export function buildRooCodeBoomerangWorkflow(overrides?: WorkflowStepConfig[]): WorkflowDefinition {
+export function buildRooCodeBoomerangWorkflow(
+  overrides?: WorkflowStepConfig[],
+): WorkflowDefinition {
   let steps = defaultSteps;
   if (overrides && overrides.length > 0) {
     const byId = new Map(defaultSteps.map((s) => [s.id, s]));
@@ -76,7 +87,8 @@ export function buildRooCodeBoomerangWorkflow(overrides?: WorkflowStepConfig[]):
   return {
     id: "roocode-boomerang",
     name: "RooCode Boomerang",
-    description: "Plan, implement, review, and fix in a tight loop with bounded carry.",
+    description:
+      "Plan, implement, review, and fix in a tight loop with bounded carry.",
     steps,
   };
 }

@@ -12,105 +12,121 @@ function getBackendClient(instance: WorkerInstance, fallback?: any) {
 
 export async function spawnAgentWorker(
   profile: WorkerProfile,
-  options: SpawnOptions
+  options: SpawnOptions,
 ): Promise<WorkerInstance> {
-  return workerPool.getOrSpawn(profile, options, async (resolvedProfile, spawnOptions) => {
-    const resolvedKind = resolvedProfile.kind ?? "agent";
-    const modelRef = resolvedProfile.model.trim();
-    const instance: WorkerInstance = {
-      profile: resolvedProfile,
-      kind: resolvedKind,
-      execution: resolvedProfile.execution,
-      status: "starting",
-      port: 0,
-      directory: spawnOptions.directory,
-      startedAt: new Date(),
-      modelRef,
-      modelPolicy: "dynamic",
-      modelResolution: isFullModelID(modelRef) ? "configured" : `resolved from ${modelRef}`,
-    };
+  return workerPool.getOrSpawn(
+    profile,
+    options,
+    async (resolvedProfile, spawnOptions) => {
+      const resolvedKind = resolvedProfile.kind ?? "agent";
+      const modelRef = resolvedProfile.model.trim();
+      const instance: WorkerInstance = {
+        profile: resolvedProfile,
+        kind: resolvedKind,
+        execution: resolvedProfile.execution,
+        status: "starting",
+        port: 0,
+        directory: spawnOptions.directory,
+        startedAt: new Date(),
+        modelRef,
+        modelPolicy: "dynamic",
+        modelResolution: isFullModelID(modelRef)
+          ? "configured"
+          : `resolved from ${modelRef}`,
+      };
 
-    workerPool.register(instance);
+      workerPool.register(instance);
 
-    if (!spawnOptions.client) {
-      const msg = `OpenCode client required to spawn agent worker "${resolvedProfile.id}".`;
-      instance.status = "error";
-      instance.error = msg;
-      workerPool.updateStatus(resolvedProfile.id, "error", msg);
-      throw new Error(msg);
-    }
+      if (!spawnOptions.client) {
+        const msg = `OpenCode client required to spawn agent worker "${resolvedProfile.id}".`;
+        instance.status = "error";
+        instance.error = msg;
+        workerPool.updateStatus(resolvedProfile.id, "error", msg);
+        throw new Error(msg);
+      }
 
-    instance.client = spawnOptions.client;
+      instance.client = spawnOptions.client;
 
-    const isSubagent = resolvedKind === "subagent";
-    const parentSessionId = spawnOptions.parentSessionId;
-    if (isSubagent && !parentSessionId) {
-      const msg = `Subagent worker "${resolvedProfile.id}" requires parentSessionId to fork a child session.`;
-      instance.status = "error";
-      instance.error = msg;
-      workerPool.updateStatus(resolvedProfile.id, "error", msg);
-      throw new Error(msg);
-    }
+      const isSubagent = resolvedKind === "subagent";
+      const parentSessionId = spawnOptions.parentSessionId;
+      if (isSubagent && !parentSessionId) {
+        const msg = `Subagent worker "${resolvedProfile.id}" requires parentSessionId to fork a child session.`;
+        instance.status = "error";
+        instance.error = msg;
+        workerPool.updateStatus(resolvedProfile.id, "error", msg);
+        throw new Error(msg);
+      }
 
-    const sessionResult = isSubagent
-      ? await spawnOptions.client.session.fork({
-          path: { id: parentSessionId as string },
+      const sessionResult = isSubagent
+        ? await spawnOptions.client.session.fork({
+            path: { id: parentSessionId as string },
+            query: { directory: spawnOptions.directory },
+          })
+        : await spawnOptions.client.session.create({
+            body: { title: `Worker: ${resolvedProfile.name}` },
+            query: { directory: spawnOptions.directory },
+          });
+
+      const session = sessionResult.data;
+      if (!session) {
+        const err = sessionResult.error as any;
+        const msg =
+          err?.message ?? err?.toString?.() ?? "Failed to create session";
+        instance.status = "error";
+        instance.error = msg;
+        workerPool.updateStatus(resolvedProfile.id, "error", msg);
+        throw new Error(msg);
+      }
+
+      instance.sessionId = session.id;
+      if (isSubagent && parentSessionId) {
+        instance.parentSessionId = parentSessionId;
+      }
+
+      // Inject bootstrap prompt (worker identity & instructions)
+      const bootstrapPrompt = await buildWorkerBootstrapPrompt({
+        profile: resolvedProfile,
+        directory: spawnOptions.directory,
+      });
+
+      await spawnOptions.client.session
+        .prompt({
+          path: { id: session.id },
+          body: {
+            noReply: true,
+            parts: [{ type: "text", text: bootstrapPrompt }],
+          },
           query: { directory: spawnOptions.directory },
-        })
-      : await spawnOptions.client.session.create({
-          body: { title: `Worker: ${resolvedProfile.name}` },
-          query: { directory: spawnOptions.directory },
-        });
+        } as any)
+        .catch(() => {});
 
-    const session = sessionResult.data;
-    if (!session) {
-      const err = sessionResult.error as any;
-      const msg = err?.message ?? err?.toString?.() ?? "Failed to create session";
-      instance.status = "error";
-      instance.error = msg;
-      workerPool.updateStatus(resolvedProfile.id, "error", msg);
-      throw new Error(msg);
-    }
+      instance.status = "ready";
+      instance.lastActivity = new Date();
+      workerPool.updateStatus(resolvedProfile.id, "ready");
 
-    instance.sessionId = session.id;
-    if (isSubagent && parentSessionId) {
-      instance.parentSessionId = parentSessionId;
-    }
-
-    // Inject bootstrap prompt (worker identity & instructions)
-    const bootstrapPrompt = await buildWorkerBootstrapPrompt({
-      profile: resolvedProfile,
-      directory: spawnOptions.directory,
-    });
-
-    await spawnOptions.client.session
-      .prompt({
-        path: { id: session.id },
-        body: {
-          noReply: true,
-          parts: [{ type: "text", text: bootstrapPrompt }],
-        },
-        query: { directory: spawnOptions.directory },
-      } as any)
-      .catch(() => {});
-
-    instance.status = "ready";
-    instance.lastActivity = new Date();
-    workerPool.updateStatus(resolvedProfile.id, "ready");
-
-    return instance;
-  });
+      return instance;
+    },
+  );
 }
 
 export async function sendToAgentWorker(
   workerId: string,
   message: string,
-  options?: SendToWorkerOptions & { client?: any; directory?: string }
-): Promise<{ success: boolean; response?: string; warning?: string; error?: string }> {
+  options?: SendToWorkerOptions & { client?: any; directory?: string },
+): Promise<{
+  success: boolean;
+  response?: string;
+  warning?: string;
+  error?: string;
+}> {
   const instance = workerPool.get(workerId);
 
   if (!instance) {
-    publishErrorEvent({ message: `Worker "${workerId}" not found`, source: "worker", workerId });
+    publishErrorEvent({
+      message: `Worker "${workerId}" not found`,
+      source: "worker",
+      workerId,
+    });
     return { success: false, error: `Worker "${workerId}" not found` };
   }
 
@@ -120,7 +136,10 @@ export async function sendToAgentWorker(
       source: "worker",
       workerId,
     });
-    return { success: false, error: `Worker "${workerId}" is ${instance.status}, not ready` };
+    return {
+      success: false,
+      error: `Worker "${workerId}" is ${instance.status}, not ready`,
+    };
   }
 
   const client = getBackendClient(instance, options?.client);
@@ -130,7 +149,10 @@ export async function sendToAgentWorker(
       source: "worker",
       workerId,
     });
-    return { success: false, error: `Worker "${workerId}" missing OpenCode client` };
+    return {
+      success: false,
+      error: `Worker "${workerId}" missing OpenCode client`,
+    };
   }
 
   // Always use the worker's own session, not the caller's session
@@ -142,7 +164,10 @@ export async function sendToAgentWorker(
       source: "worker",
       workerId,
     });
-    return { success: false, error: `Worker "${workerId}" missing sessionId for agent backend` };
+    return {
+      success: false,
+      error: `Worker "${workerId}" missing sessionId for agent backend`,
+    };
   }
 
   workerPool.updateStatus(workerId, "busy");
@@ -152,7 +177,8 @@ export async function sendToAgentWorker(
     const startedAt = Date.now();
     const warning = instance.warning;
     const directory = instance.directory ?? options?.directory ?? process.cwd();
-    const overrideRequested = typeof options?.model === "string" && options.model.trim().length > 0;
+    const overrideRequested =
+      typeof options?.model === "string" && options.model.trim().length > 0;
     let modelOverride = (options?.model ?? instance.profile.model).trim();
     let resolutionReason = instance.modelResolution;
     if (modelOverride && !isFullModelID(modelOverride)) {
@@ -164,7 +190,8 @@ export async function sendToAgentWorker(
       });
       modelOverride = profiles[instance.profile.id]?.model ?? modelOverride;
       const change = changes.find((c) => c.profileId === instance.profile.id);
-      resolutionReason = change?.reason ?? `resolved from ${profileOverride.model}`;
+      resolutionReason =
+        change?.reason ?? `resolved from ${profileOverride.model}`;
     } else if (modelOverride && !overrideRequested) {
       resolutionReason = "configured";
     }
@@ -200,7 +227,11 @@ export async function sendToAgentWorker(
       durationMs,
     };
 
-    return { success: true, response: responseText, ...(warning ? { warning } : {}) };
+    return {
+      success: true,
+      response: responseText,
+      ...(warning ? { warning } : {}),
+    };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     const isSdkError = Boolean((error as any)?.isSdkError);
@@ -208,7 +239,7 @@ export async function sendToAgentWorker(
     instance.currentTask = undefined;
     instance.warning = isSdkError
       ? `Last request failed: ${errorMsg}`
-      : instance.warning ?? `Last request failed: ${errorMsg}`;
+      : (instance.warning ?? `Last request failed: ${errorMsg}`);
     publishErrorEvent({ message: errorMsg, source: "worker", workerId });
     return { success: false, error: errorMsg };
   }

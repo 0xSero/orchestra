@@ -31,7 +31,7 @@ describe("buildWorkerPromptBody", () => {
       buildWorkerPromptBody({
         parts: [{ type: "text", text: "hello" }],
         model: "node:fast",
-      })
+      }),
     ).toThrow('Invalid model override "node:fast". Expected "provider/model".');
   });
 });

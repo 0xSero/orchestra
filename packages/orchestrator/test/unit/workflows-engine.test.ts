@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { registerWorkflow, runWorkflow } from "../../src/workflows/engine";
-import type { WorkflowAttachment, WorkflowStepDefinition } from "../../src/workflows/types";
+import type {
+  WorkflowAttachment,
+  WorkflowStepDefinition,
+} from "../../src/workflows/types";
 
 const limits = {
   maxSteps: 4,
@@ -41,7 +44,9 @@ describe("workflow engine unit", () => {
     const attachmentsSeen: Array<unknown | undefined> = [];
     const autoSpawnSeen: Array<boolean | undefined> = [];
 
-    const attachments: WorkflowAttachment[] = [{ type: "file", path: "/tmp/test.txt" }];
+    const attachments: WorkflowAttachment[] = [
+      { type: "file", path: "/tmp/test.txt" },
+    ];
     const result = await runWorkflow(
       {
         workflowId: "unit-flow-carry",
@@ -62,7 +67,7 @@ describe("workflow engine unit", () => {
             response: workerId === "coder" ? "STEP_ONE_OK" : "STEP_TWO_OK",
           };
         },
-      }
+      },
     );
 
     expect(result.steps.length).toBe(2);
@@ -106,7 +111,7 @@ describe("workflow engine unit", () => {
           }
           return { success: true, response: "STEP_ONE_OK" };
         },
-      }
+      },
     );
 
     expect(result.steps.length).toBe(2);
@@ -149,7 +154,7 @@ describe("workflow engine unit", () => {
           timeouts.push(options.timeoutMs);
           return { success: true, response: "ok" };
         },
-      }
+      },
     );
 
     expect(timeouts).toEqual([2000, 5000]);
@@ -183,8 +188,8 @@ describe("workflow engine unit", () => {
         {
           resolveWorker: async (workerId) => workerId,
           sendToWorker: async () => ({ success: true, response: "ok" }),
-        }
-      )
+        },
+      ),
     ).rejects.toThrow("maxSteps=1");
   });
 
@@ -206,7 +211,10 @@ describe("workflow engine unit", () => {
       },
     ]);
 
-    const longArtifacts = Array.from({ length: 50 }, (_, i) => `- file-${i}.ts`).join("\n");
+    const longArtifacts = Array.from(
+      { length: 50 },
+      (_, i) => `- file-${i}.ts`,
+    ).join("\n");
     const response = [
       "## Summary",
       "- Did the thing",
@@ -237,7 +245,7 @@ describe("workflow engine unit", () => {
           prompts.push(message);
           return { success: true, response };
         },
-      }
+      },
     );
 
     expect(prompts[1]).toContain("#### Summary");

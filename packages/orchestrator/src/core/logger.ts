@@ -36,11 +36,18 @@ function emit(level: LogLevel, args: unknown[]) {
   // Never emit to console - logs only go to internal buffer
 }
 
-export function setLoggerConfig(input: { bufferSize?: number; enabled?: boolean }) {
+export function setLoggerConfig(input: {
+  bufferSize?: number;
+  enabled?: boolean;
+}) {
   if (typeof input.enabled === "boolean") {
     enabled = input.enabled;
   }
-  if (typeof input.bufferSize === "number" && Number.isFinite(input.bufferSize) && input.bufferSize > 0) {
+  if (
+    typeof input.bufferSize === "number" &&
+    Number.isFinite(input.bufferSize) &&
+    input.bufferSize > 0
+  ) {
     bufferSize = Math.floor(input.bufferSize);
   }
 }

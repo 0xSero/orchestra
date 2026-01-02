@@ -26,7 +26,7 @@ export function resolveWorkerBridgePluginSpecifier(): string | undefined {
     getUserConfigDir(),
     "opencode",
     "plugin",
-    "worker-bridge-plugin.mjs"
+    "worker-bridge-plugin.mjs",
   );
   // OpenCode treats `file://...` as a local plugin. A plain absolute path can be misinterpreted
   // as a package specifier and trigger a Bun install attempt.
@@ -49,13 +49,17 @@ export async function spawnOpencodeServe(options: {
   config: Record<string, unknown>;
   env: Record<string, string | undefined>;
 }): Promise<{ url: string; proc: ChildProcess; close: () => Promise<void> }> {
-  const mergedConfig = await mergeOpenCodeConfig(options.config ?? {}, { dropOrchestratorPlugin: true });
+  const mergedConfig = await mergeOpenCodeConfig(options.config ?? {}, {
+    dropOrchestratorPlugin: true,
+  });
   // CRITICAL: Mark this as a worker process to prevent recursive spawning.
   // Workers should NOT load the orchestrator plugin or spawn more workers.
   const workerEnv = {
     ...process.env,
     ...options.env,
-    OPENCODE_CONFIG_CONTENT: JSON.stringify(mergedConfig ?? options.config ?? {}),
+    OPENCODE_CONFIG_CONTENT: JSON.stringify(
+      mergedConfig ?? options.config ?? {},
+    ),
     OPENCODE_ORCHESTRATOR_WORKER: "1", // Signal that this is a worker, not the orchestrator
   };
 
@@ -66,11 +70,19 @@ export async function spawnOpencodeServe(options: {
       env: workerEnv as any,
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
-    }
+    },
   );
 
   const url = await new Promise<string>((resolve, reject) => {
-    const id = setTimeout(() => reject(new Error(`Timeout waiting for server to start after ${options.timeout}ms`)), options.timeout);
+    const id = setTimeout(
+      () =>
+        reject(
+          new Error(
+            `Timeout waiting for server to start after ${options.timeout}ms`,
+          ),
+        ),
+      options.timeout,
+    );
     let output = "";
 
     const onData = (chunk: Buffer) => {

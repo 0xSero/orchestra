@@ -1,9 +1,17 @@
 import { randomUUID } from "node:crypto";
 import type { OrchestratorContext } from "../context/orchestrator-context";
 import { logger } from "../core/logger";
-import { publishErrorEvent, publishOrchestratorEvent } from "../core/orchestrator-events";
+import {
+  publishErrorEvent,
+  publishOrchestratorEvent,
+} from "../core/orchestrator-events";
 import { sendToWorker, spawnWorker } from "../workers/spawner";
-import { executeWorkflowStep, getWorkflow, type WorkflowRunDependencies, validateWorkflowInput } from "./engine";
+import {
+  executeWorkflowStep,
+  getWorkflow,
+  type WorkflowRunDependencies,
+  validateWorkflowInput,
+} from "./engine";
 import type {
   WorkflowRunInput,
   WorkflowRunResult,
@@ -23,7 +31,10 @@ import {
   type WorkflowRunState,
 } from "./runs";
 import { injectSessionNotice } from "../ux/wakeup";
-import { clearWorkflowSkillContext, setWorkflowSkillContext } from "../skills/context";
+import {
+  clearWorkflowSkillContext,
+  setWorkflowSkillContext,
+} from "../skills/context";
 import {
   collectWorkflowSkillRequirements,
   loadSkillConfig,
@@ -39,45 +50,87 @@ const defaultLimits: WorkflowSecurityLimits = {
   perStepTimeoutMs: 120_000,
 };
 
-function clampLimit(value: number | undefined, cap: number | undefined, fallback: number): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) return cap ?? fallback;
-  if (typeof cap === "number" && Number.isFinite(cap)) return Math.min(value, cap);
+function clampLimit(
+  value: number | undefined,
+  cap: number | undefined,
+  fallback: number,
+): number {
+  if (typeof value !== "number" || !Number.isFinite(value))
+    return cap ?? fallback;
+  if (typeof cap === "number" && Number.isFinite(cap))
+    return Math.min(value, cap);
   return value;
 }
 
-export function resolveWorkflowLimits(context: OrchestratorContext, workflowId: string): WorkflowSecurityLimits {
+export function resolveWorkflowLimits(
+  context: OrchestratorContext,
+  workflowId: string,
+): WorkflowSecurityLimits {
   const security = context.security?.workflows;
   const workflows = context.workflows;
-  const roocode = workflowId === "roocode-boomerang" ? workflows?.roocodeBoomerang : undefined;
+  const roocode =
+    workflowId === "roocode-boomerang"
+      ? workflows?.roocodeBoomerang
+      : undefined;
 
   const maxStepsCap = security?.maxSteps ?? defaultLimits.maxSteps;
   const maxTaskCap = security?.maxTaskChars ?? defaultLimits.maxTaskChars;
   const maxCarryCap = security?.maxCarryChars ?? defaultLimits.maxCarryChars;
-  const perStepCap = security?.perStepTimeoutMs ?? defaultLimits.perStepTimeoutMs;
+  const perStepCap =
+    security?.perStepTimeoutMs ?? defaultLimits.perStepTimeoutMs;
 
   return {
-    maxSteps: clampLimit(roocode?.maxSteps, maxStepsCap, defaultLimits.maxSteps),
-    maxTaskChars: clampLimit(roocode?.maxTaskChars, maxTaskCap, defaultLimits.maxTaskChars),
-    maxCarryChars: clampLimit(roocode?.maxCarryChars, maxCarryCap, defaultLimits.maxCarryChars),
-    perStepTimeoutMs: clampLimit(roocode?.perStepTimeoutMs, perStepCap, defaultLimits.perStepTimeoutMs),
+    maxSteps: clampLimit(
+      roocode?.maxSteps,
+      maxStepsCap,
+      defaultLimits.maxSteps,
+    ),
+    maxTaskChars: clampLimit(
+      roocode?.maxTaskChars,
+      maxTaskCap,
+      defaultLimits.maxTaskChars,
+    ),
+    maxCarryChars: clampLimit(
+      roocode?.maxCarryChars,
+      maxCarryCap,
+      defaultLimits.maxCarryChars,
+    ),
+    perStepTimeoutMs: clampLimit(
+      roocode?.perStepTimeoutMs,
+      perStepCap,
+      defaultLimits.perStepTimeoutMs,
+    ),
   };
 }
 
-const defaultUiPolicy: WorkflowUiPolicy = { execution: "auto", intervene: "on-error" };
+const defaultUiPolicy: WorkflowUiPolicy = {
+  execution: "auto",
+  intervene: "on-error",
+};
 
-function resolveWorkflowUiPolicy(context: OrchestratorContext, override?: WorkflowUiPolicy): WorkflowUiPolicy {
+function resolveWorkflowUiPolicy(
+  context: OrchestratorContext,
+  override?: WorkflowUiPolicy,
+): WorkflowUiPolicy {
   const ui = context.workflows?.ui;
   return {
-    execution: override?.execution ?? ui?.execution ?? defaultUiPolicy.execution,
-    intervene: override?.intervene ?? ui?.intervene ?? defaultUiPolicy.intervene,
+    execution:
+      override?.execution ?? ui?.execution ?? defaultUiPolicy.execution,
+    intervene:
+      override?.intervene ?? ui?.intervene ?? defaultUiPolicy.intervene,
   };
 }
 
 function resolveStepGate(
   ui: WorkflowUiPolicy,
   step: WorkflowStepResult,
-  isLastStep: boolean
-): { pause: boolean; retry: boolean; terminalStatus?: WorkflowRunStatus; reason?: string } {
+  isLastStep: boolean,
+): {
+  pause: boolean;
+  retry: boolean;
+  terminalStatus?: WorkflowRunStatus;
+  reason?: string;
+} {
   if (isLastStep && step.status === "success") {
     return { pause: false, retry: false, terminalStatus: "success" };
   }
@@ -99,7 +152,11 @@ function resolveStepGate(
   }
 
   if (alwaysPause || warningPause) {
-    const reason = alwaysPause ? (ui.execution === "step" ? "execution=step" : "intervene=always") : "intervene=on-warning";
+    const reason = alwaysPause
+      ? ui.execution === "step"
+        ? "execution=step"
+        : "intervene=always"
+      : "intervene=on-warning";
     return { pause: true, retry: false, reason };
   }
 
@@ -121,7 +178,7 @@ async function advanceWorkflowRun(
   run: WorkflowRunState,
   workflow: WorkflowDefinition,
   deps: WorkflowRunDependencies,
-  onStep?: WorkflowStepHook
+  onStep?: WorkflowStepHook,
 ): Promise<WorkflowRunState> {
   const totalSteps = workflow.steps.length;
 
@@ -142,7 +199,7 @@ async function advanceWorkflowRun(
         limits: run.limits,
         attachments: run.attachments,
       },
-      deps
+      deps,
     );
 
     run.steps.push(executed.step);
@@ -151,7 +208,11 @@ async function advanceWorkflowRun(
       run.carry = executed.carry;
     }
 
-    const gate = resolveStepGate(run.ui, executed.step, stepIndex >= totalSteps - 1);
+    const gate = resolveStepGate(
+      run.ui,
+      executed.step,
+      stepIndex >= totalSteps - 1,
+    );
     const isError = executed.step.status === "error";
 
     if (!isError) {
@@ -204,7 +265,12 @@ async function advanceWorkflowRun(
 export async function runWorkflowWithDependencies(
   input: WorkflowRunInput,
   deps: WorkflowRunDependencies,
-  options?: { uiPolicy?: WorkflowUiPolicy; onStep?: WorkflowStepHook; runId?: string; parentSessionId?: string }
+  options?: {
+    uiPolicy?: WorkflowUiPolicy;
+    onStep?: WorkflowStepHook;
+    runId?: string;
+    parentSessionId?: string;
+  },
 ): Promise<WorkflowRunState> {
   const workflow = getWorkflow(input.workflowId);
   if (!workflow) {
@@ -263,7 +329,7 @@ export async function runWorkflowWithDependencies(
 export async function continueWorkflowWithDependencies(
   run: WorkflowRunState,
   deps: WorkflowRunDependencies,
-  options?: { onStep?: WorkflowStepHook; uiPolicy?: WorkflowUiPolicy }
+  options?: { onStep?: WorkflowStepHook; uiPolicy?: WorkflowUiPolicy },
 ): Promise<WorkflowRunState> {
   const workflow = getWorkflow(run.workflowId);
   if (!workflow) {
@@ -337,8 +403,22 @@ function formatStepFinishNotice(input: {
   workerSessionId?: string;
   showOpenCommand: boolean;
 }): string {
-  const { run, stepIndex, step, totalSteps, stepResult, pause, retry, pauseReason, workerSessionId, showOpenCommand } = input;
-  const header = stepResult.status === "success" ? "**[WORKFLOW STEP FINISHED]**" : "**[WORKFLOW STEP FAILED]**";
+  const {
+    run,
+    stepIndex,
+    step,
+    totalSteps,
+    stepResult,
+    pause,
+    retry,
+    pauseReason,
+    workerSessionId,
+    showOpenCommand,
+  } = input;
+  const header =
+    stepResult.status === "success"
+      ? "**[WORKFLOW STEP FINISHED]**"
+      : "**[WORKFLOW STEP FAILED]**";
   const lines = [
     header,
     "",
@@ -362,7 +442,7 @@ function formatStepFinishNotice(input: {
   if (pause) {
     const retryNote = retry ? " (retries the failed step)" : "";
     lines.push(
-      `- \`task_start({ kind: "workflow", continueRunId: "${run.runId}", task: "continue workflow" })\`${retryNote}`
+      `- \`task_start({ kind: "workflow", continueRunId: "${run.runId}", task: "continue workflow" })\`${retryNote}`,
     );
   }
   if (showOpenCommand) {
@@ -373,8 +453,21 @@ function formatStepFinishNotice(input: {
   return lines.join("\n");
 }
 
-function createStepHook(context: OrchestratorContext, sessionId: string | undefined, notify: boolean): WorkflowStepHook {
-  return async ({ phase, run, stepIndex, step, stepResult, pause, retry, pauseReason }) => {
+function createStepHook(
+  context: OrchestratorContext,
+  sessionId: string | undefined,
+  notify: boolean,
+): WorkflowStepHook {
+  return async ({
+    phase,
+    run,
+    stepIndex,
+    step,
+    stepResult,
+    pause,
+    retry,
+    pauseReason,
+  }) => {
     const totalSteps = getWorkflow(run.workflowId)?.steps.length ?? 0;
     const instance = context.workerPool.get(step.workerId);
 
@@ -391,12 +484,15 @@ function createStepHook(context: OrchestratorContext, sessionId: string | undefi
       await injectSessionNotice(
         context,
         sessionId,
-        formatStepStartNotice({ run, stepIndex, step, totalSteps })
+        formatStepStartNotice({ run, stepIndex, step, totalSteps }),
       );
       return;
     }
 
-    clearWorkflowSkillContext({ workerId: step.workerId, sessionId: instance?.sessionId });
+    clearWorkflowSkillContext({
+      workerId: step.workerId,
+      sessionId: instance?.sessionId,
+    });
 
     if (!notify || !sessionId) return;
     if (!stepResult) return;
@@ -420,7 +516,9 @@ function createStepHook(context: OrchestratorContext, sessionId: string | undefi
     if (pause && context.client?.tui) {
       void context.client.tui
         .appendPrompt({
-          body: { text: `task_start({ kind: "workflow", continueRunId: "${run.runId}", task: "continue workflow" })` },
+          body: {
+            text: `task_start({ kind: "workflow", continueRunId: "${run.runId}", task: "continue workflow" })`,
+          },
           query: { directory: context.directory },
         })
         .catch(() => {});
@@ -431,18 +529,27 @@ function createStepHook(context: OrchestratorContext, sessionId: string | undefi
 export async function runWorkflowWithContext(
   context: OrchestratorContext,
   input: Omit<WorkflowRunInput, "limits"> & { limits?: WorkflowSecurityLimits },
-  options?: { sessionId?: string; uiPolicy?: WorkflowUiPolicy; notify?: boolean }
+  options?: {
+    sessionId?: string;
+    uiPolicy?: WorkflowUiPolicy;
+    notify?: boolean;
+  },
 ): Promise<WorkflowRunResult> {
   const workerPool = context.workerPool;
-  const limits = input.limits ?? resolveWorkflowLimits(context, input.workflowId);
+  const limits =
+    input.limits ?? resolveWorkflowLimits(context, input.workflowId);
   const uiPolicy = resolveWorkflowUiPolicy(context, options?.uiPolicy);
-  const notify = options?.notify !== false && context.config.ui?.wakeupInjection !== false;
+  const notify =
+    options?.notify !== false && context.config.ui?.wakeupInjection !== false;
   const workflow = getWorkflow(input.workflowId);
   if (!workflow) {
     throw new Error(`Unknown workflow "${input.workflowId}".`);
   }
 
-  const requirements = collectWorkflowSkillRequirements(workflow, context.profiles);
+  const requirements = collectWorkflowSkillRequirements(
+    workflow,
+    context.profiles,
+  );
   if (requirements.length > 0) {
     const config = await loadSkillConfig(context);
     const permissionMap = resolveSkillPermissionMap(config);
@@ -467,13 +574,22 @@ export async function runWorkflowWithContext(
     }
   }
 
-  const ensureWorker = async (workerId: string, autoSpawn: boolean): Promise<string> => {
+  const ensureWorker = async (
+    workerId: string,
+    autoSpawn: boolean,
+  ): Promise<string> => {
     const existing = workerPool.get(workerId);
-    if (existing && existing.status !== "error" && existing.status !== "stopped") {
+    if (
+      existing &&
+      existing.status !== "error" &&
+      existing.status !== "stopped"
+    ) {
       return existing.profile.id;
     }
     if (!autoSpawn) {
-      throw new Error(`Worker "${workerId}" is not running. Spawn it first or pass autoSpawn=true.`);
+      throw new Error(
+        `Worker "${workerId}" is not running. Spawn it first or pass autoSpawn=true.`,
+      );
     }
 
     const profile = context.profiles[workerId];
@@ -502,7 +618,12 @@ export async function runWorkflowWithContext(
         const existing = workerPool.get(workerId);
         const resolved = await ensureWorker(workerId, autoSpawn);
         const instance = workerPool.get(resolved);
-        if (options?.sessionId && !existing && instance && instance.modelResolution !== "reused existing worker") {
+        if (
+          options?.sessionId &&
+          !existing &&
+          instance &&
+          instance.modelResolution !== "reused existing worker"
+        ) {
           workerPool.trackOwnership(options.sessionId, instance.profile.id);
         }
         return resolved;
@@ -528,7 +649,7 @@ export async function runWorkflowWithContext(
         uiPolicy,
         parentSessionId: options?.sessionId,
         onStep: createStepHook(context, options?.sessionId, notify),
-      }
+      },
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -543,7 +664,9 @@ export async function runWorkflowWithContext(
   const durationMs = Date.now() - startedAt;
   const failed = result.steps.some((step) => step.status === "error");
   if (failed) {
-    logger.warn(`[workflow] ${input.workflowId} completed with errors (${durationMs}ms)`);
+    logger.warn(
+      `[workflow] ${input.workflowId} completed with errors (${durationMs}ms)`,
+    );
   } else if (result.status === "paused") {
     logger.info(`[workflow] ${input.workflowId} paused (${durationMs}ms)`);
   } else {
@@ -559,7 +682,11 @@ export async function runWorkflowWithContext(
 export async function continueWorkflowWithContext(
   context: OrchestratorContext,
   runId: string,
-  options?: { sessionId?: string; uiPolicy?: WorkflowUiPolicy; notify?: boolean }
+  options?: {
+    sessionId?: string;
+    uiPolicy?: WorkflowUiPolicy;
+    notify?: boolean;
+  },
 ): Promise<WorkflowRunResult> {
   try {
     const run = getWorkflowRun(runId);
@@ -571,7 +698,8 @@ export async function continueWorkflowWithContext(
     }
 
     const workerPool = context.workerPool;
-    const notify = options?.notify !== false && context.config.ui?.wakeupInjection !== false;
+    const notify =
+      options?.notify !== false && context.config.ui?.wakeupInjection !== false;
     const uiPolicy = resolveWorkflowUiPolicy(context, options?.uiPolicy);
     run.ui = uiPolicy;
     if (options?.sessionId) run.parentSessionId = options.sessionId;
@@ -579,11 +707,17 @@ export async function continueWorkflowWithContext(
     const deps: WorkflowRunDependencies = {
       resolveWorker: async (workerId, autoSpawn) => {
         const existing = workerPool.get(workerId);
-        if (existing && existing.status !== "error" && existing.status !== "stopped") {
+        if (
+          existing &&
+          existing.status !== "error" &&
+          existing.status !== "stopped"
+        ) {
           return existing.profile.id;
         }
         if (!autoSpawn) {
-          throw new Error(`Worker "${workerId}" is not running. Spawn it first or pass autoSpawn=true.`);
+          throw new Error(
+            `Worker "${workerId}" is not running. Spawn it first or pass autoSpawn=true.`,
+          );
         }
         const profile = context.profiles[workerId];
         if (!profile) {
@@ -597,7 +731,11 @@ export async function continueWorkflowWithContext(
           client: context.client,
           parentSessionId: options?.sessionId,
         });
-        if (options?.sessionId && !existing && instance.modelResolution !== "reused existing worker") {
+        if (
+          options?.sessionId &&
+          !existing &&
+          instance.modelResolution !== "reused existing worker"
+        ) {
           workerPool.trackOwnership(options.sessionId, instance.profile.id);
         }
         return instance.profile.id;

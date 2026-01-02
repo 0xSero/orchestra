@@ -5,18 +5,24 @@ export type SkillValidationResult = {
   errors: string[];
 };
 
-const isNonEmptyString = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === "string" && value.trim().length > 0;
 
 export function validateSkillName(name: string): string | undefined {
   if (!isNonEmptyString(name)) return "name is required";
-  if (name.length < 1 || name.length > 64) return "name must be 1-64 characters";
-  if (!SKILL_NAME_REGEX.test(name)) return "name must match ^[a-z0-9]+(-[a-z0-9]+)*$";
+  if (name.length < 1 || name.length > 64)
+    return "name must be 1-64 characters";
+  if (!SKILL_NAME_REGEX.test(name))
+    return "name must match ^[a-z0-9]+(-[a-z0-9]+)*$";
   return undefined;
 }
 
-export function validateSkillDescription(description: string): string | undefined {
+export function validateSkillDescription(
+  description: string,
+): string | undefined {
   if (!isNonEmptyString(description)) return "description is required";
-  if (description.length < 1 || description.length > 1024) return "description must be 1-1024 characters";
+  if (description.length < 1 || description.length > 1024)
+    return "description must be 1-1024 characters";
   return undefined;
 }
 

@@ -1,9 +1,17 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { randomBytes } from "node:crypto";
 import { URL } from "node:url";
 import { workerPool } from "./worker-pool";
 import { EventEmitter } from "node:events";
-import { onOrchestratorEvent, publishOrchestratorEvent, type OrchestratorEvent } from "./orchestrator-events";
+import {
+  onOrchestratorEvent,
+  publishOrchestratorEvent,
+  type OrchestratorEvent,
+} from "./orchestrator-events";
 import { getWorkflowContextForWorker } from "../skills/context";
 
 // Stream event emitter for real-time worker output
@@ -26,7 +34,8 @@ export type BridgeServer = {
 
 async function readJson(req: IncomingMessage): Promise<any> {
   const chunks: Buffer[] = [];
-  for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  for await (const chunk of req)
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   const body = Buffer.concat(chunks).toString("utf8");
   if (!body.trim()) return {};
   return JSON.parse(body);
@@ -37,7 +46,12 @@ function normalizeSkillEventData(type: string, data: Record<string, any>) {
   const workerId = data.worker?.id ?? data.workerId;
   if (workerId && !data.worker) {
     const instance = workerPool.get(workerId);
-    data.worker = { id: workerId, ...(instance?.kind || instance?.profile.kind ? { kind: instance?.kind ?? instance?.profile.kind } : {}) };
+    data.worker = {
+      id: workerId,
+      ...(instance?.kind || instance?.profile.kind
+        ? { kind: instance?.kind ?? instance?.profile.kind }
+        : {}),
+    };
   }
   if (!data.workflow && workerId) {
     const ctx = getWorkflowContextForWorker(workerId);
@@ -86,7 +100,8 @@ export async function startBridgeServer(): Promise<BridgeServer> {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     const auth = req.headers.authorization ?? "";
     const isWrite =
-      url.pathname === "/v1/stream/chunk" || (url.pathname === "/v1/events" && req.method === "POST");
+      url.pathname === "/v1/stream/chunk" ||
+      (url.pathname === "/v1/events" && req.method === "POST");
     if (isWrite && auth !== `Bearer ${token}`) return unauthorized(res);
 
     // Stream chunk endpoint - workers send text chunks here for real-time streaming
@@ -99,8 +114,10 @@ export async function startBridgeServer(): Promise<BridgeServer> {
         final?: boolean;
       };
 
-      if (!body.workerId) return writeJson(res, 400, { error: "missing_workerId" });
-      if (typeof body.chunk !== "string") return writeJson(res, 400, { error: "missing_chunk" });
+      if (!body.workerId)
+        return writeJson(res, 400, { error: "missing_workerId" });
+      if (typeof body.chunk !== "string")
+        return writeJson(res, 400, { error: "missing_chunk" });
 
       // Update worker's last activity
       const instance = workerPool.get(body.workerId);
@@ -117,9 +134,14 @@ export async function startBridgeServer(): Promise<BridgeServer> {
         final: body.final,
       };
       streamEmitter.emit("chunk", streamChunk);
-      publishOrchestratorEvent("orchestra.worker.stream", { chunk: streamChunk });
+      publishOrchestratorEvent("orchestra.worker.stream", {
+        chunk: streamChunk,
+      });
 
-      return writeJson(res, 200, { ok: true, timestamp: streamChunk.timestamp });
+      return writeJson(res, 200, {
+        ok: true,
+        timestamp: streamChunk.timestamp,
+      });
     }
 
     // SSE endpoint - clients subscribe to real-time worker output
@@ -172,9 +194,19 @@ export async function startBridgeServer(): Promise<BridgeServer> {
           return writeJson(res, 400, { error: "missing_type" });
         }
         const raw = isRecord(body.data) ? body.data : {};
-        const payload = normalizeSkillEventData(body.type, raw as Record<string, unknown>);
-        const event = publishOrchestratorEvent(body.type as any, payload as any);
-        return writeJson(res, 200, { ok: true, id: event.id, timestamp: event.timestamp });
+        const payload = normalizeSkillEventData(
+          body.type,
+          raw as Record<string, unknown>,
+        );
+        const event = publishOrchestratorEvent(
+          body.type as any,
+          payload as any,
+        );
+        return writeJson(res, 200, {
+          ok: true,
+          id: event.id,
+          timestamp: event.timestamp,
+        });
       }
 
       if (req.method !== "GET") return methodNotAllowed(res);
@@ -216,7 +248,8 @@ export async function startBridgeServer(): Promise<BridgeServer> {
   });
 
   const addr = server.address();
-  if (!addr || typeof addr === "string") throw new Error("Failed to bind bridge server");
+  if (!addr || typeof addr === "string")
+    throw new Error("Failed to bind bridge server");
 
   const url = `http://127.0.0.1:${addr.port}`;
 

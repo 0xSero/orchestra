@@ -33,8 +33,14 @@ describe("skills discovery benchmark", () => {
         mkdir(claudeDirPath, { recursive: true }),
       ]);
       writes.push(
-        writeFile(join(projectDirPath, "SKILL.md"), `---\nname: ${name}\ndescription: bench\n---\n`),
-        writeFile(join(claudeDirPath, "SKILL.md"), `---\nname: ${name}\ndescription: bench\n---\n`)
+        writeFile(
+          join(projectDirPath, "SKILL.md"),
+          `---\nname: ${name}\ndescription: bench\n---\n`,
+        ),
+        writeFile(
+          join(claudeDirPath, "SKILL.md"),
+          `---\nname: ${name}\ndescription: bench\n---\n`,
+        ),
       );
     }
     await Promise.all(writes);
@@ -48,9 +54,13 @@ describe("skills discovery benchmark", () => {
     const result = await benchmark(
       "skills discovery",
       async () => {
-        await discoverSkills({ directory: workDir, worktree: projectDir, includeGlobal: false });
+        await discoverSkills({
+          directory: workDir,
+          worktree: projectDir,
+          includeGlobal: false,
+        });
       },
-      { iterations: 20, warmup: 5, timeout: 30_000 }
+      { iterations: 20, warmup: 5, timeout: 30_000 },
     );
 
     expect(result.mean).toBeGreaterThan(0);

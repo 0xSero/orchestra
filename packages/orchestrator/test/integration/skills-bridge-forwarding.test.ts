@@ -1,7 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { startBridgeServer } from "../../src/core/bridge-server";
-import { onOrchestratorEvent, type OrchestratorSkillLoadEvent } from "../../src/core/orchestrator-events";
-import { clearWorkflowSkillContext, setWorkflowSkillContext } from "../../src/skills/context";
+import {
+  onOrchestratorEvent,
+  type OrchestratorSkillLoadEvent,
+} from "../../src/core/orchestrator-events";
+import {
+  clearWorkflowSkillContext,
+  setWorkflowSkillContext,
+} from "../../src/skills/context";
 
 describe("skills bridge forwarding", () => {
   let bridge: Awaited<ReturnType<typeof startBridgeServer>> | undefined;

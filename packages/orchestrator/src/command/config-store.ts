@@ -1,11 +1,16 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { getDefaultGlobalOrchestratorConfigPath, getDefaultProjectOrchestratorConfigPath } from "../config/orchestrator";
+import {
+  getDefaultGlobalOrchestratorConfigPath,
+  getDefaultProjectOrchestratorConfigPath,
+} from "../config/orchestrator";
 import { isPlainObject } from "../helpers/format";
 import type { OrchestratorConfigFile, WorkerProfile } from "../types";
 
-export async function readOrchestratorConfigFile(path: string): Promise<OrchestratorConfigFile> {
+export async function readOrchestratorConfigFile(
+  path: string,
+): Promise<OrchestratorConfigFile> {
   if (!existsSync(path)) return {};
   try {
     const raw = JSON.parse(await readFile(path, "utf8")) as unknown;
@@ -16,7 +21,10 @@ export async function readOrchestratorConfigFile(path: string): Promise<Orchestr
   }
 }
 
-export async function writeOrchestratorConfigFile(path: string, data: OrchestratorConfigFile): Promise<void> {
+export async function writeOrchestratorConfigFile(
+  path: string,
+  data: OrchestratorConfigFile,
+): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, JSON.stringify(data, null, 2) + "\n", "utf8");
 }
@@ -24,7 +32,7 @@ export async function writeOrchestratorConfigFile(path: string, data: Orchestrat
 export function upsertProfileEntry(
   config: OrchestratorConfigFile,
   profileId: string,
-  patch: Partial<WorkerProfile>
+  patch: Partial<WorkerProfile>,
 ): OrchestratorConfigFile {
   const profiles = Array.isArray(config.profiles) ? [...config.profiles] : [];
 
@@ -38,7 +46,12 @@ export function upsertProfileEntry(
       }
       continue;
     }
-    if (entry && typeof entry === "object" && "id" in entry && (entry as any).id === profileId) {
+    if (
+      entry &&
+      typeof entry === "object" &&
+      "id" in entry &&
+      (entry as any).id === profileId
+    ) {
       profiles[i] = { ...(entry as WorkerProfile), ...patch, id: profileId };
       found = true;
     }
@@ -48,11 +61,17 @@ export function upsertProfileEntry(
   return { ...config, profiles };
 }
 
-export function setSpawnList(config: OrchestratorConfigFile, profileIds: string[]): OrchestratorConfigFile {
+export function setSpawnList(
+  config: OrchestratorConfigFile,
+  profileIds: string[],
+): OrchestratorConfigFile {
   return { ...config, workers: [...new Set(profileIds)] };
 }
 
-export function configPathForScope(scope: "global" | "project", directory: string): string {
+export function configPathForScope(
+  scope: "global" | "project",
+  directory: string,
+): string {
   if (scope === "global") return getDefaultGlobalOrchestratorConfigPath();
   return getDefaultProjectOrchestratorConfigPath(directory);
 }

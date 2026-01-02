@@ -2,7 +2,10 @@ export function toBool(value: unknown): boolean {
   return value === true;
 }
 
-export function renderMarkdownTable(headers: string[], rows: string[][]): string {
+export function renderMarkdownTable(
+  headers: string[],
+  rows: string[][],
+): string {
   const esc = (s: string) => s.replace(/\|/g, "\\|");
   const head = `| ${headers.join(" | ")} |`;
   const sep = `| ${headers.map(() => "---").join(" | ")} |`;
@@ -11,4 +14,3 @@ export function renderMarkdownTable(headers: string[], rows: string[][]): string
     .join("\n");
   return [head, sep, body].filter(Boolean).join("\n");
 }
-

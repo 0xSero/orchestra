@@ -36,9 +36,15 @@ function findPluginRoot(): string | undefined {
   return undefined;
 }
 
-function clampText(input: string, maxChars: number): { text: string; truncated: boolean } {
+function clampText(
+  input: string,
+  maxChars: number,
+): { text: string; truncated: boolean } {
   if (input.length <= maxChars) return { text: input, truncated: false };
-  return { text: input.slice(0, Math.max(0, maxChars)) + "\n\n…(truncated)\n", truncated: true };
+  return {
+    text: input.slice(0, Math.max(0, maxChars)) + "\n\n…(truncated)\n",
+    truncated: true,
+  };
 }
 
 export async function getRepoDocsBundle(options?: {
@@ -69,8 +75,12 @@ export async function getRepoDocsBundle(options?: {
 
   sections.push("# opencode-orchestrator (local docs)");
   sections.push("");
-  sections.push("These are the bundled docs for the orchestrator plugin you’re running.");
-  sections.push("Prefer answering questions using this content first, then the user’s project files.");
+  sections.push(
+    "These are the bundled docs for the orchestrator plugin you’re running.",
+  );
+  sections.push(
+    "Prefer answering questions using this content first, then the user’s project files.",
+  );
   sections.push("");
 
   for (const abs of files) {
@@ -92,7 +102,9 @@ export async function getRepoDocsBundle(options?: {
 
   return {
     root,
-    files: files.map((p) => (p.startsWith(root) ? p.slice(root.length + 1) : p)),
+    files: files.map((p) =>
+      p.startsWith(root) ? p.slice(root.length + 1) : p,
+    ),
     markdown: sections.join("\n").trim() + "\n",
     truncated,
   };

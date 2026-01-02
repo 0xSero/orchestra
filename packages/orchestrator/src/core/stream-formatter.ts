@@ -15,13 +15,23 @@ export interface FormattedChunk {
 /**
  * Format a stream chunk with ASCII box header for visual distinction
  */
-export function formatStreamChunk(chunk: StreamChunk | null | undefined, isFirst: boolean, isFinal: boolean): string {
+export function formatStreamChunk(
+  chunk: StreamChunk | null | undefined,
+  isFirst: boolean,
+  isFinal: boolean,
+): string {
   // Defensive: handle undefined/null chunk
-  if (!chunk || typeof chunk.workerId !== "string" || typeof chunk.chunk !== "string") {
+  if (
+    !chunk ||
+    typeof chunk.workerId !== "string" ||
+    typeof chunk.chunk !== "string"
+  ) {
     return "";
   }
 
-  const workerLabel = chunk.workerId.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const workerLabel = chunk.workerId
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
   const lines: string[] = [];
 
   if (isFirst) {
@@ -61,7 +71,7 @@ export function createStreamBuffer(workerId: string) {
       const formatted = formatStreamChunk(
         { workerId, chunk, timestamp: Date.now(), final: isFinal },
         !isStarted,
-        isFinal
+        isFinal,
       );
       isStarted = true;
       chunks.push(chunk);
@@ -82,13 +92,18 @@ export function createStreamBuffer(workerId: string) {
 /**
  * Format a complete worker response with ASCII box
  */
-export function formatWorkerResponse(workerId: string | null | undefined, content: string | null | undefined): string {
+export function formatWorkerResponse(
+  workerId: string | null | undefined,
+  content: string | null | undefined,
+): string {
   // Defensive: handle undefined/null inputs
   if (typeof workerId !== "string" || typeof content !== "string") {
     return content ?? "";
   }
 
-  const workerLabel = workerId.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const workerLabel = workerId
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
   const headerWidth = Math.max(60, workerLabel.length + 10);
   const hr = "─".repeat(headerWidth - 2);
 

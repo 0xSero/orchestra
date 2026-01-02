@@ -14,7 +14,10 @@ export type MemoryNode = {
   updatedAt?: number;
 };
 
-function requireProjectId(scope: MemoryScope, projectId: string | undefined): string | undefined {
+function requireProjectId(
+  scope: MemoryScope,
+  projectId: string | undefined,
+): string | undefined {
   if (scope !== "project") return undefined;
   if (!projectId) throw new Error("projectId is required for project scope");
   return projectId;
@@ -22,7 +25,10 @@ function requireProjectId(scope: MemoryScope, projectId: string | undefined): st
 
 function normalizeTags(tags: unknown): string[] {
   if (!Array.isArray(tags)) return [];
-  return tags.filter((t) => typeof t === "string").map((t) => t.trim()).filter(Boolean);
+  return tags
+    .filter((t) => typeof t === "string")
+    .map((t) => t.trim())
+    .filter(Boolean);
 }
 
 function toNode(record: RecordShape): MemoryNode {
@@ -51,9 +57,10 @@ export async function upsertMemory(input: {
   const projectId = requireProjectId(scope, input.projectId);
 
   return await withNeo4jSession(input.cfg, async (session) => {
-    const mergePattern = scope === "project"
-      ? `{ scope: $scope, projectId: $projectId, key: $key }`
-      : `{ scope: $scope, key: $key }`;
+    const mergePattern =
+      scope === "project"
+        ? `{ scope: $scope, projectId: $projectId, key: $key }`
+        : `{ scope: $scope, key: $key }`;
     const res = await session.run(
       `
 MERGE (n:Memory ${mergePattern})
@@ -69,7 +76,7 @@ RETURN n
         key: input.key,
         value: input.value,
         tags: input.tags ?? [],
-      }
+      },
     );
     const rec = res.records?.[0];
     if (!rec) throw new Error("No record returned from Neo4j");
@@ -104,7 +111,7 @@ RETURN r
         fromKey: input.fromKey,
         toKey: input.toKey,
         type,
-      }
+      },
     );
   });
 
@@ -121,9 +128,10 @@ export async function getMemoryByKey(input: {
   const projectId = requireProjectId(scope, input.projectId);
 
   return await withNeo4jSession(input.cfg, async (session) => {
-    const matchPattern = scope === "project"
-      ? `{ scope: $scope, projectId: $projectId, key: $key }`
-      : `{ scope: $scope, key: $key }`;
+    const matchPattern =
+      scope === "project"
+        ? `{ scope: $scope, projectId: $projectId, key: $key }`
+        : `{ scope: $scope, key: $key }`;
     const res = await session.run(
       `
 MATCH (n:Memory ${matchPattern})
@@ -134,7 +142,7 @@ LIMIT 1
         scope,
         ...(scope === "project" ? { projectId } : {}),
         key: input.key,
-      }
+      },
     );
     const rec = res.records?.[0];
     if (!rec) return undefined;
@@ -154,9 +162,10 @@ export async function searchMemory(input: {
   const limit = Math.floor(Math.max(1, Math.min(50, input.limit ?? 10)));
 
   return await withNeo4jSession(input.cfg, async (session) => {
-    const matchPattern = scope === "project"
-      ? `{ scope: $scope, projectId: $projectId }`
-      : `{ scope: $scope }`;
+    const matchPattern =
+      scope === "project"
+        ? `{ scope: $scope, projectId: $projectId }`
+        : `{ scope: $scope }`;
     const res = await session.run(
       `
 MATCH (n:Memory ${matchPattern})
@@ -172,7 +181,7 @@ LIMIT toInteger($limit)
         ...(scope === "project" ? { projectId } : {}),
         q: input.query,
         limit,
-      }
+      },
     );
     return res.records.map((r) => toNode(r as any));
   });
@@ -189,9 +198,10 @@ export async function recentMemory(input: {
   const limit = Math.floor(Math.max(1, Math.min(50, input.limit ?? 10)));
 
   return await withNeo4jSession(input.cfg, async (session) => {
-    const matchPattern = scope === "project"
-      ? `{ scope: $scope, projectId: $projectId }`
-      : `{ scope: $scope }`;
+    const matchPattern =
+      scope === "project"
+        ? `{ scope: $scope, projectId: $projectId }`
+        : `{ scope: $scope }`;
     const res = await session.run(
       `
 MATCH (n:Memory ${matchPattern})
@@ -203,7 +213,7 @@ LIMIT toInteger($limit)
         scope,
         ...(scope === "project" ? { projectId } : {}),
         limit,
-      }
+      },
     );
     return res.records.map((r) => toNode(r as any));
   });
@@ -222,9 +232,10 @@ export async function trimMemoryByKeyPrefix(input: {
 
   if (keepLatest === 0) {
     const deleted = await withNeo4jSession(input.cfg, async (session) => {
-      const matchPattern = scope === "project"
-        ? `{ scope: $scope, projectId: $projectId }`
-        : `{ scope: $scope }`;
+      const matchPattern =
+        scope === "project"
+          ? `{ scope: $scope, projectId: $projectId }`
+          : `{ scope: $scope }`;
       const res = await session.run(
         `
 MATCH (n:Memory ${matchPattern})
@@ -237,7 +248,7 @@ RETURN size(nodes) AS deleted
           scope,
           ...(scope === "project" ? { projectId } : {}),
           prefix: input.keyPrefix,
-        }
+        },
       );
       const rec = res.records?.[0] as any;
       return rec ? (rec.get("deleted") as number) : 0;
@@ -246,9 +257,10 @@ RETURN size(nodes) AS deleted
   }
 
   const deleted = await withNeo4jSession(input.cfg, async (session) => {
-    const matchPattern = scope === "project"
-      ? `{ scope: $scope, projectId: $projectId }`
-      : `{ scope: $scope }`;
+    const matchPattern =
+      scope === "project"
+        ? `{ scope: $scope, projectId: $projectId }`
+        : `{ scope: $scope }`;
     const res = await session.run(
       `
 MATCH (n:Memory ${matchPattern})
@@ -264,7 +276,7 @@ RETURN size(toDelete) AS deleted
         ...(scope === "project" ? { projectId } : {}),
         prefix: input.keyPrefix,
         keepLatest,
-      }
+      },
     );
     const rec = res.records?.[0] as any;
     return rec ? (rec.get("deleted") as number) : 0;
@@ -303,7 +315,7 @@ WITH toDrop, collect(m) AS toDelete
 FOREACH (x IN toDelete | DETACH DELETE x)
 RETURN size(toDrop) AS projectsDropped, size(toDelete) AS messagesDeleted
       `.trim(),
-      { keepProjects, scope: "global", prefix: "message:" }
+      { keepProjects, scope: "global", prefix: "message:" },
     );
     const rec = res.records?.[0] as any;
     return {

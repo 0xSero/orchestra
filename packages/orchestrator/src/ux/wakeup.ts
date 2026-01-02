@@ -3,7 +3,7 @@ import type { OrchestratorContext } from "../context/orchestrator-context";
 export async function injectSessionNotice(
   context: OrchestratorContext,
   sessionId: string,
-  text: string
+  text: string,
 ): Promise<void> {
   if (!context.client?.session) return;
   if (context.config.ui?.wakeupInjection === false) return;

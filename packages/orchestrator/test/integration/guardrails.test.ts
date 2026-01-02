@@ -5,7 +5,11 @@ import { workerJobs } from "../../src/core/jobs";
 describe("guardrails", () => {
   test("builds pending task reminder for running tasks", () => {
     const sessionId = `session-${Date.now()}`;
-    const job = workerJobs.create({ workerId: "coder", message: "do work", sessionId });
+    const job = workerJobs.create({
+      workerId: "coder",
+      message: "do work",
+      sessionId,
+    });
 
     const reminder = buildPendingTaskReminder(sessionId);
     expect(reminder).toBeTruthy();

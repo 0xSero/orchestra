@@ -29,12 +29,16 @@ export function loadWorkflows(config: OrchestratorConfig) {
   }
 }
 
-function resolveStepConfig(step: WorkflowStepConfig): WorkflowStepDefinition | undefined {
+function resolveStepConfig(
+  step: WorkflowStepConfig,
+): WorkflowStepDefinition | undefined {
   const id = step.id;
   if (!id) return undefined;
   const workerId = step.workerId ?? "coder";
   const prompt = step.prompt ?? "Task:\n{task}";
-  const requiredSkills = step.requiredSkills ? asStringArray(step.requiredSkills) ?? [] : [];
+  const requiredSkills = step.requiredSkills
+    ? (asStringArray(step.requiredSkills) ?? [])
+    : [];
   return {
     id,
     title: step.title ?? id,
@@ -46,10 +50,14 @@ function resolveStepConfig(step: WorkflowStepConfig): WorkflowStepDefinition | u
   };
 }
 
-function resolveWorkflowDefinition(def: WorkflowDefinitionConfig): WorkflowDefinition | undefined {
+function resolveWorkflowDefinition(
+  def: WorkflowDefinitionConfig,
+): WorkflowDefinition | undefined {
   if (!def || typeof def.id !== "string") return undefined;
   if (!Array.isArray(def.steps) || def.steps.length === 0) return undefined;
-  const steps = def.steps.map(resolveStepConfig).filter(Boolean) as WorkflowStepDefinition[];
+  const steps = def.steps
+    .map(resolveStepConfig)
+    .filter(Boolean) as WorkflowStepDefinition[];
   if (steps.length === 0) return undefined;
   return {
     id: def.id,

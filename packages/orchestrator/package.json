@@ -32,7 +32,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "bun test",
     "bench": "bun test ./test/perf/*.bench.ts",
-    "check": "bun run lint && bun run typecheck && bun run test && bun run build"
+    "check": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run build"
   },
   "dependencies": {
     "@opencode-ai/plugin": "^1.0.203",

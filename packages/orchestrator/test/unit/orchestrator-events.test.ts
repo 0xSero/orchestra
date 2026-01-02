@@ -9,7 +9,9 @@ import type { WorkerInstance } from "../../src/types";
 
 describe("orchestrator events", () => {
   test("creates a versioned event envelope", () => {
-    const event = createOrchestratorEvent("orchestra.error", { message: "boom" });
+    const event = createOrchestratorEvent("orchestra.error", {
+      message: "boom",
+    });
     expect(event.version).toBe(1);
     expect(event.type).toBe("orchestra.error");
     expect(typeof event.id).toBe("string");

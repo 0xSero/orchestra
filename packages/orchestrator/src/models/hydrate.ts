@@ -56,7 +56,11 @@ export async function hydrateProfileModelsFromOpencode(input: {
 
       // If capabilities not in provider list, fetch from SDK
       if (!caps) {
-        const modelInfo = await fetchModelInfo(input.client, input.directory, desired);
+        const modelInfo = await fetchModelInfo(
+          input.client,
+          input.directory,
+          desired,
+        );
         caps = modelInfo?.capabilities;
       }
 
@@ -65,13 +69,13 @@ export async function hydrateProfileModelsFromOpencode(input: {
         if (!visionCapable) {
           throw new Error(
             `Profile "${profile.id}" requires vision, but selected model "${desired}" does not appear vision-capable. ` +
-              `Choose a model with image input support.`
+              `Choose a model with image input support.`,
           );
         }
       } else {
         console.warn(
           `[hydrate] No capability metadata for "${desired}" - ` +
-            `trusting profile "${profile.id}" supportsVision flag`
+            `trusting profile "${profile.id}" supportsVision flag`,
         );
       }
     }

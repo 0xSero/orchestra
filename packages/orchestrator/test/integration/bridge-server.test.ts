@@ -49,7 +49,7 @@ describe("bridge server streaming", () => {
           expect(contentType.includes("text/event-stream")).toBe(true);
           res.destroy();
           resolve();
-        }
+        },
       );
       req.on("error", reject);
       req.setTimeout(2000, () => {
@@ -103,7 +103,7 @@ describe("bridge server streaming", () => {
             },
             status: "ready",
           });
-        }
+        },
       );
       req.on("error", reject);
       req.end();

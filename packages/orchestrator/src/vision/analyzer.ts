@@ -45,7 +45,7 @@ export interface AnalyzeOptions {
   sendToVisionWorker: (
     message: string,
     attachments: ImageAttachment[],
-    timeout: number
+    timeout: number,
   ) => Promise<{ success: boolean; response?: string; error?: string }>;
   /** Vision model name (for progress display) */
   model?: string;
@@ -66,9 +66,23 @@ export interface AnalyzeOptions {
 function isImagePart(part: any): boolean {
   if (!part || typeof part !== "object") return false;
   if (part.type === "image") return true;
-  if (part.type === "file" && typeof part.mime === "string" && part.mime.startsWith("image/")) return true;
-  if (part.type === "file" && typeof part.url === "string" && part.url.startsWith("data:image/")) return true;
-  if (typeof part.url === "string" && (part.url === "clipboard" || part.url.startsWith("clipboard:"))) return true;
+  if (
+    part.type === "file" &&
+    typeof part.mime === "string" &&
+    part.mime.startsWith("image/")
+  )
+    return true;
+  if (
+    part.type === "file" &&
+    typeof part.url === "string" &&
+    part.url.startsWith("data:image/")
+  )
+    return true;
+  if (
+    typeof part.url === "string" &&
+    (part.url === "clipboard" || part.url.startsWith("clipboard:"))
+  )
+    return true;
   return false;
 }
 
@@ -106,13 +120,24 @@ async function extractSingleImage(part: any): Promise<ImageAttachment | null> {
     if (partUrl?.startsWith("file://")) {
       const path = fileURLToPath(partUrl);
       const buf = await readFile(path);
-      return { type: "image", mimeType: part.mime ?? inferMimeType(path), base64: buf.toString("base64") };
+      return {
+        type: "image",
+        mimeType: part.mime ?? inferMimeType(path),
+        base64: buf.toString("base64"),
+      };
     }
 
     // Direct filesystem path
-    if (partUrl && (partUrl.startsWith("/") || /^[A-Za-z]:[\\/]/.test(partUrl))) {
+    if (
+      partUrl &&
+      (partUrl.startsWith("/") || /^[A-Za-z]:[\\/]/.test(partUrl))
+    ) {
       const buf = await readFile(partUrl);
-      return { type: "image", mimeType: part.mime ?? inferMimeType(partUrl), base64: buf.toString("base64") };
+      return {
+        type: "image",
+        mimeType: part.mime ?? inferMimeType(partUrl),
+        base64: buf.toString("base64"),
+      };
     }
 
     // Data URL
@@ -133,12 +158,18 @@ async function extractSingleImage(part: any): Promise<ImageAttachment | null> {
 
     // Direct base64
     if (part.base64 && typeof part.base64 === "string") {
-      return { type: "image", mimeType: part.mime ?? "image/png", base64: part.base64 };
+      return {
+        type: "image",
+        mimeType: part.mime ?? "image/png",
+        base64: part.base64,
+      };
     }
 
     return null;
   } catch (err) {
-    logger.warn(`[VISION] Failed to extract image: ${err instanceof Error ? err.message : String(err)}`);
+    logger.warn(
+      `[VISION] Failed to extract image: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return null;
   }
 }
@@ -156,7 +187,10 @@ function inferMimeType(path: string): string {
   return mimeMap[ext ?? ""] ?? "image/png";
 }
 
-async function readClipboardImage(): Promise<{ mimeType: string; base64: string } | null> {
+async function readClipboardImage(): Promise<{
+  mimeType: string;
+  base64: string;
+} | null> {
   // macOS
   if (process.platform === "darwin") {
     try {
@@ -187,11 +221,15 @@ async function readClipboardImage(): Promise<{ mimeType: string; base64: string 
   // Linux (Wayland)
   if (process.platform === "linux") {
     try {
-      const { stdout } = await execFileAsync("wl-paste", ["--no-newline", "--type", "image/png"], {
-        encoding: "buffer" as any,
-        timeout: 2000,
-        maxBuffer: 20 * 1024 * 1024,
-      });
+      const { stdout } = await execFileAsync(
+        "wl-paste",
+        ["--no-newline", "--type", "image/png"],
+        {
+          encoding: "buffer" as any,
+          timeout: 2000,
+          maxBuffer: 20 * 1024 * 1024,
+        },
+      );
       const buf = Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout as any);
       if (buf.length > 0) {
         return { mimeType: "image/png", base64: buf.toString("base64") };
@@ -199,12 +237,18 @@ async function readClipboardImage(): Promise<{ mimeType: string; base64: string 
     } catch {
       // Try X11 fallback
       try {
-        const { stdout } = await execFileAsync("xclip", ["-selection", "clipboard", "-t", "image/png", "-o"], {
-          encoding: "buffer" as any,
-          timeout: 2000,
-          maxBuffer: 20 * 1024 * 1024,
-        });
-        const buf = Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout as any);
+        const { stdout } = await execFileAsync(
+          "xclip",
+          ["-selection", "clipboard", "-t", "image/png", "-o"],
+          {
+            encoding: "buffer" as any,
+            timeout: 2000,
+            maxBuffer: 20 * 1024 * 1024,
+          },
+        );
+        const buf = Buffer.isBuffer(stdout)
+          ? stdout
+          : Buffer.from(stdout as any);
         if (buf.length > 0) {
           return { mimeType: "image/png", base64: buf.toString("base64") };
         }
@@ -228,7 +272,7 @@ const DEFAULT_PROMPT = `Analyze this image and describe what you see. Focus on a
  */
 export async function analyzeImages(
   parts: any[],
-  options: AnalyzeOptions
+  options: AnalyzeOptions,
 ): Promise<VisionResult> {
   const startTime = Date.now();
   const timeout = options.timeout ?? 300_000;
@@ -262,7 +306,11 @@ export async function analyzeImages(
     progress?.update(`Analyzing ${attachments.length} image(s)...`, 50);
     visionProgress?.analyzing(attachments.length, model);
 
-    const result = await options.sendToVisionWorker(prompt, attachments, timeout);
+    const result = await options.sendToVisionWorker(
+      prompt,
+      attachments,
+      timeout,
+    );
 
     const durationMs = Date.now() - startTime;
 
@@ -321,7 +369,11 @@ export function formatVisionAnalysis(result: VisionResult): string | undefined {
 export function replaceImagesWithAnalysis(
   parts: any[],
   analysisText: string,
-  meta?: { sessionID?: string; messageID?: string; position?: "append" | "prepend" }
+  meta?: {
+    sessionID?: string;
+    messageID?: string;
+    position?: "append" | "prepend";
+  },
 ): any[] {
   if (!Array.isArray(parts)) return parts;
 

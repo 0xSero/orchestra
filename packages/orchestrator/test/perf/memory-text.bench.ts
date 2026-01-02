@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { benchmark } from "../helpers/benchmark";
-import { appendRollingSummary, normalizeForMemory } from "../../src/memory/text";
+import {
+  appendRollingSummary,
+  normalizeForMemory,
+} from "../../src/memory/text";
 
 describe("memory text (benchmarks)", () => {
   test("normalizeForMemory baseline", async () => {
@@ -14,7 +17,7 @@ describe("memory text (benchmarks)", () => {
       () => {
         normalizeForMemory(input, 2000);
       },
-      { iterations: 500, warmup: 50 }
+      { iterations: 500, warmup: 50 },
     );
 
     expect(result.opsPerSecond).toBeGreaterThan(0);
@@ -29,10 +32,9 @@ describe("memory text (benchmarks)", () => {
       () => {
         appendRollingSummary(prev, entry, 2000);
       },
-      { iterations: 500, warmup: 50 }
+      { iterations: 500, warmup: 50 },
     );
 
     expect(result.opsPerSecond).toBeGreaterThan(0);
   });
 });
-

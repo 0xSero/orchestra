@@ -67,7 +67,13 @@
       "purpose": "Maintain a Neo4j-backed memory graph (project + global) and advise on context pruning",
       "whenToUse": "When you want to record durable project knowledge, track decisions and entities over time, or decide what context can be safely pruned",
       "supportsWeb": true,
-      "tags": ["memory", "neo4j", "knowledge-graph", "context-pruning", "summarization"],
+      "tags": [
+        "memory",
+        "neo4j",
+        "knowledge-graph",
+        "context-pruning",
+        "summarization"
+      ],
       "sessionMode": "child",
       "skillPermissions": "inherit"
     },

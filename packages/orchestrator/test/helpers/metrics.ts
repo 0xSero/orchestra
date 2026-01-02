@@ -1,6 +1,6 @@
 /**
  * Performance metrics collection utilities for test harness
- * 
+ *
  * Provides interfaces and implementation for collecting performance metrics
  * during test execution including spawn latency, memory usage, file I/O,
  * and throughput measurements.
@@ -181,17 +181,17 @@ export interface MetricsCollector {
 
 /**
  * Creates a new MetricsCollector instance
- * 
+ *
  * @example
  * ```typescript
  * const collector = createMetricsCollector();
  * collector.start();
- * 
+ *
  * // During test execution
  * const endSpan = collector.startSpan('spawnWorker');
  * await spawnWorker(profile);
  * endSpan();
- * 
+ *
  * // After test
  * const metrics = collector.stop();
  * console.log(`Spawn P95: ${percentile(metrics.spawn.latencyMs, 95)}ms`);
@@ -252,7 +252,7 @@ export function createMetricsCollector(options?: {
 
       return () => {
         const duration = performance.now() - span.startTime;
-        
+
         // Categorize spans by name prefix
         if (name.startsWith("spawn")) {
           spawnLatencyMs.push(duration);
@@ -277,7 +277,7 @@ export function createMetricsCollector(options?: {
     recordMemory(): void {
       const memUsage = process.memoryUsage();
       const rssMb = memUsage.rss / (1024 * 1024);
-      
+
       memoryUsageMb.push(rssMb);
       rssBytes.push(memUsage.rss);
       heapUsedBytes.push(memUsage.heapUsed);
@@ -322,9 +322,10 @@ export function createMetricsCollector(options?: {
     getPerformanceMetrics(): PerformanceMetrics {
       const totalSpawns = spawnSuccessCount + spawnFailureCount;
       const elapsedMinutes = (Date.now() - startTime) / 60_000;
-      const avgJobDuration = jobDurations.length > 0 
-        ? jobDurations.reduce((a, b) => a + b, 0) / jobDurations.length 
-        : 0;
+      const avgJobDuration =
+        jobDurations.length > 0
+          ? jobDurations.reduce((a, b) => a + b, 0) / jobDurations.length
+          : 0;
 
       return {
         spawn: {
@@ -344,8 +345,10 @@ export function createMetricsCollector(options?: {
           lockAcquireMs: [...lockAcquireMs],
         },
         throughput: {
-          messagesPerSecond: elapsedMinutes > 0 ? messageCount / (elapsedMinutes * 60) : 0,
-          promptsPerMinute: elapsedMinutes > 0 ? promptCount / elapsedMinutes : 0,
+          messagesPerSecond:
+            elapsedMinutes > 0 ? messageCount / (elapsedMinutes * 60) : 0,
+          promptsPerMinute:
+            elapsedMinutes > 0 ? promptCount / elapsedMinutes : 0,
         },
         jobs: {
           activeCount: activeSpans.size,
@@ -450,14 +453,14 @@ export function createMetricsCollector(options?: {
 
 /**
  * Calculate percentile from an array of numbers
- * 
+ *
  * @param values - Array of numeric values
  * @param p - Percentile (0-100)
  * @returns The value at the given percentile
  */
 export function percentile(values: number[], p: number): number {
   if (values.length === 0) return 0;
-  
+
   const sorted = [...values].sort((a, b) => a - b);
   const index = Math.ceil((p / 100) * sorted.length) - 1;
   return sorted[Math.max(0, index)];
@@ -488,9 +491,10 @@ export function calculateStats(values: number[]): {
   const stdDev = Math.sqrt(variance);
 
   const medianIndex = Math.floor(sorted.length / 2);
-  const median = sorted.length % 2 === 0 
-    ? (sorted[medianIndex - 1] + sorted[medianIndex]) / 2 
-    : sorted[medianIndex];
+  const median =
+    sorted.length % 2 === 0
+      ? (sorted[medianIndex - 1] + sorted[medianIndex]) / 2
+      : sorted[medianIndex];
 
   return {
     mean,

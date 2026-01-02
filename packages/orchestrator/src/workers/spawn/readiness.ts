@@ -4,7 +4,7 @@ const workerBridgeToolIds = ["stream_chunk"] as const;
 
 export async function checkWorkerBridgeTools(
   client: ReturnType<typeof createOpencodeClient>,
-  directory: string | undefined
+  directory: string | undefined,
 ): Promise<{ ok: boolean; missing: string[]; toolIds: string[] }> {
   const result = await client.tool.ids({ query: { directory } } as any);
   const sdkError: any = (result as any)?.error;

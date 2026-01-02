@@ -56,7 +56,9 @@ export function createWorkflowRunState(input: {
     carry: "",
     startedAt: now,
     updatedAt: now,
-    ...(input.parentSessionId ? { parentSessionId: input.parentSessionId } : {}),
+    ...(input.parentSessionId
+      ? { parentSessionId: input.parentSessionId }
+      : {}),
   };
 }
 
@@ -72,7 +74,9 @@ export function deleteWorkflowRun(runId: string): void {
   runs.delete(runId);
 }
 
-export function toWorkflowRunResult(state: WorkflowRunState): WorkflowRunResult {
+export function toWorkflowRunResult(
+  state: WorkflowRunState,
+): WorkflowRunResult {
   return {
     runId: state.runId,
     workflowId: state.workflowId,

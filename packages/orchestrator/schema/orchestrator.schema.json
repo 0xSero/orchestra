@@ -16,11 +16,15 @@
         "toasts": { "type": "boolean", "default": true },
         "injectSystemContext": { "type": "boolean", "default": true },
         "systemContextMaxWorkers": { "type": "number", "default": 12 },
-        "defaultListFormat": { "type": "string", "enum": ["markdown", "json"], "default": "markdown" },
+        "defaultListFormat": {
+          "type": "string",
+          "enum": ["markdown", "json"],
+          "default": "markdown"
+        },
         "debug": { "type": "boolean", "default": false },
         "logToConsole": { "type": "boolean", "default": false },
-        "wakeupInjection": { 
-          "type": "boolean", 
+        "wakeupInjection": {
+          "type": "boolean",
           "default": true,
           "description": "When async worker jobs or vision analysis complete, inject a prompt into the orchestrator session to resume it."
         }
@@ -50,7 +54,11 @@
         "name": { "type": "string", "default": "orchestrator" },
         "model": { "type": "string" },
         "prompt": { "type": "string" },
-        "mode": { "type": "string", "enum": ["primary", "subagent"], "default": "primary" },
+        "mode": {
+          "type": "string",
+          "enum": ["primary", "subagent"],
+          "default": "primary"
+        },
         "color": { "type": "string" },
         "applyToBuild": { "type": "boolean", "default": false },
         "tools": {
@@ -76,7 +84,11 @@
         "enabled": { "type": "boolean", "default": false },
         "maxToolOutputChars": { "type": "number", "default": 12000 },
         "maxToolInputChars": { "type": "number", "default": 4000 },
-        "protectedTools": { "type": "array", "items": { "type": "string" }, "default": ["task", "todowrite", "todoread"] }
+        "protectedTools": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["task", "todowrite", "todoread"]
+        }
       }
     },
     "workflows": {
@@ -89,7 +101,10 @@
           "additionalProperties": false,
           "properties": {
             "execution": { "type": "string", "enum": ["step", "auto"] },
-            "intervene": { "type": "string", "enum": ["never", "on-warning", "on-error", "always"] }
+            "intervene": {
+              "type": "string",
+              "enum": ["never", "on-warning", "on-error", "always"]
+            }
           }
         },
         "definitions": {
@@ -115,7 +130,10 @@
                     "prompt": { "type": "string" },
                     "carry": { "type": "boolean" },
                     "timeoutMs": { "type": "number" },
-                    "requiredSkills": { "type": "array", "items": { "type": "string" } }
+                    "requiredSkills": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    }
                   }
                 }
               }
@@ -166,7 +184,10 @@
                   "prompt": { "type": "string" },
                   "carry": { "type": "boolean" },
                   "timeoutMs": { "type": "number" },
-                  "requiredSkills": { "type": "array", "items": { "type": "string" } }
+                  "requiredSkills": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  }
                 }
               }
             },
@@ -202,7 +223,11 @@
         "autoSpawn": { "type": "boolean", "default": true },
         "autoRecord": { "type": "boolean", "default": true },
         "autoInject": { "type": "boolean", "default": true },
-        "scope": { "type": "string", "enum": ["project", "global"], "default": "project" },
+        "scope": {
+          "type": "string",
+          "enum": ["project", "global"],
+          "default": "project"
+        },
         "maxChars": { "type": "number", "default": 2000 },
         "summaries": {
           "type": "object",
@@ -244,8 +269,14 @@
       "description": "PostHog telemetry settings. Set POSTHOG_API_KEY env var or provide apiKey here.",
       "properties": {
         "enabled": { "type": "boolean", "default": false },
-        "apiKey": { "type": "string", "description": "PostHog API key (or use POSTHOG_API_KEY env var)" },
-        "host": { "type": "string", "description": "PostHog host (default: https://us.i.posthog.com)" }
+        "apiKey": {
+          "type": "string",
+          "description": "PostHog API key (or use POSTHOG_API_KEY env var)"
+        },
+        "host": {
+          "type": "string",
+          "description": "PostHog host (default: https://us.i.posthog.com)"
+        }
       }
     },
     "profiles": {
@@ -287,7 +318,10 @@
               "supportsWeb": { "type": "boolean" },
               "temperature": { "type": "number" },
               "tags": { "type": "array", "items": { "type": "string" } },
-              "requiredSkills": { "type": "array", "items": { "type": "string" } },
+              "requiredSkills": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
               "tools": {
                 "type": "object",
                 "additionalProperties": { "type": "boolean" }
@@ -336,7 +370,10 @@
               "supportsWeb": { "type": "boolean" },
               "temperature": { "type": "number" },
               "tags": { "type": "array", "items": { "type": "string" } },
-              "requiredSkills": { "type": "array", "items": { "type": "string" } },
+              "requiredSkills": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
               "tools": {
                 "type": "object",
                 "additionalProperties": { "type": "boolean" }

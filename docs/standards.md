@@ -36,10 +36,12 @@ Hard rules from the docs:
 
 Every task completes only when these pass locally and in CI:
 
-1. `lint`
-2. `typecheck`
-3. `test`
-4. `build`
+1. `audit`
+2. `format:check`
+3. `lint`
+4. `typecheck`
+5. `test`
+6. `build`
 
 Run them together with `bun run check`.
 

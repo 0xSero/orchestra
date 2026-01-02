@@ -39,7 +39,10 @@ export interface ProgressHandle {
 }
 
 export type ToastVariant = "success" | "info" | "warning" | "error";
-export type ToastFn = (message: string, variant: ToastVariant) => void | Promise<unknown>;
+export type ToastFn = (
+  message: string,
+  variant: ToastVariant,
+) => void | Promise<unknown>;
 
 export interface ProgressManagerOptions {
   /** Toast function for user notifications */
@@ -72,8 +75,10 @@ export class ProgressManager {
    */
   configure(options: ProgressManagerOptions): void {
     if (options.showToast !== undefined) this.showToast = options.showToast;
-    if (options.toastsEnabled !== undefined) this.toastsEnabled = options.toastsEnabled;
-    if (options.minDurationForToast !== undefined) this.minDurationForToast = options.minDurationForToast;
+    if (options.toastsEnabled !== undefined)
+      this.toastsEnabled = options.toastsEnabled;
+    if (options.minDurationForToast !== undefined)
+      this.minDurationForToast = options.minDurationForToast;
   }
 
   /**
@@ -140,13 +145,18 @@ export class ProgressManager {
     progress.status = status;
     if (percent !== undefined) progress.percent = percent;
 
-    logger.debug(`[PROGRESS] ${progress.operation}: ${status}${percent !== undefined ? ` (${percent}%)` : ""}`);
+    logger.debug(
+      `[PROGRESS] ${progress.operation}: ${status}${percent !== undefined ? ` (${percent}%)` : ""}`,
+    );
 
     // Update toast if operation has been running long enough
     const elapsed = Date.now() - progress.startedAt;
     if (this.toastsEnabled && elapsed >= this.minDurationForToast) {
       const percentStr = percent !== undefined ? ` (${percent}%)` : "";
-      void this.showToast(`${progress.operation}: ${status}${percentStr}`, "info");
+      void this.showToast(
+        `${progress.operation}: ${status}${percentStr}`,
+        "info",
+      );
     }
   }
 
@@ -159,7 +169,9 @@ export class ProgressManager {
     progress.status = message ?? "Complete";
     progress.percent = 100;
 
-    logger.info(`[PROGRESS] Completed: ${progress.operation} (${formatDuration(elapsed)})`);
+    logger.info(
+      `[PROGRESS] Completed: ${progress.operation} (${formatDuration(elapsed)})`,
+    );
 
     // Show completion toast
     if (this.toastsEnabled) {

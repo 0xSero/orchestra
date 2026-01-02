@@ -1,7 +1,11 @@
 import { logger } from "../../core/logger";
 
-export function extractTextFromPromptResponse(data: unknown): { text: string; debug?: string } {
-  const asObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
+export function extractTextFromPromptResponse(data: unknown): {
+  text: string;
+  debug?: string;
+} {
+  const asObj = (v: unknown): v is Record<string, unknown> =>
+    typeof v === "object" && v !== null;
   const readParts = (v: unknown): unknown[] | undefined => {
     if (!asObj(v)) return undefined;
     const parts = (v as any).parts;
@@ -9,19 +13,26 @@ export function extractTextFromPromptResponse(data: unknown): { text: string; de
     return undefined;
   };
 
-  const parts = readParts(data) ?? readParts(asObj(data) ? (data as any).message : undefined) ?? [];
-  if (!Array.isArray(parts) || parts.length === 0) return { text: "", debug: "no_parts" };
+  const parts =
+    readParts(data) ??
+    readParts(asObj(data) ? (data as any).message : undefined) ??
+    [];
+  if (!Array.isArray(parts) || parts.length === 0)
+    return { text: "", debug: "no_parts" };
 
   let text = "";
   const partTypes: string[] = [];
   for (const part of parts) {
     if (!asObj(part)) continue;
-    const type = typeof (part as any).type === "string" ? (part as any).type : "unknown";
+    const type =
+      typeof (part as any).type === "string" ? (part as any).type : "unknown";
     partTypes.push(type);
-    if (type === "text" && typeof (part as any).text === "string") text += (part as any).text;
+    if (type === "text" && typeof (part as any).text === "string")
+      text += (part as any).text;
   }
 
-  const debug = text.length > 0 ? undefined : `parts:${[...new Set(partTypes)].join(",")}`;
+  const debug =
+    text.length > 0 ? undefined : `parts:${[...new Set(partTypes)].join(",")}`;
   return { text, debug };
 }
 
@@ -33,7 +44,9 @@ export function extractStreamChunks(value: any): string {
       : [];
   if (!Array.isArray(parts) || parts.length === 0) return "";
   const chunks = parts
-    .filter((part: any) => part?.type === "tool" && part?.tool === "stream_chunk")
+    .filter(
+      (part: any) => part?.type === "tool" && part?.tool === "stream_chunk",
+    )
     .map((part: any) => {
       const input = part?.state?.input;
       return typeof input?.chunk === "string" ? input.chunk : "";
@@ -50,7 +63,8 @@ export async function extractWorkerResponse(input: {
   timeoutMs: number;
   debugLabel?: string;
 }): Promise<string> {
-  const { client, sessionId, directory, promptData, timeoutMs, debugLabel } = input;
+  const { client, sessionId, directory, promptData, timeoutMs, debugLabel } =
+    input;
 
   const extracted = extractTextFromPromptResponse(promptData);
   let responseText = extracted.text.trim();
@@ -69,7 +83,11 @@ export async function extractWorkerResponse(input: {
   if (responseText.length === 0) {
     const messageId = promptData?.info?.id ?? promptData?.message?.info?.id;
     if (messageId) {
-      for (let attempt = 0; attempt < 3 && responseText.length === 0; attempt += 1) {
+      for (
+        let attempt = 0;
+        attempt < 3 && responseText.length === 0;
+        attempt += 1
+      ) {
         const messageRes = await client.session.message({
           path: { id: sessionId, messageID: messageId },
           query: { directory },
@@ -82,7 +100,9 @@ export async function extractWorkerResponse(input: {
           if (streamed.length > 0) responseText = streamed;
         }
         if (responseText.length > 0) break;
-        await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
+        await new Promise((resolve) =>
+          setTimeout(resolve, 200 * (attempt + 1)),
+        );
       }
     }
   }
@@ -98,7 +118,9 @@ export async function extractWorkerResponse(input: {
         : Array.isArray(messagesRes)
           ? messagesRes
           : [];
-      const assistant = [...messages].reverse().find((m: any) => m?.info?.role === "assistant");
+      const assistant = [...messages]
+        .reverse()
+        .find((m: any) => m?.info?.role === "assistant");
       if (assistant) {
         const extractedMessage = extractTextFromPromptResponse(assistant);
         responseText = extractedMessage.text.trim();
@@ -128,16 +150,24 @@ export async function extractWorkerResponse(input: {
           id: m?.info?.id,
           finish: m?.info?.finish,
           error: m?.info?.error,
-          parts: Array.isArray(m?.parts) ? m.parts.map((p: any) => p?.type).filter(Boolean) : [],
+          parts: Array.isArray(m?.parts)
+            ? m.parts.map((p: any) => p?.type).filter(Boolean)
+            : [],
         }));
-        logger.warn(`${debugLabel ?? "[worker]"} empty response summary`, JSON.stringify(summary, null, 2));
+        logger.warn(
+          `${debugLabel ?? "[worker]"} empty response summary`,
+          JSON.stringify(summary, null, 2),
+        );
       } catch (error) {
-        logger.warn(`${debugLabel ?? "[worker]"} empty response debug failed`, error);
+        logger.warn(
+          `${debugLabel ?? "[worker]"} empty response debug failed`,
+          error,
+        );
       }
     }
     throw new Error(
       `Worker returned no text output (${extracted.debug ?? "unknown"}). ` +
-        `This usually means the worker model/provider is misconfigured or unavailable.`
+        `This usually means the worker model/provider is misconfigured or unavailable.`,
     );
   }
 

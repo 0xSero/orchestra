@@ -23,7 +23,13 @@ const registerTestWorkflow = (id: string, steps: WorkflowStepDefinition[]) => {
 describe("workflow events", () => {
   test("emits started, step, and completed events with consistent runId", async () => {
     registerTestWorkflow("unit-events", [
-      { id: "s1", title: "Step 1", workerId: "coder", prompt: "Do 1", carry: true },
+      {
+        id: "s1",
+        title: "Step 1",
+        workerId: "coder",
+        prompt: "Do 1",
+        carry: true,
+      },
     ]);
 
     const events: Array<{ type: string; data: any }> = [];
@@ -38,14 +44,16 @@ describe("workflow events", () => {
       {
         resolveWorker: async (workerId) => workerId,
         sendToWorker: async () => ({ success: true, response: "ok" }),
-      }
+      },
     );
 
     off();
 
     const started = events.find((e) => e.type === "orchestra.workflow.started");
     const step = events.find((e) => e.type === "orchestra.workflow.step");
-    const completed = events.find((e) => e.type === "orchestra.workflow.completed");
+    const completed = events.find(
+      (e) => e.type === "orchestra.workflow.completed",
+    );
 
     expect(started).toBeTruthy();
     expect(step).toBeTruthy();
@@ -56,8 +64,20 @@ describe("workflow events", () => {
 
   test("emits carry trimmed event when carry exceeds limits", async () => {
     registerTestWorkflow("unit-carry-trimmed", [
-      { id: "s1", title: "Step 1", workerId: "coder", prompt: "Do 1", carry: true },
-      { id: "s2", title: "Step 2", workerId: "architect", prompt: "Carry: {carry}", carry: false },
+      {
+        id: "s1",
+        title: "Step 1",
+        workerId: "coder",
+        prompt: "Do 1",
+        carry: true,
+      },
+      {
+        id: "s2",
+        title: "Step 2",
+        workerId: "architect",
+        prompt: "Carry: {carry}",
+        carry: false,
+      },
     ]);
 
     const events: Array<{ type: string; data: any }> = [];
@@ -67,7 +87,10 @@ describe("workflow events", () => {
       }
     });
 
-    const longArtifacts = Array.from({ length: 40 }, (_, i) => `- file-${i}.ts`).join("\n");
+    const longArtifacts = Array.from(
+      { length: 40 },
+      (_, i) => `- file-${i}.ts`,
+    ).join("\n");
     const response = [
       "## Summary",
       "- Did the thing",
@@ -86,16 +109,22 @@ describe("workflow events", () => {
     ].join("\n");
 
     await runWorkflowWithDependencies(
-      { workflowId: "unit-carry-trimmed", task: "do", limits: { ...limits, maxCarryChars: 300 } },
+      {
+        workflowId: "unit-carry-trimmed",
+        task: "do",
+        limits: { ...limits, maxCarryChars: 300 },
+      },
       {
         resolveWorker: async (workerId) => workerId,
         sendToWorker: async () => ({ success: true, response }),
-      }
+      },
     );
 
     off();
 
-    const trimmed = events.find((e) => e.type === "orchestra.workflow.carry.trimmed");
+    const trimmed = events.find(
+      (e) => e.type === "orchestra.workflow.carry.trimmed",
+    );
     expect(trimmed).toBeTruthy();
     expect(trimmed?.data?.workflowId).toBe("unit-carry-trimmed");
   });

@@ -5,7 +5,11 @@
 import type { WorkerBackend, WorkerInstance, WorkerProfile } from "../types";
 import { workerPool, type SpawnOptions } from "../core/worker-pool";
 import { publishErrorEvent } from "../core/orchestrator-events";
-import { spawnAgentWorker, sendToAgentWorker, stopAgentWorker } from "./backends/agent";
+import {
+  spawnAgentWorker,
+  sendToAgentWorker,
+  stopAgentWorker,
+} from "./backends/agent";
 import {
   spawnServerWorker,
   connectToServerWorker,
@@ -25,7 +29,7 @@ function resolveWorkerBackend(profile: WorkerProfile): WorkerBackend {
 
 export async function spawnWorker(
   profile: WorkerProfile,
-  options: SpawnOptions & { forceNew?: boolean }
+  options: SpawnOptions & { forceNew?: boolean },
 ): Promise<WorkerInstance> {
   const backend = resolveWorkerBackend(profile);
   if (backend === "agent") {
@@ -36,11 +40,13 @@ export async function spawnWorker(
 
 export async function connectToWorker(
   profile: WorkerProfile,
-  port: number
+  port: number,
 ): Promise<WorkerInstance> {
   const backend = resolveWorkerBackend(profile);
   if (backend !== "server") {
-    throw new Error(`Worker "${profile.id}" uses agent backend and cannot connect to a server process.`);
+    throw new Error(
+      `Worker "${profile.id}" uses agent backend and cannot connect to a server process.`,
+    );
   }
   return connectToServerWorker(profile, port);
 }
@@ -58,19 +64,35 @@ export async function stopWorker(workerId: string): Promise<boolean> {
 export async function sendToWorker(
   workerId: string,
   message: string,
-  options?: SendToWorkerOptions & { client?: any; directory?: string }
-): Promise<{ success: boolean; response?: string; warning?: string; error?: string }> {
+  options?: SendToWorkerOptions & { client?: any; directory?: string },
+): Promise<{
+  success: boolean;
+  response?: string;
+  warning?: string;
+  error?: string;
+}> {
   const instance = workerPool.get(workerId);
   if (!instance) {
-    publishErrorEvent({ message: `Worker "${workerId}" not found`, source: "worker", workerId });
+    publishErrorEvent({
+      message: `Worker "${workerId}" not found`,
+      source: "worker",
+      workerId,
+    });
     return { success: false, error: `Worker "${workerId}" not found` };
   }
   const backend = resolveWorkerBackend(instance.profile);
-  const stickyModel = instance.modelPolicy === "sticky" ? instance.profile.model?.trim() : undefined;
+  const stickyModel =
+    instance.modelPolicy === "sticky"
+      ? instance.profile.model?.trim()
+      : undefined;
   const resolvedModel =
     options?.model ??
-    (stickyModel && (backend === "agent" || isFullModelID(stickyModel)) ? stickyModel : undefined);
-  const nextOptions = resolvedModel ? { ...(options ?? {}), model: resolvedModel } : options;
+    (stickyModel && (backend === "agent" || isFullModelID(stickyModel))
+      ? stickyModel
+      : undefined);
+  const nextOptions = resolvedModel
+    ? { ...(options ?? {}), model: resolvedModel }
+    : options;
   if (backend === "agent") {
     return sendToAgentWorker(workerId, message, nextOptions);
   }
@@ -79,8 +101,11 @@ export async function sendToWorker(
 
 export async function spawnWorkers(
   profiles: WorkerProfile[],
-  options: SpawnOptions & { sequential?: boolean }
-): Promise<{ succeeded: WorkerInstance[]; failed: Array<{ profile: WorkerProfile; error: string }> }> {
+  options: SpawnOptions & { sequential?: boolean },
+): Promise<{
+  succeeded: WorkerInstance[];
+  failed: Array<{ profile: WorkerProfile; error: string }>;
+}> {
   const succeeded: WorkerInstance[] = [];
   const failed: Array<{ profile: WorkerProfile; error: string }> = [];
 
@@ -100,7 +125,7 @@ export async function spawnWorkers(
     }
   } else {
     const results = await Promise.allSettled(
-      profiles.map((profile) => spawnWorker(profile, options))
+      profiles.map((profile) => spawnWorker(profile, options)),
     );
 
     results.forEach((result, index) => {

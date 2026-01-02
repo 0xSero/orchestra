@@ -1,11 +1,18 @@
 /**
  * Enhanced E2E test environment utilities
- * 
+ *
  * Provides isolated test environments with XDG directory overrides,
  * metrics collection integration, worker lifecycle hooks, and cleanup handling.
  */
 
-import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
@@ -26,7 +33,7 @@ type EnvSnapshot = {
 /**
  * Worker lifecycle event types
  */
-export type WorkerLifecycleEvent = 
+export type WorkerLifecycleEvent =
   | "spawning"
   | "spawned"
   | "ready"
@@ -41,7 +48,7 @@ export type WorkerLifecycleEvent =
 export type WorkerLifecycleHook = (
   event: WorkerLifecycleEvent,
   workerId: string,
-  details?: Record<string, unknown>
+  details?: Record<string, unknown>,
 ) => void | Promise<void>;
 
 /**
@@ -88,7 +95,7 @@ export interface E2eEnv {
   emitLifecycleEvent: (
     event: WorkerLifecycleEvent,
     workerId: string,
-    details?: Record<string, unknown>
+    details?: Record<string, unknown>,
   ) => Promise<void>;
   /** Get all timing data collected */
   getTimings: () => TimingData;
@@ -114,7 +121,10 @@ export interface TimingData {
   endedAt: number;
 }
 
-async function copyOpenCodeConfig(sourceConfigHome: string | undefined, targetConfigHome: string) {
+async function copyOpenCodeConfig(
+  sourceConfigHome: string | undefined,
+  targetConfigHome: string,
+) {
   const base = sourceConfigHome ?? join(homedir(), ".config");
   const sourceDir = join(base, "opencode");
   if (!existsSync(sourceDir)) return;
@@ -125,12 +135,20 @@ async function copyOpenCodeConfig(sourceConfigHome: string | undefined, targetCo
     try {
       const raw = await readFile(opencodePath, "utf8");
       const parsed = JSON.parse(raw) as Record<string, unknown>;
-      if (parsed && typeof parsed === "object" && Array.isArray(parsed.plugin)) {
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        Array.isArray(parsed.plugin)
+      ) {
         parsed.plugin = parsed.plugin.filter(
-          (entry) => typeof entry === "string" && !entry.includes("orchestrator.")
+          (entry) =>
+            typeof entry === "string" && !entry.includes("orchestrator."),
         );
       }
-      await writeFile(join(targetDir, "opencode.json"), JSON.stringify(parsed, null, 2));
+      await writeFile(
+        join(targetDir, "opencode.json"),
+        JSON.stringify(parsed, null, 2),
+      );
     } catch {
       await copyFile(opencodePath, join(targetDir, "opencode.json"));
     }
@@ -179,16 +197,20 @@ export async function setupE2eEnv() {
   return {
     root,
     restore: () => {
-      if (snapshot.XDG_CONFIG_HOME === undefined) process.env.XDG_CONFIG_HOME = undefined;
+      if (snapshot.XDG_CONFIG_HOME === undefined)
+        process.env.XDG_CONFIG_HOME = undefined;
       else process.env.XDG_CONFIG_HOME = snapshot.XDG_CONFIG_HOME;
 
-      if (snapshot.XDG_DATA_HOME === undefined) process.env.XDG_DATA_HOME = undefined;
+      if (snapshot.XDG_DATA_HOME === undefined)
+        process.env.XDG_DATA_HOME = undefined;
       else process.env.XDG_DATA_HOME = snapshot.XDG_DATA_HOME;
 
-      if (snapshot.XDG_STATE_HOME === undefined) process.env.XDG_STATE_HOME = undefined;
+      if (snapshot.XDG_STATE_HOME === undefined)
+        process.env.XDG_STATE_HOME = undefined;
       else process.env.XDG_STATE_HOME = snapshot.XDG_STATE_HOME;
 
-      if (snapshot.XDG_CACHE_HOME === undefined) process.env.XDG_CACHE_HOME = undefined;
+      if (snapshot.XDG_CACHE_HOME === undefined)
+        process.env.XDG_CACHE_HOME = undefined;
       else process.env.XDG_CACHE_HOME = snapshot.XDG_CACHE_HOME;
     },
   };
@@ -196,10 +218,10 @@ export async function setupE2eEnv() {
 
 /**
  * Create an enhanced E2E test environment with metrics and cleanup
- * 
+ *
  * @param options - Environment options
  * @returns E2E environment instance
- * 
+ *
  * @example
  * ```typescript
  * const env = await createE2eEnv({
@@ -208,16 +230,16 @@ export async function setupE2eEnv() {
  *     (event, workerId) => console.log(`Worker ${workerId}: ${event}`)
  *   ]
  * });
- * 
+ *
  * try {
  *   // Test code...
  *   const endTiming = env.startTiming('spawn-worker');
  *   const worker = await spawnWorker(profile);
  *   endTiming();
- *   
+ *
  *   env.registerWorker(worker.profile.id, worker.pid!);
  *   await env.emitLifecycleEvent('ready', worker.profile.id);
- *   
+ *
  * } finally {
  *   const timings = env.getTimings();
  *   console.log(`Total duration: ${timings.totalDurationMs}ms`);
@@ -357,7 +379,7 @@ export async function createE2eEnv(options?: E2eEnvOptions): Promise<E2eEnv> {
     async emitLifecycleEvent(
       event: WorkerLifecycleEvent,
       workerId: string,
-      details?: Record<string, unknown>
+      details?: Record<string, unknown>,
     ) {
       // Record timing for spawn events
       if (event === "ready" && workers.has(workerId)) {
@@ -378,7 +400,9 @@ export async function createE2eEnv(options?: E2eEnvOptions): Promise<E2eEnv> {
         } catch (error) {
           console.warn(`Lifecycle hook error for ${event}:`, error);
           if (metrics) {
-            metrics.recordError(`Lifecycle hook error: ${(error as Error).message}`);
+            metrics.recordError(
+              `Lifecycle hook error: ${(error as Error).message}`,
+            );
           }
         }
       }
@@ -388,9 +412,10 @@ export async function createE2eEnv(options?: E2eEnvOptions): Promise<E2eEnv> {
       const now = Date.now();
       return {
         ...timingData,
-        totalDurationMs: timingData.endedAt > 0
-          ? timingData.totalDurationMs
-          : now - timingData.startedAt,
+        totalDurationMs:
+          timingData.endedAt > 0
+            ? timingData.totalDurationMs
+            : now - timingData.startedAt,
         endedAt: timingData.endedAt > 0 ? timingData.endedAt : now,
       };
     },
@@ -438,7 +463,7 @@ export async function createE2eEnv(options?: E2eEnvOptions): Promise<E2eEnv> {
 
 /**
  * Create a minimal test environment without full E2E setup
- * 
+ *
  * Useful for unit/integration tests that need isolated directories
  * but don't need the full E2E infrastructure.
  */
@@ -462,10 +487,10 @@ export async function createTestEnv(): Promise<{
 
 /**
  * Run a test with automatic E2E environment setup and teardown
- * 
+ *
  * @param options - Environment options
  * @param testFn - Test function to run
- * 
+ *
  * @example
  * ```typescript
  * await withE2eEnv({ metrics: true }, async (env) => {
@@ -477,7 +502,7 @@ export async function createTestEnv(): Promise<{
  */
 export async function withE2eEnv<T>(
   options: E2eEnvOptions | undefined,
-  testFn: (env: E2eEnv) => Promise<T>
+  testFn: (env: E2eEnv) => Promise<T>,
 ): Promise<T> {
   const env = await createE2eEnv(options);
 

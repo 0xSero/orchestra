@@ -40,7 +40,9 @@ function pruneTasks() {
   }
 
   if (tasks.size <= MAX_TASKS) return;
-  const entries = [...tasks.entries()].sort((a, b) => a[1].createdAt - b[1].createdAt);
+  const entries = [...tasks.entries()].sort(
+    (a, b) => a[1].createdAt - b[1].createdAt,
+  );
   for (const [taskId] of entries) {
     if (tasks.size <= MAX_TASKS) break;
     tasks.delete(taskId);
@@ -48,7 +50,9 @@ function pruneTasks() {
   }
 }
 
-export function createMemoryTask(input: Omit<MemoryTaskPayload, "taskId" | "type">): MemoryTaskPayload {
+export function createMemoryTask(
+  input: Omit<MemoryTaskPayload, "taskId" | "type">,
+): MemoryTaskPayload {
   const job = workerJobs.create({
     workerId: "memory",
     message: input.turn.summary,
@@ -89,18 +93,26 @@ export function recordMemoryPut(taskId: string, key: string) {
   if (!record.storedKeys.includes(key)) record.storedKeys.push(key);
 }
 
-export function recordMemoryLink(taskId: string, from: string, to: string, relation: string) {
+export function recordMemoryLink(
+  taskId: string,
+  from: string,
+  to: string,
+  relation: string,
+) {
   const record = tasks.get(taskId);
   if (!record) return;
   record.linkedKeys.push({ from, to, relation });
 }
 
-export function completeMemoryTask(taskId: string, input?: {
-  summary?: string;
-  storedKeys?: string[];
-  linkedKeys?: Array<{ from: string; to: string; relation: string }>;
-  notes?: string;
-}): { ok: boolean; message: string } {
+export function completeMemoryTask(
+  taskId: string,
+  input?: {
+    summary?: string;
+    storedKeys?: string[];
+    linkedKeys?: Array<{ from: string; to: string; relation: string }>;
+    notes?: string;
+  },
+): { ok: boolean; message: string } {
   const record = tasks.get(taskId);
   if (!record) {
     return { ok: false, message: `Unknown memory task "${taskId}"` };
@@ -110,13 +122,17 @@ export function completeMemoryTask(taskId: string, input?: {
   const linkedKeys = input?.linkedKeys ?? record.linkedKeys;
   const summary =
     input?.summary ??
-    (storedKeys.length > 0 ? `Stored ${storedKeys.length} memory entr${storedKeys.length === 1 ? "y" : "ies"}` : "Memory task completed");
+    (storedKeys.length > 0
+      ? `Stored ${storedKeys.length} memory entr${storedKeys.length === 1 ? "y" : "ies"}`
+      : "Memory task completed");
 
   workerJobs.setResult(taskId, { responseText: summary });
 
   const details = [
     storedKeys.length ? `Stored keys: ${storedKeys.join(", ")}` : "",
-    linkedKeys.length ? `Links: ${linkedKeys.map((l) => `${l.from} -> ${l.to} (${l.relation})`).join(", ")}` : "",
+    linkedKeys.length
+      ? `Links: ${linkedKeys.map((l) => `${l.from} -> ${l.to} (${l.relation})`).join(", ")}`
+      : "",
     input?.notes ?? "",
   ]
     .filter((line) => line.trim().length > 0)

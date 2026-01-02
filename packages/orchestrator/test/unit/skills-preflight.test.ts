@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { WorkflowDefinition } from "../../src/workflows/types";
 import type { WorkerProfile } from "../../src/types";
-import { collectWorkflowSkillRequirements, resolveSkillPermission, validateSkills } from "../../src/skills/preflight";
+import {
+  collectWorkflowSkillRequirements,
+  resolveSkillPermission,
+  validateSkills,
+} from "../../src/skills/preflight";
 
 describe("skills preflight", () => {
   test("resolves permission patterns by specificity", () => {
@@ -53,6 +57,9 @@ describe("skills preflight", () => {
       },
     };
     const requirements = collectWorkflowSkillRequirements(workflow, profiles);
-    expect(requirements.map((req) => req.name).sort()).toEqual(["code-implementer", "docs-research"]);
+    expect(requirements.map((req) => req.name).sort()).toEqual([
+      "code-implementer",
+      "docs-research",
+    ]);
   });
 });

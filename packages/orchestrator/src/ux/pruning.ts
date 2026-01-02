@@ -19,11 +19,24 @@ function shorten(text: string, maxChars: number): string {
 
 export function createPruningTransform(pruning: OrchestratorConfig["pruning"]) {
   const enabled = pruning?.enabled === true;
-  const maxToolOutputChars = clamp(pruning?.maxToolOutputChars ?? 12000, 1000, 200000);
-  const maxToolInputChars = clamp(pruning?.maxToolInputChars ?? 4000, 500, 100000);
-  const protectedTools = new Set(pruning?.protectedTools ?? ["task", "todowrite", "todoread"]);
+  const maxToolOutputChars = clamp(
+    pruning?.maxToolOutputChars ?? 12000,
+    1000,
+    200000,
+  );
+  const maxToolInputChars = clamp(
+    pruning?.maxToolInputChars ?? 4000,
+    500,
+    100000,
+  );
+  const protectedTools = new Set(
+    pruning?.protectedTools ?? ["task", "todowrite", "todoread"],
+  );
 
-  return async (_input: Record<string, unknown>, output: { messages: WithParts[] }) => {
+  return async (
+    _input: Record<string, unknown>,
+    output: { messages: WithParts[] },
+  ) => {
     if (!enabled) return;
 
     for (const msg of output.messages) {
@@ -33,12 +46,18 @@ export function createPruningTransform(pruning: OrchestratorConfig["pruning"]) {
         if (protectedTools.has(toolName)) continue;
 
         // Prune large outputs for completed tool calls
-        if (part.state?.status === "completed" && typeof part.state.output === "string") {
+        if (
+          part.state?.status === "completed" &&
+          typeof part.state.output === "string"
+        ) {
           part.state.output = shorten(part.state.output, maxToolOutputChars);
         }
 
         // Prune large inputs for write/edit
-        if ((toolName === "write" || toolName === "edit") && part.state?.input) {
+        if (
+          (toolName === "write" || toolName === "edit") &&
+          part.state?.input
+        ) {
           const input = part.state.input as Record<string, any>;
           if (typeof input.content === "string") {
             input.content = shorten(input.content, maxToolInputChars);

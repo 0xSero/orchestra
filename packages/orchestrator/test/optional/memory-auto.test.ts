@@ -1,6 +1,9 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { recordMessageMemory } from "../../src/memory/auto";
-import { loadNeo4jConfigFromEnv, type Neo4jConfig } from "../../src/memory/neo4j";
+import {
+  loadNeo4jConfigFromEnv,
+  type Neo4jConfig,
+} from "../../src/memory/neo4j";
 import { searchMemory } from "../../src/memory/graph";
 import { withNeo4jSession } from "../../src/memory/neo4j";
 import { buildMemoryInjection } from "../../src/memory/inject";
@@ -13,11 +16,17 @@ let containerName: string | undefined;
 let neo4jCfg: Neo4jConfig | undefined = loadNeo4jConfigFromEnv();
 let neo4jSkipReason: string | undefined;
 
-async function docker(args: string[], timeoutMs = 30_000): Promise<{ stdout: string; stderr: string }> {
+async function docker(
+  args: string[],
+  timeoutMs = 30_000,
+): Promise<{ stdout: string; stderr: string }> {
   return (await exec("docker", args, { timeout: timeoutMs })) as any;
 }
 
-async function waitForNeo4j(cfg: Neo4jConfig, timeoutMs = 90_000): Promise<void> {
+async function waitForNeo4j(
+  cfg: Neo4jConfig,
+  timeoutMs = 90_000,
+): Promise<void> {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     try {
@@ -55,17 +64,22 @@ async function startNeo4jDocker(): Promise<void> {
         "NEO4J_server_memory_pagecache_size=128M",
         "neo4j:5-community",
       ],
-      120_000
+      120_000,
     );
   } catch (err: any) {
     containerName = undefined;
-    neo4jSkipReason = String(err?.stderr || err?.message || "docker run failed");
+    neo4jSkipReason = String(
+      err?.stderr || err?.message || "docker run failed",
+    );
     return;
   }
 
   await new Promise((r) => setTimeout(r, 1500));
 
-  const state = await docker(["inspect", "-f", "{{.State.Status}}|{{.State.ExitCode}}", name], 30_000)
+  const state = await docker(
+    ["inspect", "-f", "{{.State.Status}}|{{.State.ExitCode}}", name],
+    30_000,
+  )
     .then((r) => String(r.stdout || "").trim())
     .catch(() => "unknown|0");
 
@@ -80,8 +94,13 @@ async function startNeo4jDocker(): Promise<void> {
   }
 
   const hostPort = await docker(
-    ["inspect", "-f", '{{(index (index .NetworkSettings.Ports "7687/tcp") 0).HostPort}}', name],
-    30_000
+    [
+      "inspect",
+      "-f",
+      '{{(index (index .NetworkSettings.Ports "7687/tcp") 0).HostPort}}',
+      name,
+    ],
+    30_000,
   )
     .then((r) => String(r.stdout || "").trim())
     .catch(() => "");
@@ -94,7 +113,11 @@ async function startNeo4jDocker(): Promise<void> {
     return;
   }
 
-  neo4jCfg = { uri: `bolt://localhost:${port}`, username: "neo4j", password: "testpass" };
+  neo4jCfg = {
+    uri: `bolt://localhost:${port}`,
+    username: "neo4j",
+    password: "testpass",
+  };
 
   try {
     await waitForNeo4j(neo4jCfg, 120_000);
@@ -115,7 +138,9 @@ if (!neo4jCfg) {
 
 const SKIP = !neo4jCfg;
 if (SKIP) {
-  const reasonText = neo4jSkipReason ? neo4jSkipReason.replace(/\s+/g, " ").trim().slice(0, 220) : "";
+  const reasonText = neo4jSkipReason
+    ? neo4jSkipReason.replace(/\s+/g, " ").trim().slice(0, 220)
+    : "";
   const reason = reasonText ? `: ${reasonText}` : "";
   test.skip(`memory auto record (neo4j unavailable${reason})`, () => {});
 }
@@ -180,7 +205,9 @@ describe.skipIf(SKIP)("memory auto record", () => {
       query: `project:${projectId}`,
       limit: 5,
     });
-    expect(projectNodes.some((r) => r.key === `project:${projectId}`)).toBe(true);
+    expect(projectNodes.some((r) => r.key === `project:${projectId}`)).toBe(
+      true,
+    );
 
     const userNodes = await searchMemory({
       cfg,
@@ -199,7 +226,7 @@ MATCH (n:Memory { scope: $scope, projectId: $projectId })
 WHERE n.key STARTS WITH $prefix
 RETURN count(n) AS c
         `.trim(),
-        { scope: "project", projectId, prefix: "message:session-test:" }
+        { scope: "project", projectId, prefix: "message:session-test:" },
       );
       const rec = res.records?.[0] as any;
       return rec ? (rec.get("c") as number) : 0;
@@ -214,7 +241,7 @@ MATCH (n:Memory { scope: $scope, projectId: $projectId })
 WHERE n.key STARTS WITH $prefix
 RETURN count(n) AS c
         `.trim(),
-        { scope: "project", projectId, prefix: "message:" }
+        { scope: "project", projectId, prefix: "message:" },
       );
       const rec = res.records?.[0] as any;
       return rec ? (rec.get("c") as number) : 0;
@@ -229,12 +256,23 @@ MATCH (n:Memory { scope: $scope, projectId: $projectId })
 WHERE n.key IN $keys
 RETURN n.key AS key, n.value AS value
         `.trim(),
-        { scope: "project", projectId, keys: ["summary:project", "summary:session:session-test"] }
+        {
+          scope: "project",
+          projectId,
+          keys: ["summary:project", "summary:session:session-test"],
+        },
       );
-      return res.records.map((r: any) => ({ key: String(r.get("key")), value: String(r.get("value") ?? "") }));
+      return res.records.map((r: any) => ({
+        key: String(r.get("key")),
+        value: String(r.get("value") ?? ""),
+      }));
     });
-    expect(summaries.find((s) => s.key === "summary:project")?.value.length ?? 0).toBeGreaterThan(0);
-    expect(summaries.find((s) => s.key === "summary:project")?.value.length ?? 0).toBeLessThanOrEqual(500);
+    expect(
+      summaries.find((s) => s.key === "summary:project")?.value.length ?? 0,
+    ).toBeGreaterThan(0);
+    expect(
+      summaries.find((s) => s.key === "summary:project")?.value.length ?? 0,
+    ).toBeLessThanOrEqual(500);
 
     const globalSummary = await withNeo4jSession(cfg, async (session) => {
       const res = await session.run(
@@ -243,7 +281,7 @@ MATCH (n:Memory { scope: $scope, key: $key })
 RETURN n.value AS value
 LIMIT 1
         `.trim(),
-        { scope: "global", key: `summary:project:${projectId}` }
+        { scope: "global", key: `summary:project:${projectId}` },
       );
       const rec = res.records?.[0] as any;
       return rec ? String(rec.get("value") ?? "") : "";

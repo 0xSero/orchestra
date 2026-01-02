@@ -31,7 +31,12 @@ export class WorkerJobRegistry {
   private jobs = new Map<string, WorkerJob>();
   private waiters = new Map<string, Set<(job: WorkerJob) => void>>();
 
-  create(input: { workerId: string; message: string; sessionId?: string; requestedBy?: string }): WorkerJob {
+  create(input: {
+    workerId: string;
+    message: string;
+    sessionId?: string;
+    requestedBy?: string;
+  }): WorkerJob {
     const id = randomUUID();
     const job: WorkerJob = {
       id,
@@ -51,13 +56,22 @@ export class WorkerJobRegistry {
     return this.jobs.get(id);
   }
 
-  list(options?: { workerId?: string; sessionId?: string; status?: WorkerJobStatus; limit?: number }): WorkerJob[] {
+  list(options?: {
+    workerId?: string;
+    sessionId?: string;
+    status?: WorkerJobStatus;
+    limit?: number;
+  }): WorkerJob[] {
     const limit = Math.max(1, options?.limit ?? 50);
     const arr = [...this.jobs.values()]
-      .filter((j) => (options?.workerId ? j.workerId === options.workerId : true))
-      .filter((j) => (options?.sessionId ? j.sessionId === options.sessionId : true))
+      .filter((j) =>
+        options?.workerId ? j.workerId === options.workerId : true,
+      )
+      .filter((j) =>
+        options?.sessionId ? j.sessionId === options.sessionId : true,
+      )
       .filter((j) => (options?.status ? j.status === options.status : true))
-      .sort((a, b) => (b.startedAt - a.startedAt))
+      .sort((a, b) => b.startedAt - a.startedAt)
       .slice(0, limit);
     return arr;
   }
@@ -102,7 +116,10 @@ export class WorkerJobRegistry {
     this.prune();
   }
 
-  async await(id: string, options?: { timeoutMs?: number }): Promise<WorkerJob> {
+  async await(
+    id: string,
+    options?: { timeoutMs?: number },
+  ): Promise<WorkerJob> {
     const existing = this.jobs.get(id);
     if (!existing) throw new Error(`Unknown job "${id}"`);
     if (existing.status !== "running") return existing;
@@ -111,7 +128,9 @@ export class WorkerJobRegistry {
     return await new Promise<WorkerJob>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.offWaiter(id, onDone);
-        reject(new Error(`Timed out waiting for job "${id}" after ${timeoutMs}ms`));
+        reject(
+          new Error(`Timed out waiting for job "${id}" after ${timeoutMs}ms`),
+        );
       }, timeoutMs);
       const onDone = (job: WorkerJob) => {
         clearTimeout(timer);

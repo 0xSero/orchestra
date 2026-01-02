@@ -20,7 +20,8 @@ export function buildVisionWorkflow(): WorkflowDefinition {
   return {
     id: VISION_WORKFLOW_ID,
     name: "Vision Analysis",
-    description: "Analyze images and return a structured summary for the orchestrator.",
+    description:
+      "Analyze images and return a structured summary for the orchestrator.",
     steps: [
       {
         id: "analyze",

@@ -36,7 +36,10 @@ function resolvePromptPath(input: string): string {
   return resolved;
 }
 
-async function expandSnippets(content: string, stack: Set<string>): Promise<string> {
+async function expandSnippets(
+  content: string,
+  stack: Set<string>,
+): Promise<string> {
   const matches = [...content.matchAll(snippetPattern)];
   if (matches.length === 0) return content;
 
@@ -61,13 +64,18 @@ export async function expandPromptSnippets(content: string): Promise<string> {
   return expandSnippets(content, new Set());
 }
 
-async function loadPromptFileInternal(relativePath: string, stack: Set<string>): Promise<string> {
+async function loadPromptFileInternal(
+  relativePath: string,
+  stack: Set<string>,
+): Promise<string> {
   const key = relativePath;
   const cached = cache.get(key);
   if (cached) return cached;
 
   if (stack.has(key)) {
-    throw new Error(`Prompt snippet cycle detected: ${[...stack, key].join(" -> ")}`);
+    throw new Error(
+      `Prompt snippet cycle detected: ${[...stack, key].join(" -> ")}`,
+    );
   }
   stack.add(key);
 

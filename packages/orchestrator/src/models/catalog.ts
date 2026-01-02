@@ -17,7 +17,10 @@ export function isFullModelID(value: string): boolean {
   return value.includes("/");
 }
 
-export function parseFullModelID(value: string): { providerID: string; modelID: string } {
+export function parseFullModelID(value: string): {
+  providerID: string;
+  modelID: string;
+} {
   const [providerID, ...rest] = value.split("/");
   return { providerID, modelID: rest.join("/") };
 }
@@ -42,11 +45,27 @@ export function flattenProviders(providers: Provider[]): ModelCatalogEntry[] {
           reasoning: false,
           attachment: false,
           toolcall: false,
-          input: { text: true, audio: false, image: false, video: false, pdf: false },
-          output: { text: true, audio: false, image: false, video: false, pdf: false },
+          input: {
+            text: true,
+            audio: false,
+            image: false,
+            video: false,
+            pdf: false,
+          },
+          output: {
+            text: true,
+            audio: false,
+            image: false,
+            video: false,
+            pdf: false,
+          },
         },
         limit: (model as any).limit ?? { context: 0, output: 0 },
-        cost: (model as any).cost ?? { input: 0, output: 0, cache: { read: 0, write: 0 } },
+        cost: (model as any).cost ?? {
+          input: 0,
+          output: 0,
+          cache: { read: 0, write: 0 },
+        },
         providerSource: provider.source,
       });
     }
@@ -54,11 +73,14 @@ export function flattenProviders(providers: Provider[]): ModelCatalogEntry[] {
   return out;
 }
 
-export function filterProviders(providers: Provider[], scope: "configured" | "all"): Provider[] {
+export function filterProviders(
+  providers: Provider[],
+  scope: "configured" | "all",
+): Provider[] {
   if (scope === "all") return providers;
-  
+
   // Filter to only providers that are usable (have credentials or are explicitly configured).
-  // 
+  //
   // The SDK's Provider.source field tells us how the provider was registered:
   //   - "config": Explicitly configured in opencode.json
   //   - "custom": Custom provider (npm package, explicitly configured)
@@ -72,26 +94,28 @@ export function filterProviders(providers: Provider[], scope: "configured" | "al
   // The "opencode" provider is special and always available.
   return providers.filter((p) => {
     if (p.id === "opencode") return true;
-    
+
     // Include explicitly configured providers
     if (p.source === "config" || p.source === "custom") return true;
-    
+
     // Include environment-detected providers (they have API keys set)
     if (p.source === "env") return true;
-    
+
     // For API catalog providers, check if they have credentials set.
     // The SDK's Provider type has an optional `key` field that's populated when
     // credentials are available (set via /connect command which stores in auth.json).
     if (p.source === "api" && p.key) return true;
-    
+
     return false;
   });
 }
 
 export function resolveModelRef(
   input: string,
-  providers: Provider[]
-): { full: string; providerID: string; modelID: string } | { error: string; suggestions?: string[] } {
+  providers: Provider[],
+):
+  | { full: string; providerID: string; modelID: string }
+  | { error: string; suggestions?: string[] } {
   const raw = input.trim();
   if (!raw) return { error: "Model is required." };
 
@@ -107,9 +131,17 @@ export function resolveModelRef(
       .replace(/-\d{4}-\d{2}-\d{2}$/i, "")
       .replace(/-v\d+$/i, "");
   };
-  const matchCandidate = (needleRaw: string, candidateRaw: string, candidateName?: string): boolean => {
-    const needle = normalize(stripVersionSuffix(stripProviderPrefix(needleRaw)));
-    const cand = normalize(stripVersionSuffix(stripProviderPrefix(candidateRaw)));
+  const matchCandidate = (
+    needleRaw: string,
+    candidateRaw: string,
+    candidateName?: string,
+  ): boolean => {
+    const needle = normalize(
+      stripVersionSuffix(stripProviderPrefix(needleRaw)),
+    );
+    const cand = normalize(
+      stripVersionSuffix(stripProviderPrefix(candidateRaw)),
+    );
     if (!needle) return false;
 
     if (cand === needle) return true;
@@ -121,12 +153,27 @@ export function resolveModelRef(
     }
     return false;
   };
-  type Match = { providerID: string; modelID: string; score: number; providerSource: Provider["source"] };
-  const scoreMatch = (needleRaw: string, provider: Provider, candidateRaw: string, candidateName?: string): number | undefined => {
-    if (!matchCandidate(needleRaw, candidateRaw, candidateName)) return undefined;
+  type Match = {
+    providerID: string;
+    modelID: string;
+    score: number;
+    providerSource: Provider["source"];
+  };
+  const scoreMatch = (
+    needleRaw: string,
+    provider: Provider,
+    candidateRaw: string,
+    candidateName?: string,
+  ): number | undefined => {
+    if (!matchCandidate(needleRaw, candidateRaw, candidateName))
+      return undefined;
 
-    const needle = normalize(stripVersionSuffix(stripProviderPrefix(needleRaw)));
-    const cand = normalize(stripVersionSuffix(stripProviderPrefix(candidateRaw)));
+    const needle = normalize(
+      stripVersionSuffix(stripProviderPrefix(needleRaw)),
+    );
+    const cand = normalize(
+      stripVersionSuffix(stripProviderPrefix(candidateRaw)),
+    );
     let score = 0;
 
     // Prefer configured providers over API ones when possible.
@@ -138,8 +185,16 @@ export function resolveModelRef(
     else if (cand.includes(needle)) score += 10;
 
     // Prefer non-thinking variants when multiple Claude-style matches exist.
-    if (/\bthinking\b/i.test(candidateRaw) || /\bthinking\b/i.test(candidateName ?? "")) score -= 10;
-    if (/\breasoning\b/i.test(candidateRaw) || /\breasoning\b/i.test(candidateName ?? "")) score -= 5;
+    if (
+      /\bthinking\b/i.test(candidateRaw) ||
+      /\bthinking\b/i.test(candidateName ?? "")
+    )
+      score -= 10;
+    if (
+      /\breasoning\b/i.test(candidateRaw) ||
+      /\breasoning\b/i.test(candidateName ?? "")
+    )
+      score -= 5;
 
     return score;
   };
@@ -148,11 +203,14 @@ export function resolveModelRef(
     if (source === "env") return 1;
     return 2;
   };
-  const pickBest = (matches: Match[]): { providerID: string; modelID: string } | undefined => {
+  const pickBest = (
+    matches: Match[],
+  ): { providerID: string; modelID: string } | undefined => {
     if (matches.length === 0) return undefined;
     const sorted = [...matches].sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
-      const rank = providerRank(a.providerSource) - providerRank(b.providerSource);
+      const rank =
+        providerRank(a.providerSource) - providerRank(b.providerSource);
       if (rank !== 0) return rank;
       const providerCmp = a.providerID.localeCompare(b.providerID);
       if (providerCmp !== 0) return providerCmp;
@@ -170,7 +228,11 @@ export function resolveModelRef(
     // Exact match within provider - respect explicit provider specification.
     // When user explicitly specifies "anthropic/model", use anthropic even if it's an "api" provider.
     if (provider && parsed.modelID in (provider.models ?? {})) {
-      return { full: raw, providerID: parsed.providerID, modelID: parsed.modelID };
+      return {
+        full: raw,
+        providerID: parsed.providerID,
+        modelID: parsed.modelID,
+      };
     }
 
     // Fuzzy match: prefer same provider if it exists; otherwise search across all providers.
@@ -178,15 +240,29 @@ export function resolveModelRef(
     const matches: Match[] = [];
     for (const p of pool) {
       for (const [modelID, model] of Object.entries(p.models ?? {})) {
-        const score = scoreMatch(parsed.modelID, p, modelID, (model as any)?.name);
+        const score = scoreMatch(
+          parsed.modelID,
+          p,
+          modelID,
+          (model as any)?.name,
+        );
         if (typeof score === "number") {
-          matches.push({ providerID: p.id, modelID, score, providerSource: p.source });
+          matches.push({
+            providerID: p.id,
+            modelID,
+            score,
+            providerSource: p.source,
+          });
         }
       }
     }
     const best = pickBest(matches);
     if (best) {
-      return { full: fullModelID(best.providerID, best.modelID), providerID: best.providerID, modelID: best.modelID };
+      return {
+        full: fullModelID(best.providerID, best.modelID),
+        providerID: best.providerID,
+        modelID: best.modelID,
+      };
     }
     if (matches.length > 1) {
       return {
@@ -201,34 +277,53 @@ export function resolveModelRef(
       const all: Array<{ providerID: string; modelID: string }> = [];
       for (const p of providers) {
         for (const [modelID, model] of Object.entries(p.models ?? {})) {
-          if (matchCandidate(parsed.modelID, modelID, (model as any)?.name)) all.push({ providerID: p.id, modelID });
+          if (matchCandidate(parsed.modelID, modelID, (model as any)?.name))
+            all.push({ providerID: p.id, modelID });
         }
       }
       return {
         error: `Unknown provider "${parsed.providerID}".`,
-        suggestions: all.length ? suggest(all) : providers.map((p) => p.id).slice(0, 20),
+        suggestions: all.length
+          ? suggest(all)
+          : providers.map((p) => p.id).slice(0, 20),
       };
     }
 
     // Provider exists but model doesn't.
-    const exactSuggestions = Object.keys(provider.models ?? {}).slice(0, 20).map((m) => fullModelID(provider.id, m));
+    const exactSuggestions = Object.keys(provider.models ?? {})
+      .slice(0, 20)
+      .map((m) => fullModelID(provider.id, m));
     return {
       error: `Model "${parsed.modelID}" not found for provider "${provider.id}".`,
       suggestions: exactSuggestions,
     };
   }
 
-  const matches: Array<{ providerID: string; modelID: string; score: number; providerSource: Provider["source"] }> = [];
+  const matches: Array<{
+    providerID: string;
+    modelID: string;
+    score: number;
+    providerSource: Provider["source"];
+  }> = [];
   for (const provider of providers) {
     if (provider.models && raw in provider.models) {
-      matches.push({ providerID: provider.id, modelID: raw, score: 50, providerSource: provider.source });
+      matches.push({
+        providerID: provider.id,
+        modelID: raw,
+        score: 50,
+        providerSource: provider.source,
+      });
     }
   }
 
   if (matches.length >= 1) {
     const best = pickBest(matches);
     if (best) {
-      return { full: fullModelID(best.providerID, best.modelID), providerID: best.providerID, modelID: best.modelID };
+      return {
+        full: fullModelID(best.providerID, best.modelID),
+        providerID: best.providerID,
+        modelID: best.modelID,
+      };
     }
   }
 
@@ -238,13 +333,22 @@ export function resolveModelRef(
     for (const [modelID, model] of Object.entries(provider.models ?? {})) {
       const score = scoreMatch(raw, provider, modelID, (model as any)?.name);
       if (typeof score === "number") {
-        fuzzy.push({ providerID: provider.id, modelID, score, providerSource: provider.source });
+        fuzzy.push({
+          providerID: provider.id,
+          modelID,
+          score,
+          providerSource: provider.source,
+        });
       }
     }
   }
   const bestFuzzy = pickBest(fuzzy);
   if (bestFuzzy) {
-    return { full: fullModelID(bestFuzzy.providerID, bestFuzzy.modelID), providerID: bestFuzzy.providerID, modelID: bestFuzzy.modelID };
+    return {
+      full: fullModelID(bestFuzzy.providerID, bestFuzzy.modelID),
+      providerID: bestFuzzy.providerID,
+      modelID: bestFuzzy.modelID,
+    };
   }
   if (fuzzy.length > 1) {
     return {
@@ -253,10 +357,14 @@ export function resolveModelRef(
     };
   }
 
-  return { error: `Model "${raw}" not found. Run task_list({ view: "models" }) to see available models.` };
+  return {
+    error: `Model "${raw}" not found. Run task_list({ view: "models" }) to see available models.`,
+  };
 }
 
-export function pickVisionModel(models: ModelCatalogEntry[]): ModelCatalogEntry | undefined {
+export function pickVisionModel(
+  models: ModelCatalogEntry[],
+): ModelCatalogEntry | undefined {
   const score = (m: ModelCatalogEntry): number => {
     let s = 0;
     if (m.status === "deprecated") s -= 50;
@@ -275,20 +383,29 @@ export function pickVisionModel(models: ModelCatalogEntry[]): ModelCatalogEntry 
   return candidates[0];
 }
 
-export function pickFastModel(models: ModelCatalogEntry[]): ModelCatalogEntry | undefined {
+export function pickFastModel(
+  models: ModelCatalogEntry[],
+): ModelCatalogEntry | undefined {
   const score = (m: ModelCatalogEntry): number => {
     let s = 0;
     if (m.status === "deprecated") s -= 50;
     if (m.capabilities.toolcall) s += 5;
-    if (/(mini|small|flash|fast|haiku)/i.test(m.modelID) || /(mini|small|flash|fast|haiku)/i.test(m.name)) s += 10;
+    if (
+      /(mini|small|flash|fast|haiku)/i.test(m.modelID) ||
+      /(mini|small|flash|fast|haiku)/i.test(m.name)
+    )
+      s += 10;
     if ((m.cost?.input ?? 0) > 0) s -= Math.min(m.cost.input, 5);
-    if ((m.limit?.context ?? 0) > 0) s += Math.min(Math.floor(m.limit.context / 64000), 3);
+    if ((m.limit?.context ?? 0) > 0)
+      s += Math.min(Math.floor(m.limit.context / 64000), 3);
     return s;
   };
   return [...models].sort((a, b) => score(b) - score(a))[0];
 }
 
-export function pickDocsModel(models: ModelCatalogEntry[]): ModelCatalogEntry | undefined {
+export function pickDocsModel(
+  models: ModelCatalogEntry[],
+): ModelCatalogEntry | undefined {
   const score = (m: ModelCatalogEntry): number => {
     let s = 0;
     if (m.status === "deprecated") s -= 50;
@@ -302,12 +419,20 @@ export function pickDocsModel(models: ModelCatalogEntry[]): ModelCatalogEntry | 
   return [...models].sort((a, b) => score(b) - score(a))[0];
 }
 
-export async function fetchOpencodeConfig(client: any, directory: string): Promise<Config | undefined> {
-  const res = await client.config.get({ query: { directory } }).catch(() => undefined);
+export async function fetchOpencodeConfig(
+  client: any,
+  directory: string,
+): Promise<Config | undefined> {
+  const res = await client.config
+    .get({ query: { directory } })
+    .catch(() => undefined);
   return res?.data as Config | undefined;
 }
 
-export async function fetchProviders(client: any, directory: string): Promise<{ providers: Provider[]; defaults: Record<string, string> }> {
+export async function fetchProviders(
+  client: any,
+  directory: string,
+): Promise<{ providers: Provider[]; defaults: Record<string, string> }> {
   // Use provider.list() to get ALL providers including API catalog (zhipuai-coding-plan, etc.)
   // Fall back to config.providers() if provider.list() is unavailable
   const [providerListRes, configProvidersRes] = await Promise.all([
@@ -337,8 +462,10 @@ export async function fetchProviders(client: any, directory: string): Promise<{ 
 export async function fetchModelInfo(
   client: any,
   directory: string,
-  modelId: string
+  modelId: string,
 ): Promise<{ capabilities?: Model["capabilities"] } | undefined> {
-  const res = await client.config.model?.({ query: { directory, model: modelId } }).catch(() => undefined);
+  const res = await client.config
+    .model?.({ query: { directory, model: modelId } })
+    .catch(() => undefined);
   return res?.data as { capabilities?: Model["capabilities"] } | undefined;
 }

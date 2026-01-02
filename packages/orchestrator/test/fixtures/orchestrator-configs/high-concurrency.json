@@ -73,9 +73,5 @@
       "temperature": 0.1
     }
   ],
-  "workers": [
-    "stress-worker-1",
-    "stress-worker-2",
-    "stress-worker-3"
-  ]
+  "workers": ["stress-worker-1", "stress-worker-2", "stress-worker-3"]
 }

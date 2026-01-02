@@ -25,8 +25,20 @@ const registerTestWorkflow = (id: string, steps: WorkflowStepDefinition[]) => {
 describe("workflow gating", () => {
   test("execution=step pauses after each step", async () => {
     registerTestWorkflow("unit-gate-step", [
-      { id: "s1", title: "Step 1", workerId: "coder", prompt: "Do 1", carry: true },
-      { id: "s2", title: "Step 2", workerId: "architect", prompt: "Do 2", carry: true },
+      {
+        id: "s1",
+        title: "Step 1",
+        workerId: "coder",
+        prompt: "Do 1",
+        carry: true,
+      },
+      {
+        id: "s2",
+        title: "Step 2",
+        workerId: "architect",
+        prompt: "Do 2",
+        carry: true,
+      },
     ]);
 
     const deps = {
@@ -37,7 +49,7 @@ describe("workflow gating", () => {
     const run = await runWorkflowWithDependencies(
       { workflowId: "unit-gate-step", task: "do", limits },
       deps,
-      { uiPolicy: { execution: "step", intervene: "on-error" } }
+      { uiPolicy: { execution: "step", intervene: "on-error" } },
     );
 
     expect(run.status).toBe("paused");
@@ -51,7 +63,13 @@ describe("workflow gating", () => {
 
   test("intervene=on-error pauses and retries the failed step", async () => {
     registerTestWorkflow("unit-gate-error", [
-      { id: "s1", title: "Step 1", workerId: "coder", prompt: "Do 1", carry: true },
+      {
+        id: "s1",
+        title: "Step 1",
+        workerId: "coder",
+        prompt: "Do 1",
+        carry: true,
+      },
     ]);
 
     let attempt = 0;
@@ -67,7 +85,7 @@ describe("workflow gating", () => {
     const run = await runWorkflowWithDependencies(
       { workflowId: "unit-gate-error", task: "do", limits },
       deps,
-      { uiPolicy: { execution: "auto", intervene: "on-error" } }
+      { uiPolicy: { execution: "auto", intervene: "on-error" } },
     );
 
     expect(run.status).toBe("paused");
@@ -82,19 +100,35 @@ describe("workflow gating", () => {
 
   test("intervene=on-warning pauses when a step emits a warning", async () => {
     registerTestWorkflow("unit-gate-warning", [
-      { id: "s1", title: "Step 1", workerId: "coder", prompt: "Do 1", carry: true },
-      { id: "s2", title: "Step 2", workerId: "architect", prompt: "Do 2", carry: true },
+      {
+        id: "s1",
+        title: "Step 1",
+        workerId: "coder",
+        prompt: "Do 1",
+        carry: true,
+      },
+      {
+        id: "s2",
+        title: "Step 2",
+        workerId: "architect",
+        prompt: "Do 2",
+        carry: true,
+      },
     ]);
 
     const deps = {
       resolveWorker: async (workerId: string) => workerId,
-      sendToWorker: async () => ({ success: true, response: "ok", warning: "heads up" }),
+      sendToWorker: async () => ({
+        success: true,
+        response: "ok",
+        warning: "heads up",
+      }),
     };
 
     const run = await runWorkflowWithDependencies(
       { workflowId: "unit-gate-warning", task: "do", limits },
       deps,
-      { uiPolicy: { execution: "auto", intervene: "on-warning" } }
+      { uiPolicy: { execution: "auto", intervene: "on-warning" } },
     );
 
     expect(run.status).toBe("paused");
