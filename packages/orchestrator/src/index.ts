@@ -474,6 +474,28 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
         (opencodeConfig as any).agent = agents;
       }
 
+      // Exclude orchestrator tools from the build agent to prevent tool leakage
+      {
+        const agents = (opencodeConfig.agent ?? {}) as Record<string, any>;
+        const orchestratorToolNames = Object.keys(coreOrchestratorTools);
+        const toolExclusions = orchestratorToolNames.reduce(
+          (acc, name) => {
+            acc[name] = false;
+            return acc;
+          },
+          {} as Record<string, boolean>,
+        );
+        const buildAgent = agents.build ?? {};
+        agents.build = {
+          ...buildAgent,
+          tools: {
+            ...(buildAgent.tools ?? {}),
+            ...toolExclusions,
+          },
+        };
+        (opencodeConfig as any).agent = agents;
+      }
+
       // Keep profile models as configured (often `node:*` or canonical IDs).
       // Resolution happens at spawn-time based on last-used model + configured providers.
 

@@ -11,11 +11,12 @@ import {
   stopWorker,
   sendToWorker,
 } from "../../src/workers/spawner";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { taskAwait, taskStart } from "../../src/command/tasks";
 import type { WorkerProfile } from "../../src/types";
 import { createE2eEnv, type E2eEnv } from "../helpers/e2e-env";
+import { withRunBundle } from "../helpers/run-bundle";
 
 const directory = process.cwd();
 const MODEL = process.env.OPENCODE_ORCH_E2E_MODEL ?? "opencode/gpt-5-nano";
@@ -44,16 +45,42 @@ const profileB: WorkerProfile = {
 
 describe("e2e (multiagent)", () => {
   let env: E2eEnv;
+  const runBundle = withRunBundle({
+    workflowId: null,
+    testName: "e2e (multiagent)",
+    directory,
+    model: MODEL,
+  });
   beforeAll(async () => {
     env = await createE2eEnv();
+    await runBundle.start();
     await spawnWorker(profileA, { basePort: 0, timeout: 60_000, directory });
     await spawnWorker(profileB, { basePort: 0, timeout: 60_000, directory });
   }, 120_000);
 
   afterAll(async () => {
-    await shutdownAllWorkers().catch(() => {});
-    await pruneDeadEntries().catch(() => {});
-    await env.restore();
+    try {
+      await runBundle.finalize();
+      const recorder = runBundle.getRecorder();
+      if (recorder) {
+        const summary = JSON.parse(
+          await readFile(join(recorder.runDir, "summary.json"), "utf8"),
+        );
+        expect(summary.workflowId).toBeNull();
+        expect(summary.testName).toBe("e2e (multiagent)");
+        expect(summary.events.total).toBeGreaterThan(0);
+        expect(
+          summary.events.byType["orchestra.worker.status"],
+        ).toBeGreaterThan(0);
+        expect(summary.workers.total).toBeGreaterThan(0);
+        expect(summary.errors.total).toBeGreaterThanOrEqual(0);
+        expect(summary.warnings.total).toBeGreaterThanOrEqual(0);
+      }
+    } finally {
+      await shutdownAllWorkers().catch(() => {});
+      await pruneDeadEntries().catch(() => {});
+      await env.restore();
+    }
   }, 120_000);
 
   describe("registry + cleanup", () => {

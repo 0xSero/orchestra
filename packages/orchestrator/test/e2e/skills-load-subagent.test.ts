@@ -12,6 +12,7 @@ import {
 } from "../../src/workers/spawner";
 import type { WorkerProfile } from "../../src/types";
 import { createE2eEnv, type E2eEnv } from "../helpers/e2e-env";
+import { withRunBundle } from "../helpers/run-bundle";
 
 const MODEL = process.env.OPENCODE_ORCH_E2E_MODEL ?? "opencode/gpt-5-nano";
 
@@ -31,9 +32,16 @@ describe("e2e (skills load)", () => {
   let tokenProject: string;
   let tokenClaude: string;
   let originalHome: string | undefined;
+  const runBundle = withRunBundle({
+    workflowId: null,
+    testName: "e2e (skills load)",
+    directory: process.cwd(),
+    model: MODEL,
+  });
 
   beforeAll(async () => {
     env = await createE2eEnv();
+    await runBundle.start();
     originalHome = process.env.HOME;
     process.env.HOME = env.root;
 
@@ -117,14 +125,18 @@ describe("e2e (skills load)", () => {
   }, 180_000);
 
   afterAll(async () => {
-    await shutdownAllWorkers().catch(() => {});
-    await server?.close?.();
-    if (tmpDir) await rm(tmpDir, { recursive: true, force: true });
-    await env.restore();
-    if (originalHome === undefined) {
-      process.env.HOME = undefined;
-    } else {
-      process.env.HOME = originalHome;
+    try {
+      await runBundle.finalize();
+    } finally {
+      await shutdownAllWorkers().catch(() => {});
+      await server?.close?.();
+      if (tmpDir) await rm(tmpDir, { recursive: true, force: true });
+      await env.restore();
+      if (originalHome === undefined) {
+        process.env.HOME = undefined;
+      } else {
+        process.env.HOME = originalHome;
+      }
     }
   }, 180_000);
 

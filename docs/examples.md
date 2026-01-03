@@ -62,6 +62,30 @@ task_start({
 task_await({ taskId: "<taskId>" })
 ```
 
+### Planning Alternative: Generate a boomerang task queue
+
+```
+task_start({
+  kind: "workflow",
+  workflowId: "boomerang-plan",
+  task: "Target directory: packages/orchestrator\nGoal: Implement a new workflow and tests"
+})
+
+task_await({ taskId: "<taskId>" })
+```
+
+### Execution Alternative: Drain the boomerang task queue
+
+```
+task_start({
+  kind: "workflow",
+  workflowId: "boomerang-run",
+  task: "Execute tasks/ in order"
+})
+
+task_await({ taskId: "<taskId>" })
+```
+
 ---
 
 ## Example 2: Research-First Development

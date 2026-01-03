@@ -19,6 +19,7 @@ import {
 } from "../../src/workers/spawner";
 import { workerPool } from "../../src/core/worker-pool";
 import type { WorkerProfile } from "../../src/types";
+import { withRunBundle } from "../helpers/run-bundle";
 
 const ORCH_MODEL = process.env.OPENCODE_ORCH_E2E_MODEL ?? "opencode/gpt-5-nano";
 const VISION_MODEL =
@@ -94,9 +95,16 @@ describe("vision worker integration", () => {
   let env: E2eEnv;
   let tempDir: string;
   let server: { close: () => void };
+  const runBundle = withRunBundle({
+    workflowId: null,
+    testName: "vision worker integration",
+    directory: process.cwd(),
+    model: ORCH_MODEL,
+  });
 
   beforeAll(async () => {
     env = await createE2eEnv();
+    await runBundle.start();
     tempDir = await mkdtemp(join(env.root, "vision-e2e-"));
     env.cleanup.registerDirectory(tempDir);
     const config = await mergeOpenCodeConfig(
@@ -113,8 +121,12 @@ describe("vision worker integration", () => {
   });
 
   afterAll(async () => {
-    server?.close();
-    await env.restore();
+    try {
+      await runBundle.finalize();
+    } finally {
+      server?.close();
+      await env.restore();
+    }
   });
 
   afterEach(async () => {

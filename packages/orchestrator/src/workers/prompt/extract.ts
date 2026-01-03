@@ -65,20 +65,32 @@ export async function extractWorkerResponse(input: {
 }): Promise<string> {
   const { client, sessionId, directory, promptData, timeoutMs, debugLabel } =
     input;
+  const parentId =
+    promptData?.info?.parentID ?? promptData?.message?.info?.parentID;
+  const extractResponseText = (value: any): string => {
+    const extracted = extractTextFromPromptResponse(value);
+    let text = extracted.text.trim();
+    if (text.length > 0) return text;
+    const parts = Array.isArray(value?.parts)
+      ? value.parts
+      : Array.isArray(value?.message?.parts)
+        ? value.message.parts
+        : [];
+    const reasoning = parts
+      .filter((part: any) => part?.type === "reasoning")
+      .map((part: any) => (typeof part?.text === "string" ? part.text : ""))
+      .filter((part: string) => part.length > 0)
+      .join("\n");
+    text = reasoning.trim();
+    if (text.length > 0) return text;
+    const streamed = extractStreamChunks(value).trim();
+    return streamed;
+  };
 
   const extracted = extractTextFromPromptResponse(promptData);
   let responseText = extracted.text.trim();
   if (responseText.length === 0) {
-    const parts = Array.isArray(promptData?.parts) ? promptData.parts : [];
-    const reasoning = parts
-      .filter((p: any) => p?.type === "reasoning" && typeof p.text === "string")
-      .map((p: any) => p.text)
-      .join("\n");
-    responseText = reasoning.trim();
-  }
-  if (responseText.length === 0) {
-    const streamed = extractStreamChunks(promptData).trim();
-    if (streamed.length > 0) responseText = streamed;
+    responseText = extractResponseText(promptData);
   }
   if (responseText.length === 0) {
     const messageId = promptData?.info?.id ?? promptData?.message?.info?.id;
@@ -93,12 +105,7 @@ export async function extractWorkerResponse(input: {
           query: { directory },
         });
         const messageData = (messageRes as any)?.data ?? messageRes;
-        const extractedMessage = extractTextFromPromptResponse(messageData);
-        responseText = extractedMessage.text.trim();
-        if (responseText.length === 0) {
-          const streamed = extractStreamChunks(messageData).trim();
-          if (streamed.length > 0) responseText = streamed;
-        }
+        responseText = extractResponseText(messageData);
         if (responseText.length > 0) break;
         await new Promise((resolve) =>
           setTimeout(resolve, 200 * (attempt + 1)),
@@ -118,16 +125,20 @@ export async function extractWorkerResponse(input: {
         : Array.isArray(messagesRes)
           ? messagesRes
           : [];
-      const assistant = [...messages]
-        .reverse()
-        .find((m: any) => m?.info?.role === "assistant");
-      if (assistant) {
-        const extractedMessage = extractTextFromPromptResponse(assistant);
-        responseText = extractedMessage.text.trim();
-        if (responseText.length === 0) {
-          const streamed = extractStreamChunks(assistant).trim();
-          if (streamed.length > 0) responseText = streamed;
-        }
+      const assistants = messages.filter(
+        (message: any) => message?.info?.role === "assistant",
+      );
+      const scoped = parentId
+        ? assistants.filter(
+            (message: any) => message?.info?.parentID === parentId,
+          )
+        : assistants;
+      const ordered = (scoped.length > 0 ? scoped : assistants)
+        .slice()
+        .reverse();
+      for (const assistant of ordered) {
+        responseText = extractResponseText(assistant);
+        if (responseText.length > 0) break;
       }
       if (responseText.length > 0) break;
       await new Promise((resolve) => setTimeout(resolve, 500));

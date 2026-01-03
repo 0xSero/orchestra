@@ -15,6 +15,7 @@ export type WorkflowStepDefinition = {
   carry?: boolean;
   timeoutMs?: number;
   requiredSkills?: string[];
+  model?: string;
 };
 
 export type WorkflowDefinition = {

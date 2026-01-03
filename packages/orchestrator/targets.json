@@ -1,0 +1,4 @@
+{
+  "entryPoints": ["src/index.ts", "src/styles.css"],
+  "outputs": ["dist/index.html", "dist/styles.css", "dist/app.js"]
+}

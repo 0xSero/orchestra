@@ -49,9 +49,20 @@ export async function loadOpenCodeConfig(): Promise<Record<string, unknown>> {
 
 export async function mergeOpenCodeConfig(
   override?: Record<string, unknown>,
-  options?: { dropOrchestratorPlugin?: boolean; appendPlugins?: string[] },
+  options?: {
+    dropOrchestratorPlugin?: boolean;
+    appendPlugins?: string[];
+    excludeAgentConfigs?: boolean;
+  },
 ): Promise<Record<string, unknown>> {
-  const base = await loadOpenCodeConfig();
+  let base = await loadOpenCodeConfig();
+
+  // When spawning workers, exclude agent configs from global to prevent tool leakage.
+  // Workers should only use their own tool config, not inherit from orchestrator agent.
+  if (options?.excludeAgentConfigs && isPlainObject(base)) {
+    const { agent: _dropped, ...rest } = base;
+    base = rest;
+  }
   if (!override || Object.keys(override).length === 0) {
     if (
       options?.dropOrchestratorPlugin ||

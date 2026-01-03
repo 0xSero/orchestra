@@ -32,6 +32,51 @@ Everything else is routed through the Task API:
 
 Legacy tool IDs have been removed from registration; see `tools.md` for the historical list and replacements.
 
+## Boomerang workflows
+
+Configure the planner and implementer models using provider/model IDs:
+
+```json
+{
+  "workflows": {
+    "boomerang": {
+      "plannerModel": "opencode/gpt-5-nano",
+      "implementerModel": "opencode/gpt-5-nano"
+    }
+  }
+}
+```
+
+Run the planner pass to generate `scope.md`, `rules.md`, and the full `tasks/` queue:
+
+```ts
+task_start({
+  kind: "workflow",
+  workflowId: "boomerang-plan",
+  task: "Target directory: packages/orchestrator\nGoal: generate a full boomerang task queue.",
+  autoSpawn: true,
+});
+
+task_await({ taskId: "<returned taskId>" });
+```
+
+Drain the queue to execute tasks in FIFO order:
+
+```ts
+task_start({
+  kind: "workflow",
+  workflowId: "boomerang-run",
+  task: "Execute tasks/ in order until the queue is drained.",
+  autoSpawn: true,
+});
+
+task_await({ taskId: "<returned taskId>" });
+```
+
+Boomerang E2E tests write run bundles under `packages/orchestrator/test-runs/run-*/` with `meta.json`, `events.jsonl`, `orchestrator.log.jsonl`, `workers/*/messages.json`, and `summary.json`.
+
+If a model or provider is missing, use `task_list({ view: "models" })` to list valid provider/model IDs and update the workflow config accordingly.
+
 ## Runtime guardrails (orchestrator self-correction)
 
 The orchestrator injects small runtime nudges to keep async flows on the Task API path:

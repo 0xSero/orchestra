@@ -1,0 +1,9 @@
+{
+  "name": "boomerang-site-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun run scripts/build.js",
+    "test": "bun run build && bun run scripts/verify.js"
+  }
+}

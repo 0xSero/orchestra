@@ -3,48 +3,63 @@ import { createOpencode } from "@opencode-ai/sdk";
 import { extractTextFromPromptResponse } from "../../src/workers/prompt";
 import { mergeOpenCodeConfig } from "../../src/config/opencode";
 import { createE2eEnv, type E2eEnv } from "../helpers/e2e-env";
+import { withRunBundle } from "../helpers/run-bundle";
+
+const resolveModel = (config: Record<string, unknown>): string => {
+  const envModel = process.env.OPENCODE_ORCH_E2E_MODEL;
+  if (envModel && envModel.trim().length > 0) return envModel;
+  const configured =
+    typeof (config as any).model === "string"
+      ? String((config as any).model)
+      : "";
+  if (configured.includes("/")) return configured;
+  const providers = (config as any).provider;
+  if (providers && typeof providers === "object") {
+    for (const [providerId, provider] of Object.entries(providers)) {
+      const models = (provider as any)?.models;
+      if (models && typeof models === "object") {
+        const firstModelId = Object.keys(models)[0];
+        if (firstModelId) return `${providerId}/${firstModelId}`;
+      }
+    }
+  }
+  return configured || "opencode/gpt-5-nano";
+};
 
 describe("e2e", () => {
   let env: E2eEnv;
+  let config: Record<string, unknown>;
+  let runBundle: ReturnType<typeof withRunBundle> | undefined;
   beforeAll(async () => {
     env = await createE2eEnv();
+    config = await mergeOpenCodeConfig(undefined, {
+      dropOrchestratorPlugin: true,
+    });
+    const model = resolveModel(config);
+    (config as any).model = model;
+    runBundle = withRunBundle({
+      workflowId: null,
+      testName: "e2e",
+      directory: process.cwd(),
+      model,
+    });
+    await runBundle.start();
   });
 
   afterAll(async () => {
-    await env.restore();
+    try {
+      if (runBundle) await runBundle.finalize();
+    } finally {
+      await env.restore();
+    }
   });
 
   test("can prompt a spawned opencode server and get text", async () => {
-    const resolveModel = (config: Record<string, unknown>): string => {
-      const envModel = process.env.OPENCODE_ORCH_E2E_MODEL;
-      if (envModel && envModel.trim().length > 0) return envModel;
-      const configured =
-        typeof (config as any).model === "string"
-          ? String((config as any).model)
-          : "";
-      if (configured.includes("/")) return configured;
-      const providers = (config as any).provider;
-      if (providers && typeof providers === "object") {
-        for (const [providerId, provider] of Object.entries(providers)) {
-          const models = (provider as any)?.models;
-          if (models && typeof models === "object") {
-            const firstModelId = Object.keys(models)[0];
-            if (firstModelId) return `${providerId}/${firstModelId}`;
-          }
-        }
-      }
-      return configured || "opencode/gpt-5-nano";
-    };
-
-    const config = await mergeOpenCodeConfig(undefined, {
-      dropOrchestratorPlugin: true,
-    });
-    config.model = resolveModel(config);
     const { client, server } = await createOpencode({
       hostname: "127.0.0.1",
       port: 0,
       timeout: 60_000,
-      config,
+      config: config as any,
     });
 
     try {

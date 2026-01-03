@@ -72,6 +72,7 @@ function resolveStep(
       typeof override.timeoutMs === "number"
         ? override.timeoutMs
         : base?.timeoutMs,
+    model: override.model ?? base?.model,
   };
 }
 

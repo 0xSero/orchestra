@@ -228,17 +228,17 @@ fn spawn_sidecar(app: &AppHandle, port: u32, skills_port: u32, orchestrator_port
             .join("opencode-cli");
         let shell = get_user_shell();
         let mut command = app.shell().command(&shell);
-        command
+        command = command
             .env("OPENCODE_EXPERIMENTAL_ICON_DISCOVERY", "true")
             .env("OPENCODE_CLIENT", "desktop")
             .env("OPENCODE_SKILLS_PORT", skills_port.to_string())
             .env("OPENCODE_SKILLS_API_PORT", skills_port.to_string())
             .env("XDG_STATE_HOME", &state_dir);
         if let Some(port) = orchestrator_port {
-            command.env("OPENCODE_ORCH_BRIDGE_PORT", port.to_string());
+            command = command.env("OPENCODE_ORCH_BRIDGE_PORT", port.to_string());
         }
         if let Some(config_override) = config_override.as_ref() {
-            command.env("OPENCODE_CONFIG_CONTENT", config_override);
+            command = command.env("OPENCODE_CONFIG_CONTENT", config_override);
         }
         command
             .args([

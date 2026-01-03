@@ -7,6 +7,7 @@ import {
 } from "../../src/command/state";
 import { shutdownAllWorkers } from "../../src/core/runtime";
 import type { WorkerProfile } from "../../src/types";
+import { withRunBundle } from "../helpers/run-bundle";
 
 const MODEL = process.env.OPENCODE_ORCH_E2E_MODEL ?? "opencode/gpt-5-nano";
 
@@ -43,14 +44,26 @@ const profiles: Record<string, WorkerProfile> = {
 };
 
 describe("task_start auto e2e", () => {
-  beforeAll(() => {
+  const runBundle = withRunBundle({
+    workflowId: null,
+    testName: "task_start auto e2e",
+    directory: process.cwd(),
+    model: MODEL,
+  });
+
+  beforeAll(async () => {
+    await runBundle.start();
     setDirectory(process.cwd());
     setSpawnDefaults({ basePort: 0, timeout: 60_000 });
     setProfiles(profiles);
   });
 
   afterAll(async () => {
-    await shutdownAllWorkers().catch(() => {});
+    try {
+      await runBundle.finalize();
+    } finally {
+      await shutdownAllWorkers().catch(() => {});
+    }
   });
 
   test("auto-spawns a worker and returns a real response", async () => {

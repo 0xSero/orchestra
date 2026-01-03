@@ -120,6 +120,7 @@ export type WorkflowStepConfig = {
   carry?: boolean;
   timeoutMs?: number;
   requiredSkills?: string[];
+  model?: string;
 };
 
 export type WorkflowDefinitionConfig = {
@@ -154,6 +155,10 @@ export type WorkflowsConfig = {
   triggers?: {
     visionOnImage?: WorkflowTriggerConfig;
     memoryOnTurnEnd?: WorkflowTriggerConfig;
+  };
+  boomerang?: {
+    plannerModel?: string;
+    implementerModel?: string;
   };
   roocodeBoomerang?: {
     enabled?: boolean;

@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { OrchestratorContext } from "../context/orchestrator-context";
 import { logger } from "../core/logger";
 import {
@@ -9,6 +11,7 @@ import { sendToWorker, spawnWorker } from "../workers/spawner";
 import {
   executeWorkflowStep,
   getWorkflow,
+  registerWorkflow,
   type WorkflowRunDependencies,
   validateWorkflowInput,
 } from "./engine";
@@ -42,6 +45,11 @@ import {
   resolveSkillToolEnabled,
   validateSkills,
 } from "../skills/preflight";
+import { fetchProviders } from "../models/catalog";
+import {
+  applyBoomerangModels,
+  resolveBoomerangModels,
+} from "./boomerang-models";
 
 const defaultLimits: WorkflowSecurityLimits = {
   maxSteps: 4,
@@ -161,6 +169,307 @@ function resolveStepGate(
   }
 
   return { pause: false, retry: false };
+}
+
+const boomerangWorkflowIds = new Set([
+  "roocode-boomerang",
+  "boomerang",
+  "boomerang-plan",
+  "boomerang-run",
+]);
+
+async function ensureBoomerangWorkflowModels(
+  context: OrchestratorContext,
+  workflowId: string,
+): Promise<void> {
+  if (!boomerangWorkflowIds.has(workflowId)) return;
+  const workflow = getWorkflow(workflowId);
+  if (!workflow) return;
+  if (!context.client) {
+    throw new Error(
+      `OpenCode client required to resolve boomerang models for "${workflowId}".`,
+    );
+  }
+  const { providers } = await fetchProviders(context.client, context.directory);
+  const models = resolveBoomerangModels({
+    config: context.workflows?.boomerang,
+    providers,
+  });
+  const updated = applyBoomerangModels(workflow, models);
+  registerWorkflow(updated);
+}
+
+export type BoomerangQueueTask = {
+  id: string;
+  path: string;
+  content: string;
+};
+
+export type BoomerangQueueDependencies = WorkflowRunDependencies & {
+  waitForWorkerReady?: (workerId: string, timeoutMs: number) => Promise<void>;
+};
+
+function parseQueueIndex(name: string): number {
+  const match = name.match(/^task-(\d+)\.md$/);
+  if (!match) return Number.POSITIVE_INFINITY;
+  return Number(match[1] ?? 0);
+}
+
+async function loadBoomerangQueueTasks(
+  directory: string,
+): Promise<BoomerangQueueTask[]> {
+  const tasksDir = join(directory, "tasks");
+  let entries: Array<{ name: string; isFile: () => boolean }>;
+  try {
+    entries = await readdir(tasksDir, { withFileTypes: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to read tasks directory "${tasksDir}": ${msg}`);
+  }
+
+  const files = entries
+    .filter((entry) => entry.isFile() && /^task-\d+\.md$/.test(entry.name))
+    .map((entry) => entry.name)
+    .sort((a, b) => {
+      const diff = parseQueueIndex(a) - parseQueueIndex(b);
+      return diff !== 0 ? diff : a.localeCompare(b);
+    });
+
+  if (files.length === 0) {
+    throw new Error(`No task files found in "${tasksDir}".`);
+  }
+
+  return await Promise.all(
+    files.map(async (name) => {
+      const path = join(tasksDir, name);
+      const content = await readFile(path, "utf8");
+      return { id: name.replace(/\.md$/, ""), path, content };
+    }),
+  );
+}
+
+function waitForWorkerReady(
+  workerPool: OrchestratorContext["workerPool"],
+  workerId: string,
+  timeoutMs: number,
+): Promise<void> {
+  const instance = workerPool.get(workerId);
+  if (!instance || instance.status === "ready") return Promise.resolve();
+  if (instance.status === "error" || instance.status === "stopped") {
+    return Promise.reject(
+      new Error(`Worker "${workerId}" is ${instance.status}`),
+    );
+  }
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let offReady = () => {};
+    let offStop = () => {};
+    let offError = () => {};
+    const cleanup = () => {
+      if (settled) return;
+      settled = true;
+      offReady();
+      offStop();
+      offError();
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+    offReady = workerPool.on("ready", (next) => {
+      if (next.profile.id !== workerId) return;
+      cleanup();
+      resolve();
+    });
+    offStop = workerPool.on("stop", (next) => {
+      if (next.profile.id !== workerId) return;
+      cleanup();
+      reject(new Error(`Worker "${workerId}" stopped`));
+    });
+    offError = workerPool.on("error", (next) => {
+      if (next.profile.id !== workerId) return;
+      cleanup();
+      reject(new Error(`Worker "${workerId}" errored`));
+    });
+
+    const latest = workerPool.get(workerId);
+    if (!latest || latest.status === "ready") {
+      cleanup();
+      resolve();
+      return;
+    }
+
+    if (typeof timeoutMs === "number" && Number.isFinite(timeoutMs)) {
+      timeoutId = setTimeout(() => {
+        cleanup();
+        reject(
+          new Error(
+            `Worker "${workerId}" did not become ready within ${timeoutMs}ms.`,
+          ),
+        );
+      }, timeoutMs);
+    }
+  });
+}
+
+export async function runBoomerangQueueWithDependencies(
+  input: {
+    workflowId: string;
+    task: string;
+    tasks: BoomerangQueueTask[];
+    limits: WorkflowSecurityLimits;
+    autoSpawn?: boolean;
+    attachments?: WorkflowRunInput["attachments"];
+    uiPolicy?: WorkflowUiPolicy;
+    runId?: string;
+    parentSessionId?: string;
+    workflow?: WorkflowDefinition;
+  },
+  deps: BoomerangQueueDependencies,
+): Promise<WorkflowRunState> {
+  const workflow = input.workflow ?? getWorkflow(input.workflowId);
+  if (!workflow) {
+    throw new Error(`Unknown workflow "${input.workflowId}".`);
+  }
+  validateWorkflowInput(
+    {
+      workflowId: input.workflowId,
+      task: input.task,
+      attachments: input.attachments,
+      autoSpawn: input.autoSpawn,
+      limits: input.limits,
+    },
+    workflow,
+  );
+  if (input.tasks.length === 0) {
+    throw new Error("No tasks to run.");
+  }
+  const baseStep = workflow.steps[0];
+  if (!baseStep) {
+    throw new Error(`Workflow "${workflow.id}" has no steps.`);
+  }
+
+  const runId = input.runId ?? randomUUID();
+  const ui: WorkflowUiPolicy = {
+    execution: input.uiPolicy?.execution ?? defaultUiPolicy.execution,
+    intervene: input.uiPolicy?.intervene ?? defaultUiPolicy.intervene,
+  };
+  const run = createWorkflowRunState({
+    runId,
+    workflowId: workflow.id,
+    workflowName: workflow.name,
+    task: input.task,
+    autoSpawn: input.autoSpawn ?? true,
+    limits: input.limits,
+    attachments: input.attachments,
+    ui,
+    parentSessionId: input.parentSessionId,
+  });
+
+  publishOrchestratorEvent("orchestra.workflow.started", {
+    runId: run.runId,
+    workflowId: workflow.id,
+    workflowName: workflow.name,
+    task: input.task,
+    startedAt: run.startedAt,
+  });
+
+  const sendToWorker = async (
+    workerId: string,
+    message: string,
+    options: {
+      attachments?: WorkflowRunInput["attachments"];
+      timeoutMs: number;
+      model?: string;
+    },
+  ) => {
+    if (deps.waitForWorkerReady) {
+      try {
+        await deps.waitForWorkerReady(workerId, options.timeoutMs);
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    }
+    return deps.sendToWorker(workerId, message, options);
+  };
+
+  const queueDeps: WorkflowRunDependencies = {
+    resolveWorker: deps.resolveWorker,
+    sendToWorker,
+  };
+
+  let carry = "";
+
+  for (let index = 0; index < input.tasks.length; index += 1) {
+    const taskItem = input.tasks[index];
+    const step: WorkflowStepDefinition = {
+      ...baseStep,
+      id: taskItem.id,
+      title: taskItem.id,
+      model: baseStep.model,
+    };
+    const taskWorkflow: WorkflowDefinition = {
+      ...workflow,
+      steps: [step],
+    };
+
+    const executed = await executeWorkflowStep(
+      {
+        runId: run.runId,
+        workflow: taskWorkflow,
+        stepIndex: 0,
+        task: taskItem.content,
+        carry,
+        autoSpawn: input.autoSpawn ?? true,
+        limits: input.limits,
+        attachments: index === 0 ? input.attachments : undefined,
+      },
+      queueDeps,
+    );
+
+    run.steps.push(executed.step);
+    run.lastStepResult = executed.step;
+    run.currentStepIndex = index + 1;
+    run.updatedAt = Date.now();
+    carry = executed.carry;
+
+    if (executed.step.status === "error") {
+      run.status = "error";
+      break;
+    }
+
+    run.status = "running";
+  }
+
+  if (run.status === "running") {
+    run.status = "success";
+  }
+
+  run.updatedAt = Date.now();
+  if (run.status === "success" || run.status === "error") {
+    run.finishedAt = run.updatedAt;
+  }
+
+  if (run.status === "success" || run.status === "error") {
+    publishOrchestratorEvent("orchestra.workflow.completed", {
+      runId: run.runId,
+      workflowId: workflow.id,
+      workflowName: workflow.name,
+      status: run.status,
+      startedAt: run.startedAt,
+      finishedAt: run.finishedAt ?? Date.now(),
+      durationMs: (run.finishedAt ?? Date.now()) - run.startedAt,
+      steps: {
+        total: run.steps.length,
+        success: run.steps.filter((step) => step.status === "success").length,
+        error: run.steps.filter((step) => step.status === "error").length,
+      },
+    });
+  }
+
+  return run;
 }
 
 type WorkflowStepHook = (input: {
@@ -536,6 +845,17 @@ export async function runWorkflowWithContext(
   },
 ): Promise<WorkflowRunResult> {
   const workerPool = context.workerPool;
+  try {
+    await ensureBoomerangWorkflowModels(context, input.workflowId);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    publishErrorEvent({
+      message: msg,
+      source: "workflow",
+      workflowId: input.workflowId,
+    });
+    throw err;
+  }
   const limits =
     input.limits ?? resolveWorkflowLimits(context, input.workflowId);
   const uiPolicy = resolveWorkflowUiPolicy(context, options?.uiPolicy);
@@ -632,25 +952,48 @@ export async function runWorkflowWithContext(
         sendToWorker(workerId, message, {
           attachments: optionsInput.attachments,
           timeout: optionsInput.timeoutMs,
+          model: optionsInput.model,
           sessionId: options?.sessionId,
         }),
     };
 
-    result = await runWorkflowWithDependencies(
-      {
-        workflowId: input.workflowId,
-        task: input.task,
-        attachments: input.attachments,
-        autoSpawn: input.autoSpawn ?? true,
-        limits,
-      },
-      deps,
-      {
-        uiPolicy,
-        parentSessionId: options?.sessionId,
-        onStep: createStepHook(context, options?.sessionId, notify),
-      },
-    );
+    if (input.workflowId === "boomerang-run") {
+      const tasks = await loadBoomerangQueueTasks(context.directory);
+      result = await runBoomerangQueueWithDependencies(
+        {
+          workflowId: input.workflowId,
+          workflow,
+          task: input.task,
+          tasks,
+          attachments: input.attachments,
+          autoSpawn: input.autoSpawn ?? true,
+          limits,
+          uiPolicy,
+          parentSessionId: options?.sessionId,
+        },
+        {
+          ...deps,
+          waitForWorkerReady: (workerId, timeoutMs) =>
+            waitForWorkerReady(workerPool, workerId, timeoutMs),
+        },
+      );
+    } else {
+      result = await runWorkflowWithDependencies(
+        {
+          workflowId: input.workflowId,
+          task: input.task,
+          attachments: input.attachments,
+          autoSpawn: input.autoSpawn ?? true,
+          limits,
+        },
+        deps,
+        {
+          uiPolicy,
+          parentSessionId: options?.sessionId,
+          onStep: createStepHook(context, options?.sessionId, notify),
+        },
+      );
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     publishErrorEvent({
@@ -697,6 +1040,18 @@ export async function continueWorkflowWithContext(
       return toWorkflowRunResult(run);
     }
 
+    try {
+      await ensureBoomerangWorkflowModels(context, run.workflowId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      publishErrorEvent({
+        message: msg,
+        source: "workflow",
+        workflowId: run.workflowId,
+        runId: run.runId,
+      });
+      throw err;
+    }
     const workerPool = context.workerPool;
     const notify =
       options?.notify !== false && context.config.ui?.wakeupInjection !== false;

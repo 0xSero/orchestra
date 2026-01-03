@@ -20,6 +20,7 @@ export type WorkflowRunDependencies = {
     options: {
       attachments?: WorkflowRunInput["attachments"];
       timeoutMs: number;
+      model?: string;
     },
   ) => Promise<{
     success: boolean;
@@ -320,6 +321,7 @@ export async function executeWorkflowStep(
   const res = await deps.sendToWorker(workerId, prompt, {
     attachments: input.stepIndex === 0 ? input.attachments : undefined,
     timeoutMs: resolveStepTimeout(step, input.limits),
+    model: step.model,
   });
   const stepFinished = Date.now();
   if (!res.success) {

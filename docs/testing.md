@@ -11,11 +11,12 @@ bun run check
 ```
 
 Note: E2E tests require the OpenCode CLI (`opencode`) on `PATH` and a model configured via `OPENCODE_ORCH_E2E_MODEL`.
+Boomerang workflow E2E runs write run bundles under `packages/orchestrator/test-runs/run-*/` (gitignored).
 
 ## CI behavior
 
 - PR CI runs `bun run check` (lint, typecheck, unit + integration tests, build).
-- Nightly E2E workflow runs `bun run test:e2e` with `OPENCODE_ORCH_E2E_MODEL` and installs the OpenCode CLI.
+- Nightly E2E workflow runs `bun run test:e2e` (including boomerang-plan + boomerang-run) with `OPENCODE_ORCH_E2E_MODEL` or the default `opencode/gpt-5-nano`, and installs the OpenCode CLI.
 
 ## Test tiers
 
@@ -30,6 +31,7 @@ Note: E2E tests require the OpenCode CLI (`opencode`) on `PATH` and a model conf
 - `bun run test:e2e`
   - Requires `opencode` on `PATH`.
   - Set `OPENCODE_ORCH_E2E_MODEL` (example: `opencode/gpt-5-nano`).
+  - Boomerang workflows emit run bundles to `packages/orchestrator/test-runs/run-*/` with `meta.json`, `events.jsonl`, `orchestrator.log.jsonl`, `workers/*/messages.json`, and `summary.json`.
 
 ### Tier 3: Optional (environment-dependent)
 
@@ -76,6 +78,14 @@ Note: E2E tests require the OpenCode CLI (`opencode`) on `PATH` and a model conf
 - `e2e/auto-spawn-limits.test.ts`
   - Verifies worker auto-spawn under delegateTask.
   - Risk: medium (model dependent).
+
+- `e2e/boomerang-plan.test.ts`
+  - Generates `scope.md`, `rules.md`, and a full `tasks/` queue for a fixture.
+  - Risk: high (model dependent, filesystem writes).
+
+- `e2e/boomerang-run.test.ts`
+  - Drains the boomerang queue and builds the fixture `dist/` output.
+  - Risk: high (model dependent, longer runtime).
 
 - `optional/memory-auto.test.ts`
   - Optional Docker/Neo4j-backed memory recording test.

@@ -308,6 +308,7 @@ export function parseOrchestratorConfigFile(
               if (typeof step.carry === "boolean") entry.carry = step.carry;
               if (typeof step.timeoutMs === "number")
                 entry.timeoutMs = step.timeoutMs;
+              if (typeof step.model === "string") entry.model = step.model;
               return entry;
             })
             .filter(Boolean);
@@ -370,6 +371,14 @@ export function parseOrchestratorConfigFile(
       }
       if (Object.keys(triggers).length > 0) workflows.triggers = triggers;
     }
+    if (isPlainObject(raw.workflows.boomerang)) {
+      const boomerang: Record<string, unknown> = {};
+      if (typeof raw.workflows.boomerang.plannerModel === "string")
+        boomerang.plannerModel = raw.workflows.boomerang.plannerModel;
+      if (typeof raw.workflows.boomerang.implementerModel === "string")
+        boomerang.implementerModel = raw.workflows.boomerang.implementerModel;
+      if (Object.keys(boomerang).length > 0) workflows.boomerang = boomerang;
+    }
     if (isPlainObject(raw.workflows.roocodeBoomerang)) {
       const roocode: Record<string, unknown> = {};
       if (typeof raw.workflows.roocodeBoomerang.enabled === "boolean")
@@ -396,6 +405,7 @@ export function parseOrchestratorConfigFile(
             if (typeof s.prompt === "string") step.prompt = s.prompt;
             if (typeof s.carry === "boolean") step.carry = s.carry;
             if (typeof s.timeoutMs === "number") step.timeoutMs = s.timeoutMs;
+            if (typeof s.model === "string") step.model = s.model;
             return step;
           })
           .filter(Boolean);

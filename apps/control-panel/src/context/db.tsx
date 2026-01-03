@@ -59,20 +59,30 @@ export const DbProvider: ParentComponent<{ baseUrl?: string }> = (props) => {
     setReady(true);
   };
 
-  const fetchSnapshot = async () => {
-    const res = await fetch(`${apiBase}/api/db`);
-    if (!res.ok) throw new Error("Failed to load database snapshot");
-    return (await res.json()) as DbSnapshot;
+  const fetchSnapshot = async (): Promise<DbSnapshot | null> => {
+    try {
+      const res = await fetch(`${apiBase}/api/db`);
+      if (!res.ok) return null;
+      return (await res.json()) as DbSnapshot;
+    } catch {
+      // API unavailable
+      return null;
+    }
   };
 
   const refresh = async () => {
     const snapshot = await fetchSnapshot();
-    applySnapshot(snapshot);
+    if (snapshot) {
+      applySnapshot(snapshot);
+    } else {
+      // Mark as ready even without data so UI doesn't hang
+      setReady(true);
+    }
   };
 
   createEffect(() => {
     let active = true;
-    refresh().catch(() => {});
+    refresh();
 
     if (typeof EventSource === "undefined") return;
     const source = new EventSource(`${apiBase}/api/db/events`);
@@ -89,7 +99,7 @@ export const DbProvider: ParentComponent<{ baseUrl?: string }> = (props) => {
     source.onmessage = handleSnapshot;
     source.onerror = () => {
       if (!ready()) {
-        refresh().catch(() => {});
+        refresh();
       }
     };
     onCleanup(() => {

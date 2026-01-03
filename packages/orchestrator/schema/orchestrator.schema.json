@@ -130,6 +130,7 @@
                     "prompt": { "type": "string" },
                     "carry": { "type": "boolean" },
                     "timeoutMs": { "type": "number" },
+                    "model": { "type": "string" },
                     "requiredSkills": {
                       "type": "array",
                       "items": { "type": "string" }
@@ -166,6 +167,14 @@
             }
           }
         },
+        "boomerang": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "plannerModel": { "type": "string" },
+            "implementerModel": { "type": "string" }
+          }
+        },
         "roocodeBoomerang": {
           "type": "object",
           "additionalProperties": false,
@@ -184,6 +193,7 @@
                   "prompt": { "type": "string" },
                   "carry": { "type": "boolean" },
                   "timeoutMs": { "type": "number" },
+                  "model": { "type": "string" },
                   "requiredSkills": {
                     "type": "array",
                     "items": { "type": "string" }

@@ -38,9 +38,14 @@ export const AgentsProvider: ParentComponent<{ baseUrl?: string }> = (props) => 
   const [createOpen, setCreateOpen] = createSignal(false);
 
   const fetchAgents = async () => {
-    const res = await fetch(`${apiBase}/api/skills`);
-    if (!res.ok) throw new Error("Failed to load agents");
-    return (await res.json()) as AgentProfile[];
+    try {
+      const res = await fetch(`${apiBase}/api/skills`);
+      if (!res.ok) return [];
+      return (await res.json()) as AgentProfile[];
+    } catch {
+      // API unavailable - return empty array instead of crashing
+      return [];
+    }
   };
 
   const [agents, { refetch }] = createResource(fetchAgents);

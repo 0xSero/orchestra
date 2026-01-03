@@ -18,7 +18,10 @@ describe("parseOrchestratorConfigFile", () => {
       notifications: {
         idle: { enabled: true, title: 123, message: "hello", delayMs: 1500 },
       },
-      workflows: { ui: { execution: "step", intervene: "on-warning" } },
+      workflows: {
+        ui: { execution: "step", intervene: "on-warning" },
+        boomerang: { plannerModel: "opencode/gpt-5-nano" },
+      },
       profiles: ["coder", 123, { id: "custom" }],
     });
 
@@ -33,6 +36,9 @@ describe("parseOrchestratorConfigFile", () => {
     expect(parsed.workflows?.ui).toEqual({
       execution: "step",
       intervene: "on-warning",
+    });
+    expect(parsed.workflows?.boomerang).toEqual({
+      plannerModel: "opencode/gpt-5-nano",
     });
     const profiles = parsed.profiles ?? [];
     expect(profiles[0]).toBe("coder");

@@ -34,8 +34,14 @@ const OnboardingGate: Component = () => {
   createEffect(() => {
     // Wait for SQLite snapshot before deciding whether to redirect.
     if (!ready()) return;
-    const completed = preferences()["onboarding.completed"] === "true" || user()?.onboarded;
-    const skipped = preferences()["onboarding.skipped"] === "true";
+    // Check both API preferences and localStorage fallback
+    const completed =
+      preferences()["onboarding.completed"] === "true" ||
+      user()?.onboarded ||
+      localStorage.getItem("onboarding.completed") === "true";
+    const skipped =
+      preferences()["onboarding.skipped"] === "true" ||
+      localStorage.getItem("onboarding.skipped") === "true";
     if (completed || skipped) return;
     if (location.pathname.startsWith("/onboarding")) return;
     navigate("/onboarding", { replace: true });

@@ -153,6 +153,8 @@ Configure the workflow engine and built-in workflows.
 | `workflows.triggers.memoryOnTurnEnd.workflowId` | string | `memory` | Workflow ID to run for memory |
 | `workflows.triggers.memoryOnTurnEnd.autoSpawn` | boolean | `true` | Auto-spawn missing workers |
 | `workflows.triggers.memoryOnTurnEnd.blocking` | boolean | `false` | Run synchronously (blocks the message) |
+| `workflows.boomerang.plannerModel` | string | `opencode/gpt-5-nano` | Planner model (provider/model) |
+| `workflows.boomerang.implementerModel` | string | `opencode/gpt-5-nano` | Implementer model (provider/model) |
 | `workflows.roocodeBoomerang.enabled` | boolean | `true` | Enable RooCode Boomerang workflow |
 | `workflows.roocodeBoomerang.maxSteps` | number | `4` | Maximum steps in workflow |
 | `workflows.roocodeBoomerang.maxTaskChars` | number | `12000` | Max characters in task |
@@ -167,6 +169,10 @@ Configure the workflow engine and built-in workflows.
     "triggers": {
       "visionOnImage": { "enabled": true, "workflowId": "vision" },
       "memoryOnTurnEnd": { "enabled": true, "workflowId": "memory" }
+    },
+    "boomerang": {
+      "plannerModel": "opencode/gpt-5-nano",
+      "implementerModel": "opencode/gpt-5-nano"
     },
     "roocodeBoomerang": {
       "enabled": true,

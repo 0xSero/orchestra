@@ -51,6 +51,7 @@ export async function spawnOpencodeServe(options: {
 }): Promise<{ url: string; proc: ChildProcess; close: () => Promise<void> }> {
   const mergedConfig = await mergeOpenCodeConfig(options.config ?? {}, {
     dropOrchestratorPlugin: true,
+    excludeAgentConfigs: true,
   });
   // CRITICAL: Mark this as a worker process to prevent recursive spawning.
   // Workers should NOT load the orchestrator plugin or spawn more workers.

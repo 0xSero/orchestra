@@ -98,14 +98,25 @@ export const OnboardingPage: Component = () => {
   };
 
   const handleSkip = async () => {
-    await setPreference(ONBOARDING_PREF_KEYS.skipped, "true");
-    navigate("/chat");
+    try {
+      await setPreference(ONBOARDING_PREF_KEYS.skipped, "true");
+    } catch {
+      // API unavailable - store locally and continue
+      localStorage.setItem("onboarding.skipped", "true");
+    }
+    navigate("/dashboard");
   };
 
   const markComplete = async () => {
-    await setPreference(ONBOARDING_PREF_KEYS.completed, "true");
-    await setPreference(ONBOARDING_PREF_KEYS.skipped, "false");
-    await markOnboarded();
+    try {
+      await setPreference(ONBOARDING_PREF_KEYS.completed, "true");
+      await setPreference(ONBOARDING_PREF_KEYS.skipped, "false");
+      await markOnboarded();
+    } catch {
+      // API unavailable - store locally and continue
+      localStorage.setItem("onboarding.completed", "true");
+    }
+    navigate("/dashboard");
   };
 
   const restart = async () => {

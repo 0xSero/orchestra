@@ -1,6 +1,8 @@
 import type { OrchestratorConfig } from "../types";
 import { registerWorkflow } from "./engine";
 import { buildRooCodeBoomerangWorkflow } from "./roocode-boomerang";
+import { buildBoomerangRunWorkflow } from "./boomerang-run";
+import { buildBoomerangPlanWorkflow } from "./boomerang-plan";
 import { buildVisionWorkflow } from "./builtins/vision";
 import { buildMemoryWorkflow } from "./builtins/memory";
 import type { WorkflowDefinition, WorkflowStepDefinition } from "./types";
@@ -17,6 +19,8 @@ export function loadWorkflows(config: OrchestratorConfig) {
 
   registerWorkflow(buildVisionWorkflow());
   registerWorkflow(buildMemoryWorkflow());
+  registerWorkflow(buildBoomerangPlanWorkflow());
+  registerWorkflow(buildBoomerangRunWorkflow());
 
   const roocode = config.workflows?.roocodeBoomerang;
   if (roocode?.enabled !== false) {
@@ -46,6 +50,7 @@ function resolveStepConfig(
     prompt,
     carry: typeof step.carry === "boolean" ? step.carry : false,
     timeoutMs: typeof step.timeoutMs === "number" ? step.timeoutMs : undefined,
+    model: typeof step.model === "string" ? step.model : undefined,
     ...(requiredSkills.length > 0 ? { requiredSkills } : {}),
   };
 }
