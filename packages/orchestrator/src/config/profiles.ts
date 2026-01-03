@@ -46,7 +46,8 @@ export const builtInProfiles: Record<string, WorkerProfile> = {
   coder: {
     id: "coder",
     name: "Code Implementer",
-    backend: "server",
+    backend: "agent",
+    kind: "subagent",
     model: "node",
     purpose: "Write, edit, and refactor code with full tool access",
     whenToUse:
@@ -58,7 +59,8 @@ export const builtInProfiles: Record<string, WorkerProfile> = {
   architect: {
     id: "architect",
     name: "System Architect",
-    backend: "server",
+    backend: "agent",
+    kind: "subagent",
     model: "node",
     purpose:
       "Design systems, plan implementations, review architecture decisions",
@@ -76,7 +78,8 @@ export const builtInProfiles: Record<string, WorkerProfile> = {
   explorer: {
     id: "explorer",
     name: "Code Explorer",
-    backend: "server",
+    backend: "agent",
+    kind: "subagent",
     model: "node:fast",
     purpose: "Quickly search and navigate the codebase",
     whenToUse:

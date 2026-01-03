@@ -3,7 +3,13 @@
   "autoSpawn": true,
   "workflows": {
     "enabled": true,
-    "roocodeBoomerang": { "enabled": true }
+    "roocodeBoomerang": { "enabled": true },
+    "triggers": {
+      "selfImproveOnIdle": {
+        "enabled": true,
+        "idleMinutes": 30
+      }
+    }
   },
 
   "agent": {
@@ -25,7 +31,7 @@
     {
       "id": "docs",
       "name": "Documentation Librarian",
-      "model": "minimax/glm-4.7",
+      "model": "zhipuai-coding-plan/glm-4.7",
       "purpose": "Research documentation, find examples, explain APIs and libraries",
       "whenToUse": "When you need to look up official documentation, find code examples, understand library APIs, or research best practices",
       "supportsWeb": true,

@@ -137,6 +137,11 @@ export type WorkflowTriggerConfig = {
   blocking?: boolean;
 };
 
+export type SelfImproveTriggerConfig = WorkflowTriggerConfig & {
+  /** Minutes of idle time before triggering self-improvement */
+  idleMinutes?: number;
+};
+
 export type WorkflowExecutionMode = "step" | "auto";
 export type WorkflowIntervenePolicy =
   | "never"
@@ -155,6 +160,7 @@ export type WorkflowsConfig = {
   triggers?: {
     visionOnImage?: WorkflowTriggerConfig;
     memoryOnTurnEnd?: WorkflowTriggerConfig;
+    selfImproveOnIdle?: SelfImproveTriggerConfig;
   };
   boomerang?: {
     plannerModel?: string;

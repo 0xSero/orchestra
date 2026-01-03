@@ -369,6 +369,43 @@ export function parseOrchestratorConfigFile(
         }
         triggers.memoryOnTurnEnd = memory;
       }
+      if (isPlainObject(raw.workflows.triggers.selfImproveOnIdle)) {
+        const selfImprove: Record<string, unknown> = {};
+        if (
+          typeof raw.workflows.triggers.selfImproveOnIdle.enabled === "boolean"
+        ) {
+          selfImprove.enabled =
+            raw.workflows.triggers.selfImproveOnIdle.enabled;
+        }
+        if (
+          typeof raw.workflows.triggers.selfImproveOnIdle.workflowId ===
+          "string"
+        ) {
+          selfImprove.workflowId =
+            raw.workflows.triggers.selfImproveOnIdle.workflowId;
+        }
+        if (
+          typeof raw.workflows.triggers.selfImproveOnIdle.autoSpawn ===
+          "boolean"
+        ) {
+          selfImprove.autoSpawn =
+            raw.workflows.triggers.selfImproveOnIdle.autoSpawn;
+        }
+        if (
+          typeof raw.workflows.triggers.selfImproveOnIdle.blocking === "boolean"
+        ) {
+          selfImprove.blocking =
+            raw.workflows.triggers.selfImproveOnIdle.blocking;
+        }
+        if (
+          typeof raw.workflows.triggers.selfImproveOnIdle.idleMinutes ===
+          "number"
+        ) {
+          selfImprove.idleMinutes =
+            raw.workflows.triggers.selfImproveOnIdle.idleMinutes;
+        }
+        triggers.selfImproveOnIdle = selfImprove;
+      }
       if (Object.keys(triggers).length > 0) workflows.triggers = triggers;
     }
     if (isPlainObject(raw.workflows.boomerang)) {
@@ -605,6 +642,13 @@ export async function loadOrchestratorConfig(input: {
           workflowId: "memory",
           autoSpawn: true,
           blocking: false,
+        },
+        selfImproveOnIdle: {
+          enabled: false,
+          workflowId: "self-improve",
+          autoSpawn: true,
+          blocking: false,
+          idleMinutes: 30,
         },
       },
       roocodeBoomerang: {

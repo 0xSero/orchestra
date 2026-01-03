@@ -5,6 +5,7 @@ import { buildBoomerangRunWorkflow } from "./boomerang-run";
 import { buildBoomerangPlanWorkflow } from "./boomerang-plan";
 import { buildVisionWorkflow } from "./builtins/vision";
 import { buildMemoryWorkflow } from "./builtins/memory";
+import { buildSelfImproveWorkflow } from "./builtins/self-improve";
 import type { WorkflowDefinition, WorkflowStepDefinition } from "./types";
 import type { WorkflowDefinitionConfig, WorkflowStepConfig } from "../types";
 import { asStringArray } from "../helpers/format";
@@ -19,6 +20,7 @@ export function loadWorkflows(config: OrchestratorConfig) {
 
   registerWorkflow(buildVisionWorkflow());
   registerWorkflow(buildMemoryWorkflow());
+  registerWorkflow(buildSelfImproveWorkflow());
   registerWorkflow(buildBoomerangPlanWorkflow());
   registerWorkflow(buildBoomerangRunWorkflow());
 

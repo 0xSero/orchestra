@@ -44,6 +44,19 @@ type TriggerConfig = {
   blocking?: boolean;
 };
 
+type SelfImproveTriggerConfig = TriggerConfig & {
+  idleMinutes?: number;
+};
+
+// Module-level state for self-improve idle tracking
+let selfImproveLastActivity = Date.now();
+let selfImproveTriggeredThisCycle = false;
+
+export function updateSelfImproveActivity(): void {
+  selfImproveLastActivity = Date.now();
+  selfImproveTriggeredThisCycle = false;
+}
+
 function resolveTriggerConfig(
   overrides: TriggerConfig | undefined,
   defaults: TriggerConfig,
@@ -279,6 +292,13 @@ export function createWorkflowTriggers(
     workflowId: "memory",
     autoSpawn: true,
     blocking: false,
+  };
+  const selfImproveDefaults: SelfImproveTriggerConfig = {
+    enabled: false,
+    workflowId: "self-improve",
+    autoSpawn: true,
+    blocking: false,
+    idleMinutes: 30,
   };
 
   const handleVisionMessage = async (
@@ -553,9 +573,82 @@ export function createWorkflowTriggers(
     }
   };
 
+  const handleSelfImproveIdle = async (): Promise<void> => {
+    if (context.workflows?.enabled === false) return;
+
+    const triggerConfig = context.workflows?.triggers?.selfImproveOnIdle;
+    const trigger = {
+      ...selfImproveDefaults,
+      ...triggerConfig,
+    } as Required<SelfImproveTriggerConfig>;
+
+    if (!trigger.enabled) return;
+    if (!getWorkflow(trigger.workflowId)) return;
+
+    // Check if already triggered this idle cycle
+    if (selfImproveTriggeredThisCycle) return;
+
+    // Check idle time
+    const now = Date.now();
+    const idleMs = (trigger.idleMinutes ?? 30) * 60 * 1000;
+    if (now - selfImproveLastActivity < idleMs) return;
+
+    // Mark as triggered to prevent multiple runs
+    selfImproveTriggeredThisCycle = true;
+
+    const agentId = "self-improve";
+    const sessionId = `self-improve-${now}`;
+    const workerId = selectWorkflowWorker(
+      context,
+      trigger.workflowId,
+      "architect",
+    );
+
+    const job = workerJobs.create({
+      workerId,
+      message: `workflow:${trigger.workflowId}`,
+      sessionId,
+      requestedBy: agentId,
+    });
+
+    const run = async () => {
+      try {
+        const limits = resolveWorkflowLimits(context, trigger.workflowId);
+        const result = await runWorkflow(
+          {
+            workflowId: trigger.workflowId,
+            task: "Analyze orchestrator performance and identify improvements",
+            autoSpawn: trigger.autoSpawn,
+            limits,
+          },
+          { sessionId },
+        );
+
+        const picked = pickWorkflowResponse(result);
+        if (!picked.success && picked.error) {
+          workerJobs.setError(job.id, { error: picked.error });
+          return;
+        }
+        workerJobs.setResult(job.id, {
+          responseText: picked.response ?? "Self-improvement completed",
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        workerJobs.setError(job.id, { error: msg });
+      }
+    };
+
+    if (trigger.blocking) {
+      await run();
+    } else {
+      void run();
+    }
+  };
+
   return {
     handleVisionMessage,
     handleMemoryTurnEnd,
+    handleSelfImproveIdle,
     processedMessageIds,
   };
 }
