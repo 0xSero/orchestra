@@ -25,6 +25,7 @@ import {
   resolveWorkerBridgePluginSpecifier,
 } from "../spawn/spawn-opencode";
 import { checkWorkerBridgeTools, isProcessAlive } from "../spawn/readiness";
+import { sessionPool, releaseSession } from "../../core/session-pool";
 
 type SpawnOptionsWithForce = SpawnOptions & { forceNew?: boolean };
 
@@ -343,6 +344,9 @@ export async function stopServerWorker(workerId: string): Promise<boolean> {
   }
 
   try {
+    // Clean up session pool entries for this worker
+    sessionPool.removeWorkerSessions(workerId);
+
     await instance.shutdown?.();
     instance.status = "stopped";
     workerPool.updateStatus(workerId, "stopped");
@@ -377,6 +381,17 @@ export async function sendToServerWorker(
   warning?: string;
   error?: string;
 }> {
+  // Validate message parameter to prevent undefined.slice() errors
+  if (typeof message !== "string") {
+    const errorMsg = `Invalid message parameter: expected string, got ${typeof message}`;
+    publishErrorEvent({
+      message: errorMsg,
+      source: "worker",
+      workerId,
+    });
+    return { success: false, error: errorMsg };
+  }
+
   const instance = workerPool.get(workerId);
 
   if (!instance) {
@@ -475,6 +490,179 @@ export async function sendToServerWorker(
       : (instance.warning ?? `Last request failed: ${errorMsg}`);
     publishErrorEvent({ message: errorMsg, source: "worker", workerId });
     return { success: false, error: errorMsg };
+  }
+}
+
+/**
+ * Send to a server worker with session pooling support.
+ * Creates a new session if the worker is busy, enabling concurrent execution.
+ */
+export async function sendToServerWorkerConcurrent(
+  workerId: string,
+  message: string,
+  options?: SendToWorkerOptions & { taskId?: string },
+): Promise<{
+  success: boolean;
+  response?: string;
+  warning?: string;
+  error?: string;
+  sessionId?: string;
+}> {
+  // Validate message parameter
+  if (typeof message !== "string") {
+    const errorMsg = `Invalid message parameter: expected string, got ${typeof message}`;
+    publishErrorEvent({ message: errorMsg, source: "worker", workerId });
+    return { success: false, error: errorMsg };
+  }
+
+  const instance = workerPool.get(workerId);
+
+  if (!instance) {
+    publishErrorEvent({
+      message: `Worker "${workerId}" not found`,
+      source: "worker",
+      workerId,
+    });
+    return { success: false, error: `Worker "${workerId}" not found` };
+  }
+
+  // Allow sending even if worker is "busy" - we'll create a new session
+  if (instance.status === "error" || instance.status === "stopped") {
+    publishErrorEvent({
+      message: `Worker "${workerId}" is ${instance.status}`,
+      source: "worker",
+      workerId,
+    });
+    return {
+      success: false,
+      error: `Worker "${workerId}" is ${instance.status}`,
+    };
+  }
+
+  if (!instance.client) {
+    publishErrorEvent({
+      message: `Worker "${workerId}" not properly initialized`,
+      source: "worker",
+      workerId,
+    });
+    return {
+      success: false,
+      error: `Worker "${workerId}" not properly initialized`,
+    };
+  }
+
+  // Try to get an available session or create a new one
+  let sessionId: string;
+  let isNewSession = false;
+
+  const existingSession = sessionPool.getAvailableSession(workerId);
+  if (existingSession) {
+    sessionId = existingSession.sessionId;
+    sessionPool.markBusy(sessionId, options?.taskId, message);
+  } else if (sessionPool.canCreateSession(workerId)) {
+    // Create new session on the same worker
+    try {
+      const sessionResult = await instance.client.session.create({
+        body: { title: `Task: ${message.slice(0, 50)}` },
+        query: { directory: instance.directory },
+      });
+
+      const session = sessionResult.data;
+      if (!session) {
+        const err = sessionResult.error as any;
+        return {
+          success: false,
+          error: err?.message ?? "Failed to create session",
+        };
+      }
+
+      sessionId = session.id;
+      isNewSession = true;
+      sessionPool.registerSession({
+        sessionId,
+        workerId,
+        taskId: options?.taskId,
+        task: message,
+      });
+
+      // Bootstrap new session with worker prompt
+      const bootstrapPrompt = await buildWorkerBootstrapPrompt({
+        profile: instance.profile,
+        directory: instance.directory,
+      });
+
+      await instance.client.session
+        .prompt({
+          path: { id: sessionId },
+          body: {
+            noReply: true,
+            parts: [{ type: "text", text: bootstrapPrompt }],
+          },
+          query: { directory: instance.directory },
+        } as any)
+        .catch(() => {});
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { success: false, error: `Failed to create session: ${errorMsg}` };
+    }
+  } else {
+    // Worker at capacity
+    const stats = sessionPool.getStats().sessionsByWorker.get(workerId);
+    return {
+      success: false,
+      error: `Worker "${workerId}" at session capacity (${stats?.busy ?? 0} busy, ${stats?.total ?? 0} total)`,
+    };
+  }
+
+  // Update instance activity tracking (but don't change status - other sessions may be running)
+  instance.lastActivity = new Date();
+
+  try {
+    const startedAt = Date.now();
+
+    const responseText = await sendWorkerPrompt({
+      client: instance.client,
+      sessionId,
+      directory: instance.directory ?? process.cwd(),
+      workerId,
+      message,
+      model: options?.model,
+      attachments: options?.attachments,
+      timeoutMs: options?.timeout ?? 600_000,
+      jobId: options?.jobId,
+      from: options?.from,
+      allowStreaming: true,
+      debugLabel: "[concurrent]",
+    });
+
+    // Release session back to pool
+    releaseSession(sessionId, true);
+
+    const durationMs = Date.now() - startedAt;
+    instance.lastResult = {
+      at: new Date(),
+      jobId: options?.jobId ?? instance.lastResult?.jobId,
+      response: responseText,
+      report: instance.lastResult?.report,
+      durationMs,
+    };
+
+    return {
+      success: true,
+      response: responseText,
+      sessionId,
+      ...(isNewSession
+        ? { warning: "Created new session for concurrent execution" }
+        : {}),
+    };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+
+    // Mark session as error but keep it for potential cleanup
+    sessionPool.markError(sessionId, errorMsg);
+
+    publishErrorEvent({ message: errorMsg, source: "worker", workerId });
+    return { success: false, error: errorMsg, sessionId };
   }
 }
 

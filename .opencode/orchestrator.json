@@ -25,7 +25,7 @@
     {
       "id": "docs",
       "name": "Documentation Librarian",
-      "model": "minimax/MiniMax-M2",
+      "model": "minimax/glm-4.7",
       "purpose": "Research documentation, find examples, explain APIs and libraries",
       "whenToUse": "When you need to look up official documentation, find code examples, understand library APIs, or research best practices",
       "supportsWeb": true,
@@ -41,7 +41,7 @@
     {
       "id": "memory",
       "name": "Memory Graph Curator",
-      "model": "kimi-for-coding/kimi-k2-thinking",
+      "model": "openai/gpt-5.2-xhigh",
       "purpose": "Maintain a Neo4j-backed memory graph (project + global) and advise on context pruning",
       "whenToUse": "When you want to record durable project knowledge, track decisions and entities over time, or decide what context can be safely pruned",
       "supportsWeb": true,
@@ -64,7 +64,7 @@
     {
       "id": "explorer",
       "name": "Code Explorer",
-      "model": "zhipuai-coding-plan/glm-4.6",
+      "model": "zhipuai-coding-plan/glm-4.7",
       "purpose": "Quickly search and navigate the codebase",
       "whenToUse": "When you need to quickly find files, search for patterns, or locate specific code without deep analysis",
       "tools": { "write": false, "edit": false },

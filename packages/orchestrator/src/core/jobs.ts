@@ -9,6 +9,12 @@ export type WorkerJobReport = {
   notes?: string;
 };
 
+export type WorkerJobProgress = {
+  message: string;
+  percent?: number;
+  updatedAt: number;
+};
+
 export type WorkerJob = {
   id: string;
   workerId: string;
@@ -22,14 +28,40 @@ export type WorkerJob = {
   responseText?: string;
   error?: string;
   report?: WorkerJobReport;
+  progress?: WorkerJobProgress;
 };
+
+export type JobEventCallback = (
+  job: WorkerJob,
+  event: "created" | "progress" | "completed" | "failed" | "canceled",
+) => void;
 
 const MAX_JOBS = 200;
 const MAX_JOB_AGE_MS = 24 * 60 * 60 * 1000;
+const NO_TIMEOUT = 0;
 
 export class WorkerJobRegistry {
   private jobs = new Map<string, WorkerJob>();
   private waiters = new Map<string, Set<(job: WorkerJob) => void>>();
+  private eventListeners = new Set<JobEventCallback>();
+
+  onJobEvent(callback: JobEventCallback): () => void {
+    this.eventListeners.add(callback);
+    return () => this.eventListeners.delete(callback);
+  }
+
+  private emitEvent(
+    job: WorkerJob,
+    event: "created" | "progress" | "completed" | "failed" | "canceled",
+  ): void {
+    for (const listener of this.eventListeners) {
+      try {
+        listener(job, event);
+      } catch {
+        // ignore listener errors
+      }
+    }
+  }
 
   create(input: {
     workerId: string;
@@ -48,6 +80,7 @@ export class WorkerJobRegistry {
       startedAt: Date.now(),
     };
     this.jobs.set(id, job);
+    this.emitEvent(job, "created");
     this.prune();
     return job;
   }
@@ -76,6 +109,28 @@ export class WorkerJobRegistry {
     return arr;
   }
 
+  getRunningJobs(): WorkerJob[] {
+    return [...this.jobs.values()].filter((j) => j.status === "running");
+  }
+
+  getRunningJobsCount(): number {
+    return this.getRunningJobs().length;
+  }
+
+  updateProgress(
+    id: string,
+    progress: { message: string; percent?: number },
+  ): void {
+    const job = this.jobs.get(id);
+    if (!job || job.status !== "running") return;
+    job.progress = {
+      message: progress.message,
+      percent: progress.percent,
+      updatedAt: Date.now(),
+    };
+    this.emitEvent(job, "progress");
+  }
+
   setResult(id: string, input: { responseText: string }): void {
     const job = this.jobs.get(id);
     if (!job || job.status !== "running") return;
@@ -83,6 +138,7 @@ export class WorkerJobRegistry {
     job.responseText = input.responseText;
     job.finishedAt = Date.now();
     job.durationMs = job.finishedAt - job.startedAt;
+    this.emitEvent(job, "completed");
     this.notify(id, job);
     this.prune();
   }
@@ -94,6 +150,7 @@ export class WorkerJobRegistry {
     job.error = input.error;
     job.finishedAt = Date.now();
     job.durationMs = job.finishedAt - job.startedAt;
+    this.emitEvent(job, "failed");
     this.notify(id, job);
     this.prune();
   }
@@ -105,6 +162,7 @@ export class WorkerJobRegistry {
     if (input?.reason) job.error = input.reason;
     job.finishedAt = Date.now();
     job.durationMs = job.finishedAt - job.startedAt;
+    this.emitEvent(job, "canceled");
     this.notify(id, job);
     this.prune();
   }
@@ -118,26 +176,67 @@ export class WorkerJobRegistry {
 
   async await(
     id: string,
-    options?: { timeoutMs?: number },
+    options?: { timeoutMs?: number; noTimeout?: boolean },
   ): Promise<WorkerJob> {
     const existing = this.jobs.get(id);
     if (!existing) throw new Error(`Unknown job "${id}"`);
     if (existing.status !== "running") return existing;
 
-    const timeoutMs = options?.timeoutMs ?? 600_000;
+    const timeoutMs = options?.noTimeout
+      ? NO_TIMEOUT
+      : (options?.timeoutMs ?? 600_000);
+
     return await new Promise<WorkerJob>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.offWaiter(id, onDone);
-        reject(
-          new Error(`Timed out waiting for job "${id}" after ${timeoutMs}ms`),
-        );
-      }, timeoutMs);
+      let timer: ReturnType<typeof setTimeout> | undefined;
+
+      if (timeoutMs > 0) {
+        timer = setTimeout(() => {
+          this.offWaiter(id, onDone);
+          const job = this.jobs.get(id);
+          const elapsed = job ? Date.now() - job.startedAt : timeoutMs;
+          const progressInfo = job?.progress
+            ? ` (last progress: ${job.progress.message})`
+            : "";
+          reject(
+            new Error(
+              `Timed out waiting for job "${id}" after ${elapsed}ms${progressInfo}`,
+            ),
+          );
+        }, timeoutMs);
+      }
+
       const onDone = (job: WorkerJob) => {
-        clearTimeout(timer);
+        if (timer) clearTimeout(timer);
         resolve(job);
       };
       this.onWaiter(id, onDone);
     });
+  }
+
+  getJobSummary(): {
+    total: number;
+    running: number;
+    succeeded: number;
+    failed: number;
+    canceled: number;
+    oldestRunningMs?: number;
+  } {
+    const jobs = [...this.jobs.values()];
+    const running = jobs.filter((j) => j.status === "running");
+    const now = Date.now();
+    const oldestRunning =
+      running.length > 0
+        ? Math.min(...running.map((j) => j.startedAt))
+        : undefined;
+
+    return {
+      total: jobs.length,
+      running: running.length,
+      succeeded: jobs.filter((j) => j.status === "succeeded").length,
+      failed: jobs.filter((j) => j.status === "failed").length,
+      canceled: jobs.filter((j) => j.status === "canceled").length,
+      oldestRunningMs: oldestRunning ? now - oldestRunning : undefined,
+    };
   }
 
   private onWaiter(id: string, cb: (job: WorkerJob) => void) {

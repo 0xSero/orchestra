@@ -119,6 +119,17 @@ export async function sendToAgentWorker(
   warning?: string;
   error?: string;
 }> {
+  // Validate message parameter to prevent undefined.slice() errors
+  if (typeof message !== "string") {
+    const errorMsg = `Invalid message parameter: expected string, got ${typeof message}`;
+    publishErrorEvent({
+      message: errorMsg,
+      source: "worker",
+      workerId,
+    });
+    return { success: false, error: errorMsg };
+  }
+
   const instance = workerPool.get(workerId);
 
   if (!instance) {
