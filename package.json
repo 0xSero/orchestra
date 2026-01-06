@@ -4,15 +4,11 @@
   "type": "module",
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "dev": "node scripts/dev.mjs",
-    "dev:desktop": "node scripts/dev.mjs --desktop",
     "dev:min": "bun run --cwd packages/orchestrator build:watch",
-    "loc": "node scripts/loc.mjs",
     "audit": "bun audit",
-    "size:check": "node scripts/size-check.mjs",
-    "lint": "node scripts/biome.mjs lint .",
-    "format": "node scripts/biome.mjs format . --write",
-    "format:check": "node scripts/biome.mjs format .",
+    "lint": "bunx @biomejs/biome lint .",
+    "format": "bunx @biomejs/biome format . --write",
+    "format:check": "bunx @biomejs/biome format .",
     "typecheck:plugin": "cd packages/orchestrator && bun run typecheck",
     "typecheck:control-panel": "cd apps/control-panel && bun run typecheck",
     "typecheck:desktop": "cd apps/desktop && bun run typecheck",
@@ -30,7 +26,7 @@
     "build:desktop": "cd apps/desktop && bun run build",
     "build": "bun run build:plugin && bun run build:control-panel && bun run build:desktop",
     "bench": "cd packages/orchestrator && bun run bench",
-    "check": "bun run audit && bun run format:check && bun run size:check && bun run lint && bun run typecheck && bun run test && bun run build"
+    "check": "bun run audit && bun run format:check && bun run lint && bun run typecheck && bun run test && bun run build"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

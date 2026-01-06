@@ -20,6 +20,16 @@ describe("parseOrchestratorConfigFile", () => {
       },
       workflows: {
         ui: { execution: "step", intervene: "on-warning" },
+        triggers: {
+          infiniteOrchestra: {
+            enabled: true,
+            cooldownMinutes: 10,
+          },
+        },
+        infiniteOrchestra: {
+          goal: "Improve the repository",
+          queueDir: ".opencode/orchestra/tasks",
+        },
         boomerang: { plannerModel: "opencode/gpt-5-nano" },
       },
       profiles: ["coder", 123, { id: "custom" }],
@@ -36,6 +46,14 @@ describe("parseOrchestratorConfigFile", () => {
     expect(parsed.workflows?.ui).toEqual({
       execution: "step",
       intervene: "on-warning",
+    });
+    expect((parsed.workflows as any)?.triggers?.infiniteOrchestra).toEqual({
+      enabled: true,
+      cooldownMinutes: 10,
+    });
+    expect((parsed.workflows as any)?.infiniteOrchestra).toEqual({
+      goal: "Improve the repository",
+      queueDir: ".opencode/orchestra/tasks",
     });
     expect(parsed.workflows?.boomerang).toEqual({
       plannerModel: "opencode/gpt-5-nano",
@@ -90,6 +108,44 @@ describe("resolveWorkerEntry", () => {
       "docs-research",
       "code-implementer",
     ]);
+  });
+
+  test("accepts docker config", () => {
+    const resolved = resolveWorkerEntry({
+      id: "docker-worker",
+      name: "Docker Worker",
+      model: "opencode/gpt-5-nano",
+      purpose: "Test docker",
+      whenToUse: "Unit test",
+      docker: {
+        image: "ghcr.io/example/opencode:latest",
+        workdir: "/workspace",
+        passEnv: ["OPENAI_API_KEY"],
+        env: { FOO: "bar" },
+      },
+    });
+
+    expect(resolved?.docker).toEqual({
+      image: "ghcr.io/example/opencode:latest",
+      workdir: "/workspace",
+      passEnv: ["OPENAI_API_KEY"],
+      env: { FOO: "bar" },
+    });
+  });
+
+  test("rejects docker config without image", () => {
+    const resolved = resolveWorkerEntry({
+      id: "docker-worker",
+      name: "Docker Worker",
+      model: "opencode/gpt-5-nano",
+      purpose: "Test docker",
+      whenToUse: "Unit test",
+      docker: {
+        workdir: "/workspace",
+      },
+    });
+
+    expect(resolved).toBeUndefined();
   });
 
   test("rejects conflicting backend and kind", () => {

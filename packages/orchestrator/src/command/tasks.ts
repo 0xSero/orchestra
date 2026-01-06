@@ -521,9 +521,13 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
     },
     async execute(args, ctx: ToolContext) {
       const kind = args.kind ?? "auto";
-      const autoSpawn = args.autoSpawn ?? true;
-      const timeoutMs = args.timeoutMs ?? 600_000;
-      const modelPolicy = args.modelPolicy ?? "dynamic";
+      const taskDefaults = context.config.tasks;
+      const autoSpawn =
+        args.autoSpawn ?? taskDefaults?.defaultAutoSpawn ?? true;
+      const timeoutMs =
+        args.timeoutMs ?? taskDefaults?.defaultTimeoutMs ?? 600_000;
+      const modelPolicy =
+        args.modelPolicy ?? taskDefaults?.defaultModelPolicy ?? "dynamic";
       const sessionId = ctx?.sessionID;
 
       const resolvedKind = kind === "auto" ? "worker" : kind;
@@ -806,7 +810,8 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
         .describe("Timeout in ms (default: 10 minutes)"),
     },
     async execute(args) {
-      const timeoutMs = args.timeoutMs ?? 600_000;
+      const timeoutMs =
+        args.timeoutMs ?? context.config.tasks?.defaultTimeoutMs ?? 600_000;
       const ids = args.taskId ? [args.taskId] : (args.taskIds ?? []);
       if (ids.length === 0) return "Missing taskId/taskIds.";
 
@@ -859,6 +864,7 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
           "profiles",
           "models",
           "workflows",
+          "workflow",
           "status",
           "output",
         ])
@@ -893,6 +899,10 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
         .enum(["markdown", "json"])
         .optional()
         .describe("Output format (default: markdown)"),
+      taskId: tool.schema
+        .string()
+        .optional()
+        .describe("Task ID for workflow view"),
     },
     async execute(args) {
       const format: "markdown" | "json" =
@@ -903,18 +913,23 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
         const workers = context.workerPool.toJSON();
         if (format === "json") return JSON.stringify(workers, null, 2);
         if (workers.length === 0) return "No workers are currently registered.";
-        const rows = workers.map((w: any) => [
-          String(w.id),
-          String(w.status),
-          String(w.modelRef ?? ""),
-          String(w.model),
-          String(w.modelPolicy ?? ""),
-          String(w.modelResolution ?? ""),
-          w.supportsVision ? "yes" : "no",
-          w.supportsWeb ? "yes" : "no",
-          String(w.port ?? ""),
-          String(w.purpose ?? ""),
-        ]);
+        const rows = workers.map((w: any) => {
+          const profile = context.profiles[w.id];
+          const profileName = profile?.name || "Custom";
+          return [
+            String(w.id),
+            String(w.status),
+            String(w.modelRef ?? ""),
+            String(w.model),
+            String(w.modelPolicy ?? ""),
+            String(w.modelResolution ?? ""),
+            w.supportsVision ? "yes" : "no",
+            w.supportsWeb ? "yes" : "no",
+            String(w.port ?? ""),
+            String(w.purpose ?? ""),
+            profileName,
+          ];
+        });
         return renderMarkdownTable(
           [
             "Worker",
@@ -927,6 +942,7 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
             "Web",
             "Port",
             "Purpose",
+            "Profile",
           ],
           rows,
         );
@@ -975,6 +991,97 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
           ["ID", "Name", "Steps", "Description"],
           rows,
         );
+      }
+
+      if (view === "workflow") {
+        const taskId = args.taskId?.trim();
+        if (!taskId) return "Missing taskId for workflow view.";
+
+        const job = workerJobs.get(taskId);
+        if (!job) return `Task ${taskId} not found.`;
+
+        if (job.workerId?.startsWith("workflow:")) {
+          const workflowId = job.workerId.replace("workflow:", "");
+          const workflow = getWorkflow(workflowId);
+          if (!workflow) return `Workflow ${workflowId} not found.`;
+
+          let workflowSteps: Array<{
+            id: string;
+            status: string;
+            durationMs?: number;
+            workerId: string;
+            warning?: string;
+            error?: string;
+          }> = [];
+
+          if (job.report?.details) {
+            try {
+              const details = JSON.parse(job.report.details);
+              workflowSteps = details.steps ?? [];
+            } catch {
+              // If parsing fails, proceed with empty steps
+            }
+          }
+
+          const steps = workflow.steps.map((step) => {
+            const stepResult = workflowSteps.find((s) => s.id === step.id);
+            const status = stepResult?.status ?? "pending";
+            const duration = stepResult?.durationMs
+              ? `${stepResult.durationMs}ms`
+              : "";
+            const worker = stepResult?.workerId ?? "pending";
+            return {
+              id: step.id,
+              title: step.title,
+              status,
+              duration,
+              worker,
+            };
+          });
+
+          const output = {
+            taskId: job.id,
+            workflowId: workflow.id,
+            workflowName: workflow.name,
+            status: job.status,
+            startedAt: new Date(job.startedAt).toISOString(),
+            finishedAt: job.finishedAt
+              ? new Date(job.finishedAt).toISOString()
+              : null,
+            durationMs: job.durationMs,
+            message: job.message,
+            steps,
+          };
+
+          if (format === "json") return JSON.stringify(output, null, 2);
+
+          const stepRows = steps.map((s) => [
+            s.id,
+            s.title,
+            s.status,
+            s.duration,
+            s.worker,
+          ]);
+
+          return [
+            `# Workflow: ${output.workflowName} (${output.workflowId})`,
+            "",
+            `## Task: ${output.taskId}`,
+            `Status: ${output.status}`,
+            `Started: ${output.startedAt}`,
+            `Duration: ${output.durationMs}ms`,
+            `Message: ${output.message}`,
+            "",
+            "## Steps",
+            stepRows.length
+              ? renderMarkdownTable(
+                  ["Step ID", "Title", "Status", "Duration", "Worker"],
+                  stepRows,
+                )
+              : "(no steps recorded)",
+          ].join("\n");
+        }
+        return `Task ${taskId} is not a workflow task.`;
       }
 
       if (view === "models") {

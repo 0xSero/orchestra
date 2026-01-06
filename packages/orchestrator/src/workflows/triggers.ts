@@ -48,13 +48,26 @@ type SelfImproveTriggerConfig = TriggerConfig & {
   idleMinutes?: number;
 };
 
+type InfiniteOrchestraTriggerConfig = TriggerConfig & {
+  idleMinutes?: number;
+  cooldownMinutes?: number;
+};
+
 // Module-level state for self-improve idle tracking
 let selfImproveLastActivity = Date.now();
 let selfImproveTriggeredThisCycle = false;
+let infiniteLastActivity = Date.now();
+let infiniteInFlight = false;
+let infiniteNextEligibleAt = 0;
+let infiniteTimer: ReturnType<typeof setTimeout> | undefined;
 
 export function updateSelfImproveActivity(): void {
   selfImproveLastActivity = Date.now();
   selfImproveTriggeredThisCycle = false;
+  infiniteLastActivity = Date.now();
+  infiniteNextEligibleAt = 0;
+  if (infiniteTimer) clearTimeout(infiniteTimer);
+  infiniteTimer = undefined;
 }
 
 function resolveTriggerConfig(
@@ -299,6 +312,14 @@ export function createWorkflowTriggers(
     autoSpawn: true,
     blocking: false,
     idleMinutes: 30,
+  };
+  const infiniteDefaults: InfiniteOrchestraTriggerConfig = {
+    enabled: false,
+    workflowId: "infinite-orchestra",
+    autoSpawn: true,
+    blocking: false,
+    idleMinutes: 30,
+    cooldownMinutes: 30,
   };
 
   const handleVisionMessage = async (
@@ -645,10 +666,106 @@ export function createWorkflowTriggers(
     }
   };
 
+  const scheduleInfinite = (delayMs: number) => {
+    if (!Number.isFinite(delayMs) || delayMs <= 0) return;
+    if (infiniteTimer) clearTimeout(infiniteTimer);
+    infiniteTimer = setTimeout(() => {
+      infiniteTimer = undefined;
+      void handleInfiniteOrchestraIdle();
+    }, delayMs);
+  };
+
+  const handleInfiniteOrchestraIdle = async (): Promise<void> => {
+    if (context.workflows?.enabled === false) return;
+
+    const triggerConfig = context.workflows?.triggers?.infiniteOrchestra;
+    const trigger = {
+      ...infiniteDefaults,
+      ...triggerConfig,
+    } as Required<InfiniteOrchestraTriggerConfig>;
+
+    if (!trigger.enabled) return;
+    if (!getWorkflow(trigger.workflowId)) return;
+    if (infiniteInFlight) return;
+
+    const now = Date.now();
+    const idleMs = (trigger.idleMinutes ?? 30) * 60 * 1000;
+    if (now - infiniteLastActivity < idleMs) return;
+
+    if (infiniteNextEligibleAt > now) {
+      scheduleInfinite(infiniteNextEligibleAt - now);
+      return;
+    }
+
+    infiniteInFlight = true;
+    const cooldownMs = (trigger.cooldownMinutes ?? 30) * 60 * 1000;
+    infiniteNextEligibleAt = now + cooldownMs;
+
+    const agentId = "infinite-orchestra";
+    const sessionId = `infinite-orchestra-${now}`;
+    const workerId = selectWorkflowWorker(context, trigger.workflowId, "coder");
+
+    const job = workerJobs.create({
+      workerId,
+      message: `workflow:${trigger.workflowId}`,
+      sessionId,
+      requestedBy: agentId,
+    });
+
+    const task =
+      context.workflows?.infiniteOrchestra?.goal ??
+      "Keep improving the repository with small, safe, testable changes.";
+
+    const run = async () => {
+      try {
+        const limits = resolveWorkflowLimits(context, trigger.workflowId);
+        const result = await runWorkflow(
+          {
+            workflowId: trigger.workflowId,
+            task,
+            autoSpawn: trigger.autoSpawn,
+            limits,
+          },
+          { sessionId },
+        );
+
+        const picked = pickWorkflowResponse(result);
+        if (!picked.success && picked.error) {
+          workerJobs.setError(job.id, { error: picked.error });
+          return;
+        }
+        workerJobs.setResult(job.id, {
+          responseText: picked.response ?? "Infinite orchestra cycle completed",
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        workerJobs.setError(job.id, { error: msg });
+      }
+    };
+
+    const onDone = () => {
+      infiniteInFlight = false;
+      if (Date.now() - infiniteLastActivity >= idleMs)
+        scheduleInfinite(cooldownMs);
+    };
+
+    if (trigger.blocking) {
+      await run();
+      onDone();
+    } else {
+      void run().finally(onDone);
+    }
+  };
+
   return {
     handleVisionMessage,
     handleMemoryTurnEnd,
     handleSelfImproveIdle,
+    handleInfiniteOrchestraIdle,
     processedMessageIds,
+    shutdown: () => {
+      if (infiniteTimer) clearTimeout(infiniteTimer);
+      infiniteTimer = undefined;
+    },
   };
 }

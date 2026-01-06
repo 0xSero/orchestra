@@ -7,6 +7,22 @@ export type WorkerBackend = "agent" | "server";
 export type WorkerKind = "server" | "agent" | "subagent";
 export type WorkerExecution = "foreground" | "background";
 
+export type WorkerDockerConfig = {
+  enabled?: boolean;
+  image: string;
+  workdir?: string;
+  network?: string;
+  extraArgs?: string[];
+  env?: Record<string, string>;
+  passEnv?: string[];
+  mount?: {
+    source?: string;
+    target?: string;
+    readOnly?: boolean;
+  };
+  bridgeHost?: string;
+};
+
 export interface WorkerProfile {
   /** Unique identifier for this worker */
   id: string;
@@ -46,6 +62,7 @@ export interface WorkerProfile {
   requiredSkills?: string[];
   /** Whether to inject repo context on auto-launch (for docs worker) */
   injectRepoContext?: boolean;
+  docker?: WorkerDockerConfig;
 }
 
 export interface WorkerInstance {
@@ -142,6 +159,11 @@ export type SelfImproveTriggerConfig = WorkflowTriggerConfig & {
   idleMinutes?: number;
 };
 
+export type InfiniteOrchestraTriggerConfig = WorkflowTriggerConfig & {
+  idleMinutes?: number;
+  cooldownMinutes?: number;
+};
+
 export type WorkflowExecutionMode = "step" | "auto";
 export type WorkflowIntervenePolicy =
   | "never"
@@ -161,10 +183,19 @@ export type WorkflowsConfig = {
     visionOnImage?: WorkflowTriggerConfig;
     memoryOnTurnEnd?: WorkflowTriggerConfig;
     selfImproveOnIdle?: SelfImproveTriggerConfig;
+    infiniteOrchestra?: InfiniteOrchestraTriggerConfig;
   };
   boomerang?: {
     plannerModel?: string;
     implementerModel?: string;
+  };
+  infiniteOrchestra?: {
+    goal?: string;
+    queueDir?: string;
+    archiveDir?: string;
+    planWorkflowId?: string;
+    taskWorkflowId?: string;
+    maxTasksPerCycle?: number;
   };
   roocodeBoomerang?: {
     enabled?: boolean;
@@ -249,6 +280,7 @@ export interface OrchestratorConfig {
     debug?: boolean;
     /** Allow logs to print to console (default: false) */
     logToConsole?: boolean;
+    visionTimeoutMs?: number;
     /**
      * First-run demo behavior (no config file detected):
      * - true: auto-run `orchestrator.demo` once per machine/user
@@ -301,6 +333,11 @@ export interface OrchestratorConfig {
     /** Tools that should never be pruned */
     protectedTools?: string[];
   };
+  tasks?: {
+    defaultTimeoutMs?: number;
+    defaultAutoSpawn?: boolean;
+    defaultModelPolicy?: "dynamic" | "sticky";
+  };
   /** Workflow configuration */
   workflows?: WorkflowsConfig;
   /** Security limits */
@@ -322,6 +359,7 @@ export type OrchestratorConfigFile = {
   agent?: OrchestratorConfig["agent"];
   commands?: OrchestratorConfig["commands"];
   pruning?: OrchestratorConfig["pruning"];
+  tasks?: OrchestratorConfig["tasks"];
   workflows?: OrchestratorConfig["workflows"];
   security?: OrchestratorConfig["security"];
   memory?: OrchestratorConfig["memory"];

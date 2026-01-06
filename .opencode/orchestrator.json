@@ -1,21 +1,89 @@
 {
-  "$schema": "../schema/orchestrator.schema.json",
+  "$schema": "../packages/orchestrator/schema/orchestrator.schema.json",
   "autoSpawn": true,
+
+  "tasks": {
+    "defaultTimeoutMs": 900000,
+    "defaultAutoSpawn": true,
+    "defaultModelPolicy": "dynamic"
+  },
+
+  "ui": {
+    "visionTimeoutMs": 300000,
+    "logToConsole": true,
+    "debug": false
+  },
+
   "workflows": {
     "enabled": true,
     "roocodeBoomerang": { "enabled": true },
+
     "triggers": {
       "selfImproveOnIdle": {
-        "enabled": true,
-        "idleMinutes": 30
+        "enabled": false,
+        "workflowId": "self-improve",
+        "idleMinutes": 60,
+        "blocking": false
+      },
+      "infiniteOrchestra": {
+        "enabled": false,
+        "workflowId": "infinite-orchestra",
+        "idleMinutes": 30,
+        "cooldownMinutes": 5,
+        "blocking": false
       }
+    },
+
+    "infiniteOrchestra": {
+      "goal": "Continuously improve orchestrator reliability and performance for 24/7 operation. Focus on: 1) Adding periodic cleanup tasks, 2) Implementing task persistence, 3) Adding health checks, 4) Fixing memory leaks, 5) Adding circuit breakers",
+      "queueDir": ".opencode/orchestra/tasks",
+      "archiveDir": ".opencode/orchestra/done",
+      "planWorkflowId": "infinite-orchestra-plan",
+      "taskWorkflowId": "roocode-boomerang",
+      "maxTasksPerCycle": 2
+    },
+
+    "boomerang": {
+      "plannerModel": "anthropic/claude-opus-4-5",
+      "implementerModel": "minimax/minimax-m2.1"
+    }
+  },
+
+  "pruning": {
+    "enabled": true,
+    "maxToolOutputChars": 12000,
+    "maxToolInputChars": 4000,
+    "protectedTools": ["task", "todowrite", "todoread"]
+  },
+
+  "telemetry": {
+    "enabled": true
+  },
+
+  "memory": {
+    "enabled": true,
+    "autoSpawn": true,
+    "autoRecord": true,
+    "autoInject": true,
+    "scope": "project",
+    "maxChars": 3000,
+    "summaries": {
+      "enabled": true,
+      "sessionMaxChars": 3000,
+      "projectMaxChars": 4000
+    },
+    "trim": {
+      "maxMessagesPerSession": 100,
+      "maxMessagesPerProject": 500,
+      "maxMessagesGlobal": 3000,
+      "maxProjectsGlobal": 50
     }
   },
 
   "agent": {
     "enabled": true,
     "name": "orchestrator",
-    "model": "anthropic/claude-opus-4-5",
+    "model": "opencode/gpt-5.2-xhigh",
     "mode": "primary"
   },
 
@@ -40,9 +108,18 @@
     {
       "id": "coder",
       "name": "Code Implementer",
-      "model": "anthropic/claude-opus-4-5",
+      "kind": "server",
+      "model": "zhipuai-coding-plan/glm-4.7",
       "purpose": "Write, edit, and refactor code with full tool access",
-      "whenToUse": "When you need to actually write or modify code, create files, run commands, or implement features"
+      "whenToUse": "When you need to actually write or modify code, create files, run commands, or implement features",
+      "docker": {
+        "enabled": false,
+        "image": "ghcr.io/opencode-ai/opencode:latest",
+        "workdir": "/workspace",
+        "mount": { "target": "/workspace" },
+        "bridgeHost": "host.docker.internal",
+        "passEnv": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY"]
+      }
     },
     {
       "id": "memory",
@@ -70,7 +147,7 @@
     {
       "id": "explorer",
       "name": "Code Explorer",
-      "model": "zhipuai-coding-plan/glm-4.7",
+      "model": "minimax/MiniMax-M2.1",
       "purpose": "Quickly search and navigate the codebase",
       "whenToUse": "When you need to quickly find files, search for patterns, or locate specific code without deep analysis",
       "tools": { "write": false, "edit": false },
@@ -78,5 +155,5 @@
     }
   ],
 
-  "workers": ["docs"]
+  "workers": ["docs", "memory"]
 }

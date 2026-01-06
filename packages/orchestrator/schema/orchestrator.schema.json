@@ -23,6 +23,8 @@
         },
         "debug": { "type": "boolean", "default": false },
         "logToConsole": { "type": "boolean", "default": false },
+        "visionTimeoutMs": { "type": "number", "default": 300000 },
+        "firstRunDemo": { "type": "boolean", "default": true },
         "wakeupInjection": {
           "type": "boolean",
           "default": true,
@@ -88,6 +90,19 @@
           "type": "array",
           "items": { "type": "string" },
           "default": ["task", "todowrite", "todoread"]
+        }
+      }
+    },
+    "tasks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defaultTimeoutMs": { "type": "number", "default": 600000 },
+        "defaultAutoSpawn": { "type": "boolean", "default": true },
+        "defaultModelPolicy": {
+          "type": "string",
+          "enum": ["dynamic", "sticky"],
+          "default": "dynamic"
         }
       }
     },
@@ -164,7 +179,45 @@
                 "autoSpawn": { "type": "boolean", "default": true },
                 "blocking": { "type": "boolean", "default": false }
               }
+            },
+            "selfImproveOnIdle": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "type": "boolean", "default": false },
+                "workflowId": { "type": "string", "default": "self-improve" },
+                "autoSpawn": { "type": "boolean", "default": true },
+                "blocking": { "type": "boolean", "default": false },
+                "idleMinutes": { "type": "number", "default": 30 }
+              }
+            },
+            "infiniteOrchestra": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "type": "boolean", "default": false },
+                "workflowId": {
+                  "type": "string",
+                  "default": "infinite-orchestra"
+                },
+                "autoSpawn": { "type": "boolean", "default": true },
+                "blocking": { "type": "boolean", "default": false },
+                "idleMinutes": { "type": "number", "default": 30 },
+                "cooldownMinutes": { "type": "number", "default": 30 }
+              }
             }
+          }
+        },
+        "infiniteOrchestra": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "goal": { "type": "string" },
+            "queueDir": { "type": "string" },
+            "archiveDir": { "type": "string" },
+            "planWorkflowId": { "type": "string" },
+            "taskWorkflowId": { "type": "string" },
+            "maxTasksPerCycle": { "type": "number" }
           }
         },
         "boomerang": {
@@ -327,10 +380,41 @@
               "supportsVision": { "type": "boolean" },
               "supportsWeb": { "type": "boolean" },
               "temperature": { "type": "number" },
+              "injectRepoContext": { "type": "boolean" },
               "tags": { "type": "array", "items": { "type": "string" } },
               "requiredSkills": {
                 "type": "array",
                 "items": { "type": "string" }
+              },
+              "docker": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["image"],
+                "properties": {
+                  "enabled": { "type": "boolean", "default": true },
+                  "image": { "type": "string" },
+                  "workdir": { "type": "string" },
+                  "network": { "type": "string" },
+                  "extraArgs": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  },
+                  "env": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" }
+                  },
+                  "passEnv": { "type": "array", "items": { "type": "string" } },
+                  "mount": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source": { "type": "string" },
+                      "target": { "type": "string" },
+                      "readOnly": { "type": "boolean" }
+                    }
+                  },
+                  "bridgeHost": { "type": "string" }
+                }
               },
               "tools": {
                 "type": "object",
@@ -379,10 +463,41 @@
               "supportsVision": { "type": "boolean" },
               "supportsWeb": { "type": "boolean" },
               "temperature": { "type": "number" },
+              "injectRepoContext": { "type": "boolean" },
               "tags": { "type": "array", "items": { "type": "string" } },
               "requiredSkills": {
                 "type": "array",
                 "items": { "type": "string" }
+              },
+              "docker": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["image"],
+                "properties": {
+                  "enabled": { "type": "boolean", "default": true },
+                  "image": { "type": "string" },
+                  "workdir": { "type": "string" },
+                  "network": { "type": "string" },
+                  "extraArgs": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  },
+                  "env": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" }
+                  },
+                  "passEnv": { "type": "array", "items": { "type": "string" } },
+                  "mount": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source": { "type": "string" },
+                      "target": { "type": "string" },
+                      "readOnly": { "type": "boolean" }
+                    }
+                  },
+                  "bridgeHost": { "type": "string" }
+                }
               },
               "tools": {
                 "type": "object",

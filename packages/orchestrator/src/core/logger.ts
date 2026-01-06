@@ -1,3 +1,5 @@
+import { appendFile, mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
 import { inspect } from "node:util";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
@@ -11,6 +13,19 @@ export type LogEntry = {
 const entries: LogEntry[] = [];
 let bufferSize = 200;
 let enabled = false;
+let logFilePath: string | undefined;
+
+async function initLogFile() {
+  if (logFilePath) return;
+  const filePath = process.env.LOG_FILE;
+  if (!filePath) return;
+  try {
+    const dir = dirname(filePath);
+    await mkdir(dir, { recursive: true });
+    logFilePath = filePath;
+  } catch {
+  }
+}
 
 function formatArg(arg: unknown): string {
   if (typeof arg === "string") return arg;
@@ -29,11 +44,20 @@ function pushLog(level: LogLevel, message: string) {
   }
 }
 
+async function writeToFile(level: LogLevel, message: string) {
+  if (!logFilePath) return;
+  try {
+    const logLine = JSON.stringify({ at: Date.now(), level, message }) + "\n";
+    await appendFile(logFilePath, logLine, { encoding: "utf8" });
+  } catch {
+  }
+}
+
 function emit(level: LogLevel, args: unknown[]) {
   if (!enabled) return;
   const message = args.map(formatArg).join(" ");
   pushLog(level, message);
-  // Never emit to console - logs only go to internal buffer
+  writeToFile(level, message).catch(() => {});
 }
 
 export function setLoggerConfig(input: {
@@ -66,3 +90,5 @@ export const logger = {
   warn: (...args: unknown[]) => emit("warn", args),
   error: (...args: unknown[]) => emit("error", args),
 };
+
+initLogFile().catch(() => {});

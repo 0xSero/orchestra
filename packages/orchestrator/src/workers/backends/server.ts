@@ -3,6 +3,7 @@
  */
 
 import { createOpencodeClient } from "@opencode-ai/sdk";
+import { createServer } from "node:net";
 import type { WorkerProfile, WorkerInstance } from "../../types";
 import {
   workerPool,
@@ -22,6 +23,8 @@ import { sendWorkerPrompt, type SendToWorkerOptions } from "../send";
 import { buildWorkerBootstrapPrompt } from "../prompt/worker-prompt";
 import {
   spawnOpencodeServe,
+  spawnOpencodeServeDocker,
+  resolveBundledWorkerBridgePluginSpecifier,
   resolveWorkerBridgePluginSpecifier,
 } from "../spawn/spawn-opencode";
 import { checkWorkerBridgeTools, isProcessAlive } from "../spawn/readiness";
@@ -36,6 +39,44 @@ function isValidPort(value: unknown): value is number {
     value >= 0 &&
     value <= 65535
   );
+}
+
+async function isPortAvailable(port: number): Promise<boolean> {
+  if (!Number.isFinite(port) || port <= 0 || port > 65535) return false;
+  return await new Promise<boolean>((resolve) => {
+    const server = createServer();
+    server.once("error", () => resolve(false));
+    server.listen(port, "127.0.0.1", () => {
+      server.close(() => resolve(true));
+    });
+  });
+}
+
+async function findAvailablePort(basePort: number): Promise<number> {
+  const start =
+    Number.isFinite(basePort) && basePort > 0 ? Math.floor(basePort) : 14096;
+  for (let port = start; port < start + 2000; port += 1) {
+    if (await isPortAvailable(port)) return port;
+  }
+  throw new Error(`No available port found starting at ${start}.`);
+}
+
+function resolveDockerBridgeUrl(
+  url: string,
+  options: { bridgeHost?: string; network?: string },
+): string {
+  try {
+    const u = new URL(url);
+    if (options.network === "host") return u.toString();
+    const host =
+      options.bridgeHost ??
+      (process.platform === "linux" ? "172.17.0.1" : "host.docker.internal");
+    if (!host) return u.toString();
+    u.hostname = host;
+    return u.toString();
+  } catch {
+    return url;
+  }
 }
 
 export async function spawnServerWorker(
@@ -83,10 +124,18 @@ async function _spawnWorkerCore(
   })();
 
   const hostname = "127.0.0.1";
+  const dockerConfig = resolvedProfile.docker;
+  const activeDockerConfig =
+    dockerConfig && dockerConfig.enabled !== false ? dockerConfig : undefined;
+  const dockerEnabled = activeDockerConfig !== undefined;
   const fixedPort = isValidPort(resolvedProfile.port)
     ? resolvedProfile.port
     : undefined;
-  const requestedPort = fixedPort ?? 0;
+  const requestedPort = dockerEnabled
+    ? fixedPort && fixedPort > 0
+      ? fixedPort
+      : await findAvailablePort(options.basePort)
+    : (fixedPort ?? 0);
 
   const modelResolution =
     modelResolutionReason ??
@@ -113,14 +162,16 @@ async function _spawnWorkerCore(
 
   try {
     const rt = await ensureRuntime();
-    const pluginSpecifier = resolveWorkerBridgePluginSpecifier();
+    const pluginSpecifier = dockerEnabled
+      ? resolveBundledWorkerBridgePluginSpecifier()
+      : resolveWorkerBridgePluginSpecifier();
     if (process.env.OPENCODE_ORCH_SPAWNER_DEBUG === "1") {
       logger.debug(
         `[spawner] pluginSpecifier=${pluginSpecifier}, profile=${resolvedProfile.id}, model=${resolvedProfile.model}`,
       );
     }
 
-    const { url, proc, close } = await spawnOpencodeServe({
+    const spawnInput = {
       hostname,
       port: requestedPort,
       timeout: options.timeout,
@@ -130,21 +181,50 @@ async function _spawnWorkerCore(
         ...(resolvedProfile.tools && { tools: resolvedProfile.tools }),
       },
       env: {
-        OPENCODE_ORCH_BRIDGE_URL: rt.bridge.url,
+        OPENCODE_ORCH_BRIDGE_URL: dockerEnabled
+          ? resolveDockerBridgeUrl(rt.bridge.url, {
+              bridgeHost: activeDockerConfig?.bridgeHost,
+              network: activeDockerConfig?.network,
+            })
+          : rt.bridge.url,
         OPENCODE_ORCH_BRIDGE_TOKEN: rt.bridge.token,
         OPENCODE_ORCH_INSTANCE_ID: rt.instanceId,
         OPENCODE_ORCH_WORKER_ID: resolvedProfile.id,
       },
-    });
+    };
+
+    let url: string;
+    let close: () => Promise<void>;
+    let pid: number | undefined;
+
+    if (activeDockerConfig) {
+      const spawned = await spawnOpencodeServeDocker({
+        port: requestedPort,
+        timeout: options.timeout,
+        config: spawnInput.config,
+        env: spawnInput.env,
+        directory: options.directory,
+        docker: activeDockerConfig,
+      });
+      url = spawned.url;
+      close = spawned.close;
+      pid = spawned.proc.pid ?? undefined;
+      instance.directory = spawned.directory;
+    } else {
+      const spawned = await spawnOpencodeServe(spawnInput);
+      url = spawned.url;
+      close = spawned.close;
+      pid = spawned.proc.pid ?? undefined;
+    }
 
     instance.shutdown = close;
-    instance.pid = proc.pid ?? undefined;
+    instance.pid = pid;
     instance.serverUrl = url;
 
     const client = createOpencodeClient({ baseUrl: url });
     const toolCheck = await checkWorkerBridgeTools(
       client,
-      options.directory,
+      instance.directory,
     ).catch((error) => {
       instance.warning = `Unable to verify worker bridge tools: ${error instanceof Error ? error.message : String(error)}`;
       return undefined;
@@ -190,7 +270,7 @@ async function _spawnWorkerCore(
       body: {
         title: `Worker: ${resolvedProfile.name}`,
       },
-      query: { directory: options.directory },
+      query: { directory: instance.directory },
     });
 
     const session = sessionResult.data;
@@ -229,7 +309,7 @@ async function _spawnWorkerCore(
           noReply: true,
           parts: [{ type: "text", text: bootstrapPrompt }],
         },
-        query: { directory: options.directory },
+        query: { directory: instance.directory },
       } as any)
       .catch(() => {});
 

@@ -38,7 +38,10 @@ import {
 import { buildMemoryInjection } from "./memory/inject";
 import { loadPromptFile } from "./prompts/load";
 import { createOrchestratorContext } from "./context/orchestrator-context";
-import { createWorkflowTriggers } from "./workflows/triggers";
+import {
+  createWorkflowTriggers,
+  updateSelfImproveActivity,
+} from "./workflows/triggers";
 import { startEventPublisher } from "./ux/event-publisher";
 import { injectSessionNotice } from "./ux/wakeup";
 import {
@@ -121,6 +124,10 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
   const stopEventPublisher = startEventPublisher(showToast);
 
   const visionTimeoutMs = (() => {
+    const configured = config.ui?.visionTimeoutMs;
+    if (typeof configured === "number" && Number.isFinite(configured)) {
+      return configured > 0 ? configured : 300_000;
+    }
     const raw = process.env.OPENCODE_VISION_TIMEOUT_MS;
     const ms = raw ? Number(raw) : 300_000;
     return Number.isFinite(ms) && ms > 0 ? ms : 300_000;
@@ -607,6 +614,7 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
           ? String((input as any).role)
           : undefined;
       if (role === "user") {
+        updateSelfImproveActivity();
         const passthrough = getPassthrough(input.sessionID);
         if (passthrough) {
           const parts = Array.isArray(output.parts) ? output.parts : [];
@@ -691,6 +699,7 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
         workerPool.off("spawn", onWorkerUpdate);
         workerPool.off("stop", onWorkerRemove);
         stopEventPublisher();
+        workflowTriggers.shutdown?.();
         await shutdownAllWorkers().catch(() => {});
         await flushTelemetry().catch(() => {});
       }
@@ -730,6 +739,10 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
           }
           workerPool.clearSessionOwnership(sessionId);
         }
+      }
+      if (event.type === "session.idle") {
+        await workflowTriggers.handleSelfImproveIdle();
+        await workflowTriggers.handleInfiniteOrchestraIdle();
       }
       await idleNotifier({ event });
     },

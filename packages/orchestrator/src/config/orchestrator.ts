@@ -72,6 +72,56 @@ export function resolveWorkerEntry(entry: unknown): WorkerProfile | undefined {
     merged.requiredSkills = requiredSkills;
   }
 
+  if ("docker" in merged && merged.docker !== undefined) {
+    if (!isPlainObject(merged.docker)) return undefined;
+
+    const docker: Record<string, unknown> = {};
+    if (typeof merged.docker.enabled === "boolean")
+      docker.enabled = merged.docker.enabled;
+    if (typeof merged.docker.image === "string")
+      docker.image = merged.docker.image;
+    if (typeof merged.docker.workdir === "string")
+      docker.workdir = merged.docker.workdir;
+    if (typeof merged.docker.network === "string")
+      docker.network = merged.docker.network;
+    if ("extraArgs" in merged.docker) {
+      const extraArgs = asStringArray(merged.docker.extraArgs);
+      if (!extraArgs) return undefined;
+      docker.extraArgs = extraArgs;
+    }
+    if ("passEnv" in merged.docker) {
+      const passEnv = asStringArray(merged.docker.passEnv);
+      if (!passEnv) return undefined;
+      docker.passEnv = passEnv;
+    }
+    if ("env" in merged.docker && merged.docker.env !== undefined) {
+      if (!isPlainObject(merged.docker.env)) return undefined;
+      const env: Record<string, string> = {};
+      for (const [key, value] of Object.entries(merged.docker.env)) {
+        if (typeof value !== "string") return undefined;
+        env[key] = value;
+      }
+      docker.env = env;
+    }
+    if ("mount" in merged.docker && merged.docker.mount !== undefined) {
+      if (!isPlainObject(merged.docker.mount)) return undefined;
+      const mount: Record<string, unknown> = {};
+      if (typeof merged.docker.mount.source === "string")
+        mount.source = merged.docker.mount.source;
+      if (typeof merged.docker.mount.target === "string")
+        mount.target = merged.docker.mount.target;
+      if (typeof merged.docker.mount.readOnly === "boolean")
+        mount.readOnly = merged.docker.mount.readOnly;
+      docker.mount = mount;
+    }
+    if (typeof merged.docker.bridgeHost === "string")
+      docker.bridgeHost = merged.docker.bridgeHost;
+
+    if (typeof docker.image !== "string" || docker.image.trim().length === 0)
+      return undefined;
+    merged.docker = docker;
+  }
+
   const entryBackend = "backend" in entry ? (entry as any).backend : undefined;
   if (
     entryBackend !== undefined &&
@@ -187,6 +237,8 @@ export function parseOrchestratorConfigFile(
     if (typeof raw.ui.debug === "boolean") ui.debug = raw.ui.debug;
     if (typeof raw.ui.logToConsole === "boolean")
       ui.logToConsole = raw.ui.logToConsole;
+    if (typeof raw.ui.visionTimeoutMs === "number")
+      ui.visionTimeoutMs = raw.ui.visionTimeoutMs;
     if (typeof raw.ui.firstRunDemo === "boolean")
       ui.firstRunDemo = raw.ui.firstRunDemo;
     if (typeof raw.ui.wakeupInjection === "boolean")
@@ -261,6 +313,21 @@ export function parseOrchestratorConfigFile(
       pruning.protectedTools = raw.pruning.protectedTools;
     }
     partial.pruning = pruning as OrchestratorConfig["pruning"];
+  }
+
+  if (isPlainObject(raw.tasks)) {
+    const tasks: Record<string, unknown> = {};
+    if (typeof raw.tasks.defaultTimeoutMs === "number")
+      tasks.defaultTimeoutMs = raw.tasks.defaultTimeoutMs;
+    if (typeof raw.tasks.defaultAutoSpawn === "boolean")
+      tasks.defaultAutoSpawn = raw.tasks.defaultAutoSpawn;
+    if (
+      raw.tasks.defaultModelPolicy === "dynamic" ||
+      raw.tasks.defaultModelPolicy === "sticky"
+    ) {
+      tasks.defaultModelPolicy = raw.tasks.defaultModelPolicy;
+    }
+    partial.tasks = tasks as OrchestratorConfig["tasks"];
   }
 
   if (isPlainObject(raw.workflows)) {
@@ -406,7 +473,69 @@ export function parseOrchestratorConfigFile(
         }
         triggers.selfImproveOnIdle = selfImprove;
       }
+      if (isPlainObject(raw.workflows.triggers.infiniteOrchestra)) {
+        const infinite: Record<string, unknown> = {};
+        if (
+          typeof raw.workflows.triggers.infiniteOrchestra.enabled === "boolean"
+        ) {
+          infinite.enabled = raw.workflows.triggers.infiniteOrchestra.enabled;
+        }
+        if (
+          typeof raw.workflows.triggers.infiniteOrchestra.workflowId ===
+          "string"
+        ) {
+          infinite.workflowId =
+            raw.workflows.triggers.infiniteOrchestra.workflowId;
+        }
+        if (
+          typeof raw.workflows.triggers.infiniteOrchestra.autoSpawn ===
+          "boolean"
+        ) {
+          infinite.autoSpawn =
+            raw.workflows.triggers.infiniteOrchestra.autoSpawn;
+        }
+        if (
+          typeof raw.workflows.triggers.infiniteOrchestra.blocking === "boolean"
+        ) {
+          infinite.blocking = raw.workflows.triggers.infiniteOrchestra.blocking;
+        }
+        if (
+          typeof raw.workflows.triggers.infiniteOrchestra.idleMinutes ===
+          "number"
+        ) {
+          infinite.idleMinutes =
+            raw.workflows.triggers.infiniteOrchestra.idleMinutes;
+        }
+        if (
+          typeof raw.workflows.triggers.infiniteOrchestra.cooldownMinutes ===
+          "number"
+        ) {
+          infinite.cooldownMinutes =
+            raw.workflows.triggers.infiniteOrchestra.cooldownMinutes;
+        }
+        triggers.infiniteOrchestra = infinite;
+      }
       if (Object.keys(triggers).length > 0) workflows.triggers = triggers;
+    }
+    if (isPlainObject(raw.workflows.infiniteOrchestra)) {
+      const infinite: Record<string, unknown> = {};
+      if (typeof raw.workflows.infiniteOrchestra.goal === "string")
+        infinite.goal = raw.workflows.infiniteOrchestra.goal;
+      if (typeof raw.workflows.infiniteOrchestra.queueDir === "string")
+        infinite.queueDir = raw.workflows.infiniteOrchestra.queueDir;
+      if (typeof raw.workflows.infiniteOrchestra.archiveDir === "string")
+        infinite.archiveDir = raw.workflows.infiniteOrchestra.archiveDir;
+      if (typeof raw.workflows.infiniteOrchestra.planWorkflowId === "string")
+        infinite.planWorkflowId =
+          raw.workflows.infiniteOrchestra.planWorkflowId;
+      if (typeof raw.workflows.infiniteOrchestra.taskWorkflowId === "string")
+        infinite.taskWorkflowId =
+          raw.workflows.infiniteOrchestra.taskWorkflowId;
+      if (typeof raw.workflows.infiniteOrchestra.maxTasksPerCycle === "number")
+        infinite.maxTasksPerCycle =
+          raw.workflows.infiniteOrchestra.maxTasksPerCycle;
+      if (Object.keys(infinite).length > 0)
+        workflows.infiniteOrchestra = infinite;
     }
     if (isPlainObject(raw.workflows.boomerang)) {
       const boomerang: Record<string, unknown> = {};
@@ -604,6 +733,7 @@ export async function loadOrchestratorConfig(input: {
       defaultListFormat: "markdown",
       debug: false,
       logToConsole: false,
+      visionTimeoutMs: 300_000,
       firstRunDemo: true,
     },
     notifications: {
@@ -626,6 +756,11 @@ export async function loadOrchestratorConfig(input: {
       maxToolOutputChars: 12000,
       maxToolInputChars: 4000,
       protectedTools: ["task", "todowrite", "todoread"],
+    },
+    tasks: {
+      defaultTimeoutMs: 600_000,
+      defaultAutoSpawn: true,
+      defaultModelPolicy: "dynamic",
     },
     workflows: {
       enabled: true,
@@ -650,6 +785,22 @@ export async function loadOrchestratorConfig(input: {
           blocking: false,
           idleMinutes: 30,
         },
+        infiniteOrchestra: {
+          enabled: false,
+          workflowId: "infinite-orchestra",
+          autoSpawn: true,
+          blocking: false,
+          idleMinutes: 30,
+          cooldownMinutes: 30,
+        },
+      },
+      infiniteOrchestra: {
+        goal: "Keep improving the repository with small, safe, testable changes.",
+        queueDir: ".opencode/orchestra/tasks",
+        archiveDir: ".opencode/orchestra/done",
+        planWorkflowId: "infinite-orchestra-plan",
+        taskWorkflowId: "roocode-boomerang",
+        maxTasksPerCycle: 4,
       },
       roocodeBoomerang: {
         enabled: true,
@@ -774,6 +925,8 @@ export async function loadOrchestratorConfig(input: {
       defaultsFile.commands) as OrchestratorConfig["commands"],
     pruning: (mergedFile.pruning ??
       defaultsFile.pruning) as OrchestratorConfig["pruning"],
+    tasks: (mergedFile.tasks ??
+      defaultsFile.tasks) as OrchestratorConfig["tasks"],
     workflows: (mergedFile.workflows ??
       defaultsFile.workflows) as OrchestratorConfig["workflows"],
     security: (mergedFile.security ??

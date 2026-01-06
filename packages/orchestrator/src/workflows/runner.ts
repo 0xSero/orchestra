@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readdir, readFile, rename } from "node:fs/promises";
+import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import type { OrchestratorContext } from "../context/orchestrator-context";
 import { logger } from "../core/logger";
 import {
@@ -248,6 +248,66 @@ async function loadBoomerangQueueTasks(
   );
 }
 
+export function resolveConfiguredPath(
+  baseDir: string,
+  value: string | undefined,
+  fallback: string,
+): string {
+  const raw = typeof value === "string" ? value.trim() : "";
+  const resolvedInput = raw.length > 0 ? raw : fallback;
+  if (isAbsolute(resolvedInput)) return resolvedInput;
+  const base = resolve(baseDir);
+  const resolvedPath = resolve(base, resolvedInput);
+  const rel = relative(base, resolvedPath);
+  if (rel.startsWith("..") || isAbsolute(rel)) {
+    throw new Error(
+      `Configured path "${resolvedInput}" must resolve within ${baseDir}`,
+    );
+  }
+  return resolvedPath;
+}
+
+export async function loadQueueTasks(
+  tasksDir: string,
+): Promise<BoomerangQueueTask[]> {
+  let entries: Array<{ name: string; isFile: () => boolean }>;
+  try {
+    entries = await readdir(tasksDir, { withFileTypes: true });
+  } catch (err) {
+    if ((err as any)?.code === "ENOENT") return [];
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to read tasks directory "${tasksDir}": ${msg}`);
+  }
+
+  const files = entries
+    .filter((entry) => entry.isFile() && /^task-\d+\.md$/.test(entry.name))
+    .map((entry) => entry.name)
+    .sort((a, b) => {
+      const diff = parseQueueIndex(a) - parseQueueIndex(b);
+      return diff !== 0 ? diff : a.localeCompare(b);
+    });
+
+  return await Promise.all(
+    files.map(async (name) => {
+      const path = join(tasksDir, name);
+      const content = await readFile(path, "utf8");
+      return { id: name.replace(/\.md$/, ""), path, content };
+    }),
+  );
+}
+
+export async function archiveQueueTask(
+  task: BoomerangQueueTask,
+  archiveDir: string,
+): Promise<string> {
+  await mkdir(archiveDir, { recursive: true });
+  const base = basename(task.path).replace(/\.md$/, "");
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const dest = join(archiveDir, `${base}-${stamp}.md`);
+  await rename(task.path, dest);
+  return dest;
+}
+
 function waitForWorkerReady(
   workerPool: OrchestratorContext["workerPool"],
   workerId: string,
@@ -468,6 +528,284 @@ export async function runBoomerangQueueWithDependencies(
       },
     });
   }
+
+  return run;
+}
+
+async function runInfiniteOrchestraWithDependencies(
+  context: OrchestratorContext,
+  input: {
+    workflowId: string;
+    task: string;
+    limits: WorkflowSecurityLimits;
+    autoSpawn?: boolean;
+    attachments?: WorkflowRunInput["attachments"];
+    uiPolicy?: WorkflowUiPolicy;
+    runId?: string;
+    parentSessionId?: string;
+    workflow?: WorkflowDefinition;
+  },
+  deps: WorkflowRunDependencies,
+): Promise<WorkflowRunState> {
+  const workflow = input.workflow ?? getWorkflow(input.workflowId);
+  if (!workflow) {
+    throw new Error(`Unknown workflow "${input.workflowId}".`);
+  }
+  validateWorkflowInput(
+    {
+      workflowId: input.workflowId,
+      task: input.task,
+      attachments: input.attachments,
+      autoSpawn: input.autoSpawn,
+      limits: input.limits,
+    },
+    workflow,
+  );
+
+  const runId = input.runId ?? randomUUID();
+  const ui: WorkflowUiPolicy = {
+    execution: input.uiPolicy?.execution ?? defaultUiPolicy.execution,
+    intervene: input.uiPolicy?.intervene ?? defaultUiPolicy.intervene,
+  };
+  const run = createWorkflowRunState({
+    runId,
+    workflowId: workflow.id,
+    workflowName: workflow.name,
+    task: input.task,
+    autoSpawn: input.autoSpawn ?? true,
+    limits: input.limits,
+    attachments: input.attachments,
+    ui,
+    parentSessionId: input.parentSessionId,
+  });
+
+  publishOrchestratorEvent("orchestra.workflow.started", {
+    runId: run.runId,
+    workflowId: workflow.id,
+    workflowName: workflow.name,
+    task: input.task,
+    startedAt: run.startedAt,
+  });
+
+  const complete = () => {
+    run.updatedAt = Date.now();
+    if (run.status === "success" || run.status === "error") {
+      run.finishedAt = run.updatedAt;
+      publishOrchestratorEvent("orchestra.workflow.completed", {
+        runId: run.runId,
+        workflowId: workflow.id,
+        workflowName: workflow.name,
+        status: run.status,
+        startedAt: run.startedAt,
+        finishedAt: run.finishedAt ?? Date.now(),
+        durationMs: (run.finishedAt ?? Date.now()) - run.startedAt,
+        steps: {
+          total: run.steps.length,
+          success: run.steps.filter((step) => step.status === "success").length,
+          error: run.steps.filter((step) => step.status === "error").length,
+        },
+      });
+    }
+  };
+
+  const cfg = context.workflows?.infiniteOrchestra ?? {};
+  const queueDirSetting =
+    typeof cfg.queueDir === "string" && cfg.queueDir.trim().length > 0
+      ? cfg.queueDir.trim()
+      : ".opencode/orchestra/tasks";
+  const archiveDirSetting =
+    typeof cfg.archiveDir === "string" && cfg.archiveDir.trim().length > 0
+      ? cfg.archiveDir.trim()
+      : ".opencode/orchestra/done";
+  const queueDir = resolveConfiguredPath(
+    context.directory,
+    queueDirSetting,
+    ".opencode/orchestra/tasks",
+  );
+  const archiveDir = resolveConfiguredPath(
+    context.directory,
+    archiveDirSetting,
+    ".opencode/orchestra/done",
+  );
+  const planWorkflowId =
+    typeof cfg.planWorkflowId === "string" && cfg.planWorkflowId.trim()
+      ? cfg.planWorkflowId.trim()
+      : "infinite-orchestra-plan";
+  const taskWorkflowId =
+    typeof cfg.taskWorkflowId === "string" && cfg.taskWorkflowId.trim()
+      ? cfg.taskWorkflowId.trim()
+      : "roocode-boomerang";
+  const maxTasksPerCycle =
+    typeof cfg.maxTasksPerCycle === "number" &&
+    Number.isFinite(cfg.maxTasksPerCycle)
+      ? Math.max(1, Math.floor(cfg.maxTasksPerCycle))
+      : 4;
+  const goal =
+    typeof cfg.goal === "string" && cfg.goal.trim().length > 0
+      ? cfg.goal.trim()
+      : input.task;
+
+  await mkdir(queueDir, { recursive: true });
+  await mkdir(archiveDir, { recursive: true });
+
+  const nestedUiPolicy: WorkflowUiPolicy = {
+    execution: "auto",
+    intervene: "never",
+  };
+
+  const appendPlanStep = (result: WorkflowRunState) => {
+    const finishedAt = result.finishedAt ?? Date.now();
+    const step: WorkflowStepResult = {
+      id: "plan",
+      title: "Plan Queue",
+      workerId: result.lastStepResult?.workerId ?? "architect",
+      status: result.status === "error" ? "error" : "success",
+      response: result.lastStepResult?.response,
+      error: result.lastStepResult?.error,
+      startedAt: result.startedAt,
+      finishedAt,
+      durationMs: finishedAt - result.startedAt,
+    };
+    run.steps.push(step);
+    run.lastStepResult = step;
+    run.currentStepIndex = run.steps.length;
+    run.updatedAt = Date.now();
+    if (step.status === "error") run.status = "error";
+  };
+
+  let tasks = await loadQueueTasks(queueDir);
+  if (tasks.length === 0) {
+    if (!getWorkflow(planWorkflowId)) {
+      throw new Error(`Unknown workflow "${planWorkflowId}".`);
+    }
+
+    const planTask = [
+      `Goal:`,
+      goal,
+      ``,
+      `Queue directory: ${queueDirSetting}`,
+      `Archive directory: ${archiveDirSetting}`,
+      `Max tasks per cycle: ${maxTasksPerCycle}`,
+      ``,
+      `Rules:`,
+      `- Only write task files inside the queue directory`,
+      `- Do not modify other repo files during planning`,
+    ].join("\n");
+
+    const planResult = await runWorkflowWithDependencies(
+      {
+        workflowId: planWorkflowId,
+        task: planTask,
+        attachments: input.attachments,
+        autoSpawn: input.autoSpawn ?? true,
+        limits: resolveWorkflowLimits(context, planWorkflowId),
+      },
+      deps,
+      {
+        uiPolicy: nestedUiPolicy,
+        parentSessionId: input.parentSessionId,
+      },
+    );
+    appendPlanStep(planResult);
+    if (run.status === "error") {
+      complete();
+      return run;
+    }
+
+    tasks = await loadQueueTasks(queueDir);
+  }
+
+  if (tasks.length === 0) {
+    run.status = "error";
+    const now = Date.now();
+    const step: WorkflowStepResult = {
+      id: "queue",
+      title: "Queue",
+      workerId: "coder",
+      status: "error",
+      error: `No task files found in "${queueDir}".`,
+      startedAt: now,
+      finishedAt: now,
+      durationMs: 0,
+    };
+    run.steps.push(step);
+    run.lastStepResult = step;
+    run.currentStepIndex = run.steps.length;
+    run.updatedAt = now;
+    run.finishedAt = now;
+    complete();
+    return run;
+  }
+
+  tasks = tasks.slice(0, maxTasksPerCycle);
+
+  for (let index = 0; index < tasks.length; index += 1) {
+    const taskItem = tasks[index];
+    const startedAt = Date.now();
+    const result = await runWorkflowWithDependencies(
+      {
+        workflowId: taskWorkflowId,
+        task: taskItem.content,
+        attachments: index === 0 ? input.attachments : undefined,
+        autoSpawn: input.autoSpawn ?? true,
+        limits: resolveWorkflowLimits(context, taskWorkflowId),
+      },
+      deps,
+      {
+        uiPolicy: nestedUiPolicy,
+        parentSessionId: input.parentSessionId,
+      },
+    );
+
+    const finishedAt = result.finishedAt ?? Date.now();
+    let archivedPath: string | undefined;
+    let archiveWarning: string | undefined;
+    if (result.status === "success") {
+      try {
+        archivedPath = await archiveQueueTask(taskItem, archiveDir);
+      } catch (err) {
+        archiveWarning = err instanceof Error ? err.message : String(err);
+      }
+    }
+    const warningParts = [
+      result.lastStepResult?.warning,
+      archiveWarning ? `Archive failed: ${archiveWarning}` : undefined,
+    ].filter(Boolean);
+    const step: WorkflowStepResult = {
+      id: taskItem.id,
+      title: taskItem.id,
+      workerId: result.lastStepResult?.workerId ?? "coder",
+      status: result.status === "error" ? "error" : "success",
+      response:
+        [
+          ...(archivedPath ? [`Archived: ${archivedPath}`, ``] : []),
+          result.lastStepResult?.response ?? "",
+        ]
+          .join("\n")
+          .trim() || undefined,
+      warning: warningParts.length ? warningParts.join("\n") : undefined,
+      error: result.lastStepResult?.error,
+      startedAt,
+      finishedAt,
+      durationMs: finishedAt - startedAt,
+    };
+
+    run.steps.push(step);
+    run.lastStepResult = step;
+    run.currentStepIndex = run.steps.length;
+    run.updatedAt = Date.now();
+
+    if (step.status === "error") {
+      run.status = "error";
+      break;
+    }
+  }
+
+  if (run.status === "running") {
+    run.status = "success";
+  }
+
+  complete();
 
   return run;
 }
@@ -976,6 +1314,21 @@ export async function runWorkflowWithContext(
           waitForWorkerReady: (workerId, timeoutMs) =>
             waitForWorkerReady(workerPool, workerId, timeoutMs),
         },
+      );
+    } else if (input.workflowId === "infinite-orchestra") {
+      result = await runInfiniteOrchestraWithDependencies(
+        context,
+        {
+          workflowId: input.workflowId,
+          workflow,
+          task: input.task,
+          attachments: input.attachments,
+          autoSpawn: input.autoSpawn ?? true,
+          limits,
+          uiPolicy,
+          parentSessionId: options?.sessionId,
+        },
+        deps,
       );
     } else {
       result = await runWorkflowWithDependencies(
