@@ -27,14 +27,17 @@
 - [x] Build successful (vite build works)
 - [x] No type errors
 
-## In Progress 🚧
+## Recently Completed (Iteration 2) ✅
 
 ### Tasks Kanban Board
-- [ ] Create kanban board layout with 5 columns
-- [ ] Implement drag & drop functionality
-- [ ] Create issue model and persistence layer
-- [ ] Build issue detail drawer
-- [ ] Connect issues to orchestrator tasks/runs
+- [x] Create kanban board layout with 5 columns
+- [x] Implement drag & drop functionality (HTML5 drag/drop API)
+- [x] Create issue model and persistence layer (localStorage)
+- [x] Build issue detail drawer with edit/delete
+- [x] New issue modal with create flow
+- [x] Priority indicators (low/medium/high/urgent)
+- [x] Labels support
+- [ ] Connect issues to orchestrator tasks/runs (deferred)
 
 ## Remaining Work 📋
 
@@ -106,17 +109,27 @@
 - [x] UI uses modular component system + centralized tokens
 - [x] No dead links; app builds/runs cleanly
 
-**Current Completion: ~40%**
+**Current Completion: ~55%**
 
-## Next Steps (Iteration 2)
+## Latest Changes (Iteration 2 - Commit 1dbe5d9)
 
-1. Create Kanban board component with drag & drop
-2. Implement issue persistence (localStorage or SQLite)
-3. Create Automation hub parent component with tabs
-4. Merge Config into Settings
-5. Create Workers page
+Added complete Kanban board implementation:
+- Functional drag & drop between 5 columns
+- Full CRUD operations for issues
+- localStorage persistence
+- Detail drawer with inline editing
+- New issue modal
+- Priority and label support
+
+## Next Steps (Iteration 3)
+
+1. Create Automation hub parent component with tabs
+2. Merge Config into Settings
+3. Create Workers page
+4. Enhance Memory page with search/drawer
+5. Enhance Observe page with filters
 6. Run tests and fix any issues
 
 ---
 
-*Generated: 2026-01-09 (Iteration 1)*
+*Updated: 2026-01-09 (Iteration 2 complete)*
