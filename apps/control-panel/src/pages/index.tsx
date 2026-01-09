@@ -15,4 +15,5 @@ export { SettingsPage } from "./settings";
 export { TaskComposer } from "./task-composer";
 export { TasksPage } from "./tasks";
 export { TasksKanbanPage } from "./tasks-kanban";
+export { WorkersPage } from "./workers";
 export { WorkflowsPage } from "./workflows";

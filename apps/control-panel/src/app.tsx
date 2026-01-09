@@ -24,6 +24,7 @@ import {
   SkillsPage,
   SettingsPage,
   TasksKanbanPage,
+  WorkersPage,
   WorkflowsPage,
 } from "@/pages";
 import { OpenBoardRoute } from "@/components/openboard-seam";
@@ -67,7 +68,7 @@ export const App: Component = () => {
                 {/* Main pages */}
                 <Route path="/dashboard" component={DashboardPage} />
                 <Route path="/tasks" component={TasksKanbanPage} />
-                <Route path="/workers" component={DashboardPage} /> {/* Placeholder - will create dedicated page */}
+                <Route path="/workers" component={WorkersPage} />
                 <Route path="/memory" component={MemoryPage} />
                 <Route path="/chat" component={ChatPage} />
 
