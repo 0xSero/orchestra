@@ -1,0 +1,76 @@
+services:
+  orchestra:
+    build:
+      context: .
+      dockerfile: docker/orchestra/Dockerfile
+      args:
+        OPENCODE_VERSION: 1.0.203
+        BUN_VERSION: 1.3.4
+    ports:
+      - "${ORCHESTRA_OPENCODE_PORT:-4096}:4096"
+      - "${ORCHESTRA_BRIDGE_PORT:-14096}:14096"
+    environment:
+      XDG_CONFIG_HOME: /data
+      XDG_DATA_HOME: /data
+      OPENCODE_HOSTNAME: 0.0.0.0
+      OPENCODE_PORT: 4096
+      OPENCODE_ORCH_BRIDGE_HOST: 0.0.0.0
+      OPENCODE_ORCH_BRIDGE_PORT: 14096
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
+      MINIMAX_API_KEY: ${MINIMAX_API_KEY:-}
+    volumes:
+      - .:/workspace
+      - orchestra-data:/data
+      - orchestra-node_modules:/workspace/node_modules
+      - orchestra-orchestrator-node_modules:/workspace/packages/orchestrator/node_modules
+      - orchestra-control-panel-node_modules:/workspace/apps/control-panel/node_modules
+      - orchestra-desktop-node_modules:/workspace/apps/desktop/node_modules
+      - orchestra-opencode-node_modules:/workspace/.opencode/node_modules
+      - orchestra-opencode-orchestra:/workspace/.opencode/orchestra
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4g
+          pids: 512
+    init: true
+    working_dir: /workspace
+
+  control-panel:
+    build:
+      context: .
+      dockerfile: docker/orchestra/Dockerfile
+      args:
+        OPENCODE_VERSION: 1.0.203
+        BUN_VERSION: 1.3.4
+    ports:
+      - "${ORCHESTRA_CONTROL_PANEL_PORT:-5173}:5173"
+    environment:
+      VITE_ORCHESTRATOR_EVENTS_URL: http://localhost:${ORCHESTRA_BRIDGE_PORT:-14096}
+    volumes:
+      - .:/workspace
+      - orchestra-node_modules:/workspace/node_modules
+      - orchestra-orchestrator-node_modules:/workspace/packages/orchestrator/node_modules
+      - orchestra-control-panel-node_modules:/workspace/apps/control-panel/node_modules
+      - orchestra-desktop-node_modules:/workspace/apps/desktop/node_modules
+      - orchestra-opencode-node_modules:/workspace/.opencode/node_modules
+    depends_on:
+      - orchestra
+    init: true
+    working_dir: /workspace
+    entrypoint:
+      - sh
+      - -c
+      - bun install && bun --cwd=apps/control-panel run dev -- --host 0.0.0.0 --port 5173
+
+volumes:
+  orchestra-data: {}
+  orchestra-node_modules: {}
+  orchestra-orchestrator-node_modules: {}
+  orchestra-control-panel-node_modules: {}
+  orchestra-desktop-node_modules: {}
+  orchestra-opencode-node_modules: {}
+  orchestra-opencode-orchestra: {}

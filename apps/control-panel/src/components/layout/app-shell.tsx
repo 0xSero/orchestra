@@ -420,7 +420,25 @@ export const AppShell: Component<{ children: JSX.Element }> = (props) => {
       </aside>
 
       {/* Main content */}
-      <div class="flex-1 flex flex-col overflow-hidden">{props.children}</div>
+      <div class="flex-1 flex flex-col overflow-hidden">
+        {/* Connection banner when offline */}
+        <Show when={!connected()}>
+          <div class="bg-status-error/10 border-b border-status-error/20 px-4 py-2 flex items-center gap-3">
+            <div class="flex items-center gap-2 text-status-error">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                <path d="M12 9v4" />
+                <path d="M12 17h.01" />
+              </svg>
+              <span class="text-sm font-medium">Server Disconnected</span>
+            </div>
+            <span class="text-xs text-muted-foreground">
+              Start with: <code class="bg-muted px-1 py-0.5 rounded">opencode serve --port 4097</code>
+            </span>
+          </div>
+        </Show>
+        {props.children}
+      </div>
 
       {/* Global modals */}
       <CommandPalette />

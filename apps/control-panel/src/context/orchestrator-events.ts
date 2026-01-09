@@ -14,6 +14,11 @@ const eventTypes: OrchestratorEventType[] = [
   "orchestra.skill.load.completed",
   "orchestra.skill.load.failed",
   "orchestra.skill.permission",
+  "orchestra.job.created",
+  "orchestra.job.progress",
+  "orchestra.job.completed",
+  "orchestra.job.failed",
+  "orchestra.job.canceled",
   "orchestra.error",
 ];
 

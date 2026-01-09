@@ -99,10 +99,33 @@ export const SkillsPage: Component = () => {
     return map;
   });
 
+  // Show skill load events from orchestrator even if no inventory loaded
+  const skillsFromEvents = createMemo(() => {
+    const seen = new Set<string>();
+    const items: SkillInventoryItem[] = [];
+    for (const event of skillEvents()) {
+      if (!event.skillName || seen.has(event.skillName)) continue;
+      seen.add(event.skillName);
+      items.push({
+        name: event.skillName,
+        description: `Loaded ${event.type === "orchestra.skill.load.completed" ? "successfully" : "with errors"}`,
+        source: event.source === "server" ? "server" : "in-process",
+        status: event.status === "success" ? "loaded" : "error",
+      });
+    }
+    return items;
+  });
+
+  const allSkills = createMemo(() => {
+    const inventory = skills();
+    if (inventory.length > 0) return inventory;
+    return skillsFromEvents();
+  });
+
   const filteredSkills = createMemo(() => {
     const query = search().trim().toLowerCase();
-    if (!query) return skills();
-    return skills().filter((skill) => {
+    if (!query) return allSkills();
+    return allSkills().filter((skill) => {
       return (
         skill.name.toLowerCase().includes(query) ||
         (skill.description ?? "").toLowerCase().includes(query) ||
@@ -114,7 +137,7 @@ export const SkillsPage: Component = () => {
   const selectedSkill = createMemo(() => {
     const name = selectedSkillName();
     if (!name) return undefined;
-    return skills().find((skill) => skill.name === name);
+    return allSkills().find((skill) => skill.name === name);
   });
 
   createEffect(() => {
@@ -401,13 +424,33 @@ export const SkillsPage: Component = () => {
                               <div class="text-xs text-muted-foreground">
                                 Worker: {worker?.name ?? load().workerId ?? "unknown"}
                               </div>
+                              <Show when={load().workerKind}>
+                                <div class="text-xs text-muted-foreground">
+                                  Worker Kind: {load().workerKind}
+                                </div>
+                              </Show>
                               <div class="text-xs text-muted-foreground">
                                 Session: {load().sessionId ?? "unknown"}
                               </div>
+                              <Show when={load().callId}>
+                                <div class="text-xs text-muted-foreground font-mono">
+                                  Call ID: {load().callId}
+                                </div>
+                              </Show>
                               <Show when={load().workflowRunId || load().workflowStepId}>
                                 <div class="text-xs text-muted-foreground">
                                   Workflow: {load().workflowRunId ?? "run"}
                                   {load().workflowStepId ? ` · Step ${load().workflowStepId}` : ""}
+                                </div>
+                              </Show>
+                              <Show when={load().durationMs != null}>
+                                <div class="text-xs text-muted-foreground">
+                                  Duration: {(load().durationMs! / 1000).toFixed(2)}s
+                                </div>
+                              </Show>
+                              <Show when={load().outputBytes != null}>
+                                <div class="text-xs text-muted-foreground">
+                                  Output: {load().outputBytes! > 1024 ? `${(load().outputBytes! / 1024).toFixed(1)}KB` : `${load().outputBytes}B`}
                                 </div>
                               </Show>
                             </div>

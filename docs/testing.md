@@ -99,6 +99,93 @@ Boomerang workflow E2E runs write run bundles under `packages/orchestrator/test-
 
 ### App tests (`apps/control-panel/`)
 
-- `apps/control-panel/src/context/__tests__/skills-context.test.tsx`
-  - Validates CRUD for the UI "skills" client layer.
+- `src/context/__tests__/tasks-store.test.ts`
+  - Validates task store state management.
+  - Risk: low (deterministic).
+
+- `src/context/__tests__/orchestrator-events.test.ts`
+  - Validates orchestrator event processing and filtering.
+  - Risk: low (deterministic).
+
+- `src/context/__tests__/agents-context.test.tsx`
+  - Validates agents context provider.
   - Risk: low (unit-ish).
+
+- `src/lib/__tests__/orchestrator-bridge.test.ts`
+  - Validates DI-first orchestrator bridge client.
+  - Risk: low (deterministic).
+
+- `src/lib/__tests__/shared-client.test.ts`
+  - Validates shared client adapter for OpenBoard integration.
+  - Risk: low (deterministic).
+
+- `src/lib/__tests__/event-correlation.test.ts`
+  - Validates event correlation and grouping for observability.
+  - Risk: low (deterministic).
+
+- `src/lib/__tests__/task-args.test.ts`
+  - Validates task command argument builders.
+  - Risk: low (deterministic).
+
+- `src/pages/__tests__/tasks-page.test.tsx`
+  - Validates Tasks page rendering and job display.
+  - Risk: low (unit-ish).
+
+- `src/pages/__tests__/task-composer.test.tsx`
+  - Validates Task Composer UI interactions.
+  - Risk: low (unit-ish).
+
+- `src/components/__tests__/observability-timeline.test.tsx`
+  - Validates observability timeline rendering and filtering.
+  - Risk: low (unit-ish).
+
+- `src/__tests__/integration-openboard.test.tsx`
+  - Validates OpenBoard integration seam.
+  - Risk: low (unit-ish).
+
+### App tests (`apps/openboard/`)
+
+- `src/__tests__/app.test.tsx`
+  - Validates OpenBoard scaffold app rendering.
+  - Risk: low (unit-ish).
+
+## Coverage
+
+### Orchestrator plugin coverage
+
+```bash
+cd packages/orchestrator && bun test --coverage ./test/unit ./test/integration
+```
+
+### Control panel coverage
+
+```bash
+cd apps/control-panel && bun run test -- --coverage
+```
+
+### OpenBoard coverage
+
+```bash
+cd apps/openboard && bun run test -- --coverage
+```
+
+### Full verification sequence
+
+From repo root:
+
+```bash
+bun run format:check
+bun run lint
+bun run typecheck
+bun run test:unit
+bun run test:integration
+bun run test:control-panel
+bun run test:openboard
+bun run build
+```
+
+For E2E (requires OpenCode CLI and model):
+
+```bash
+OPENCODE_ORCH_E2E_MODEL=opencode/gpt-5-nano bun run test:e2e
+```

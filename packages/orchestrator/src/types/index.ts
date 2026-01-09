@@ -26,6 +26,7 @@ export type WorkerDockerConfig = {
 export interface WorkerProfile {
   /** Unique identifier for this worker */
   id: string;
+  base?: string;
   /** Human-readable name */
   name: string;
   /** Worker kind (server = spawned, agent/subagent = in-process) */
@@ -38,6 +39,7 @@ export interface WorkerProfile {
   model: string;
   /** Provider ID */
   providerID?: string;
+  directory?: string;
   /** What this worker specializes in */
   purpose: string;
   /** When to use this worker (injected into context) */
@@ -81,6 +83,7 @@ export interface WorkerInstance {
   serverUrl?: string;
   /** Directory context for tool execution (query.directory) */
   directory?: string;
+  spawnDirectory?: string;
   sessionId?: string;
   client?: ReturnType<typeof import("@opencode-ai/sdk").createOpencodeClient>;
   /** If this worker was spawned in-process, this shuts down its server */
@@ -337,9 +340,34 @@ export interface OrchestratorConfig {
     defaultTimeoutMs?: number;
     defaultAutoSpawn?: boolean;
     defaultModelPolicy?: "dynamic" | "sticky";
+    persist?: {
+      enabled?: boolean;
+      intervalMs?: number;
+    };
+    /** Job registry limits for 24/7 operation */
+    jobs?: {
+      /** Maximum age of completed jobs in milliseconds (default: 3600000 = 1 hour) */
+      maxAgeMs?: number;
+      /** Maximum number of completed jobs to retain (default: 100) */
+      maxCount?: number;
+    };
   };
   /** Workflow configuration */
   workflows?: WorkflowsConfig;
+  /** Cleanup scheduler settings */
+  cleanup?: {
+    /** Cleanup interval in milliseconds (default: 300000 = 5 minutes) */
+    intervalMs?: number;
+  };
+  /** Circuit breaker settings for worker spawn protection */
+  circuitBreaker?: {
+    /** Number of failures before opening circuit (default: 5) */
+    failureThreshold?: number;
+    /** Time window for failure counting in ms (default: 600000 = 10 minutes) */
+    failureWindowMs?: number;
+    /** Time in ms before trying half-open state (default: 300000 = 5 minutes) */
+    halfOpenTimeoutMs?: number;
+  };
   /** Security limits */
   security?: SecurityConfig;
   /** Memory graph settings */
@@ -361,6 +389,8 @@ export type OrchestratorConfigFile = {
   pruning?: OrchestratorConfig["pruning"];
   tasks?: OrchestratorConfig["tasks"];
   workflows?: OrchestratorConfig["workflows"];
+  cleanup?: OrchestratorConfig["cleanup"];
+  circuitBreaker?: OrchestratorConfig["circuitBreaker"];
   security?: OrchestratorConfig["security"];
   memory?: OrchestratorConfig["memory"];
   telemetry?: OrchestratorConfig["telemetry"];

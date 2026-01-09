@@ -20,7 +20,6 @@ function findPluginRoot(): string | undefined {
   }
   const docMarkers = [
     ["README.md"],
-    ["HEADLESS_TESTING.md"],
     ["docs", "guide.md"],
     ["docs", "reference.md"],
     ["docs", "architecture.md"],
@@ -62,7 +61,6 @@ export async function getRepoDocsBundle(options?: {
     "docs/guide.md",
     "docs/reference.md",
     "docs/architecture.md",
-    "HEADLESS_TESTING.md",
   ]
     .map((p) => join(root, p))
     .filter((p) => existsSync(p));

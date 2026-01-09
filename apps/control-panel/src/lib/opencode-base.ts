@@ -38,6 +38,9 @@ export const resolveOpenCodeBase = (): string | undefined => {
   if (window.__OPENCODE__?.port) {
     return `http://127.0.0.1:${window.__OPENCODE__.port}`;
   }
+  if (import.meta.env.VITE_OPENCODE_BASE_URL) {
+    return import.meta.env.VITE_OPENCODE_BASE_URL;
+  }
   return undefined;
 };
 

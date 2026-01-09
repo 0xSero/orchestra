@@ -10,6 +10,65 @@ This is the source of truth for workers, workflows, memory writes, and errors.
 - Auth: read access does not require a token; write endpoints remain protected.
 - Each SSE frame includes `event: <type>` and `data: <json>`.
 - Optional: set `OPENCODE_ORCH_BRIDGE_PORT` to pin the bridge server port.
+- Optional: set `OPENCODE_ORCH_BRIDGE_HOST=0.0.0.0` when you need the bridge reachable outside the process (e.g. Docker port mapping).
+
+## Read APIs
+
+### `GET /v1/status`
+
+Returns a snapshot of current workers and job summary.
+
+```json
+{
+  "workers": [
+    {
+      "id": "vision",
+      "name": "Vision",
+      "status": "ready",
+      "model": "opencode/gpt-5-nano",
+      "port": 14097
+    }
+  ],
+  "jobs": {
+    "total": 5,
+    "running": 1,
+    "succeeded": 3,
+    "failed": 0,
+    "canceled": 1,
+    "oldestRunningMs": 12000
+  }
+}
+```
+
+### `GET /v1/output`
+
+Returns recent jobs and log buffer. Supports optional query params:
+- `limit` (default: 50): Maximum number of jobs/logs to return
+- `after` (unix ms): Only return items after this timestamp
+
+```json
+{
+  "jobs": [
+    {
+      "id": "job-123",
+      "workerId": "coder",
+      "message": "Implement feature X",
+      "status": "succeeded",
+      "startedAt": 1730000000000,
+      "finishedAt": 1730000005000,
+      "durationMs": 5000,
+      "responseText": "Feature implemented..."
+    }
+  ],
+  "logs": [
+    {
+      "at": 1730000000000,
+      "level": "info",
+      "message": "Worker started"
+    }
+  ]
+}
+```
 
 ## Event Envelope
 
@@ -289,6 +348,114 @@ Permission resolution for a skill tool call.
     "worker": { "id": "docs", "kind": "subagent" },
     "source": "in-process",
     "timestamp": 1730000000000
+  }
+}
+```
+
+### `orchestra.job.created`
+
+Job created and started.
+
+```json
+{
+  "version": 1,
+  "id": "evt_...",
+  "type": "orchestra.job.created",
+  "timestamp": 1730000000000,
+  "data": {
+    "jobId": "job-123",
+    "workerId": "coder",
+    "message": "Implement feature X",
+    "sessionId": "session-...",
+    "requestedBy": "orchestrator",
+    "startedAt": 1730000000000
+  }
+}
+```
+
+### `orchestra.job.progress`
+
+Job progress update.
+
+```json
+{
+  "version": 1,
+  "id": "evt_...",
+  "type": "orchestra.job.progress",
+  "timestamp": 1730000000000,
+  "data": {
+    "jobId": "job-123",
+    "workerId": "coder",
+    "message": "Step 2 of 4",
+    "percent": 50,
+    "updatedAt": 1730000000000
+  }
+}
+```
+
+### `orchestra.job.completed`
+
+Job completed successfully.
+
+```json
+{
+  "version": 1,
+  "id": "evt_...",
+  "type": "orchestra.job.completed",
+  "timestamp": 1730000000000,
+  "data": {
+    "jobId": "job-123",
+    "workerId": "coder",
+    "message": "Implement feature X",
+    "startedAt": 1730000000000,
+    "finishedAt": 1730000005000,
+    "durationMs": 5000,
+    "responsePreview": "Feature X implemented...",
+    "responseLength": 1024
+  }
+}
+```
+
+### `orchestra.job.failed`
+
+Job failed with error.
+
+```json
+{
+  "version": 1,
+  "id": "evt_...",
+  "type": "orchestra.job.failed",
+  "timestamp": 1730000000000,
+  "data": {
+    "jobId": "job-123",
+    "workerId": "coder",
+    "message": "Implement feature X",
+    "error": "Worker timeout",
+    "startedAt": 1730000000000,
+    "finishedAt": 1730000010000,
+    "durationMs": 10000
+  }
+}
+```
+
+### `orchestra.job.canceled`
+
+Job canceled.
+
+```json
+{
+  "version": 1,
+  "id": "evt_...",
+  "type": "orchestra.job.canceled",
+  "timestamp": 1730000000000,
+  "data": {
+    "jobId": "job-123",
+    "workerId": "coder",
+    "message": "Implement feature X",
+    "reason": "User requested cancellation",
+    "startedAt": 1730000000000,
+    "finishedAt": 1730000003000,
+    "durationMs": 3000
   }
 }
 ```

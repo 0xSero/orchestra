@@ -1,0 +1,138 @@
+@import "@fontsource/geist-sans";
+@import "@fontsource/geist-mono";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * OpenBoard Design System
+ * Shares tokens with control-panel for consistency
+ */
+
+@layer base {
+  :root {
+    color-scheme: light;
+
+    /* Light mode: Warm Paper */
+    --background: 40 30% 97%;
+    --foreground: 30 15% 15%;
+
+    --card: 40 25% 95%;
+    --card-foreground: 30 15% 15%;
+
+    --popover: 40 25% 98%;
+    --popover-foreground: 30 15% 15%;
+
+    --primary: 32 28% 28%;
+    --primary-foreground: 40 30% 97%;
+
+    --secondary: 35 20% 90%;
+    --secondary-foreground: 30 15% 25%;
+
+    --muted: 35 20% 88%;
+    --muted-foreground: 30 10% 45%;
+
+    --accent: 35 18% 92%;
+    --accent-foreground: 30 15% 15%;
+
+    --destructive: 0 60% 45%;
+    --destructive-foreground: 40 30% 97%;
+
+    --border: 35 15% 85%;
+    --input: 35 15% 88%;
+    --ring: 30 20% 30%;
+  }
+
+  /* Dark mode */
+  .dark {
+    color-scheme: dark;
+
+    --background: 30 5% 10.5%;
+    --foreground: 40 20% 92%;
+
+    --card: 30 5% 12%;
+    --card-foreground: 40 20% 92%;
+
+    --popover: 30 5% 14%;
+    --popover-foreground: 40 20% 92%;
+
+    --primary: 35 25% 45%;
+    --primary-foreground: 40 20% 95%;
+
+    --secondary: 30 5% 15%;
+    --secondary-foreground: 40 15% 70%;
+
+    --muted: 30 5% 18%;
+    --muted-foreground: 40 10% 55%;
+
+    --accent: 35 8% 18%;
+    --accent-foreground: 40 20% 92%;
+
+    --destructive: 0 55% 45%;
+    --destructive-foreground: 40 20% 95%;
+
+    --border: 30 5% 20%;
+    --input: 30 5% 15%;
+    --ring: 35 15% 70%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    @apply h-full;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "Geist Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  code,
+  pre {
+    font-family: "Geist Mono", "SF Mono", "Fira Code", "JetBrains Mono", monospace;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  ::selection {
+    @apply bg-primary/20;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5;
+    @apply px-4 py-2 text-sm font-medium rounded-md;
+    @apply bg-secondary text-secondary-foreground border border-border;
+    @apply hover:bg-accent/50 transition-colors;
+    @apply disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-primary {
+    @apply bg-foreground text-background border-foreground;
+    @apply hover:bg-foreground/90;
+  }
+
+  .card {
+    @apply rounded-lg border border-border bg-card shadow-sm;
+  }
+
+  .card-header {
+    @apply p-4 border-b border-border;
+  }
+
+  .card-content {
+    @apply p-4;
+  }
+}

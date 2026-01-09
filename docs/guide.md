@@ -41,6 +41,7 @@ Desktop/sidecar:
 - `OPENCODE_DESKTOP_SKILLS_URL` (override skills API base)
 - `OPENCODE_SKILLS_PORT` / `OPENCODE_SKILLS_API_PORT` (sidecar skills port)
 - `OPENCODE_ORCH_BRIDGE_PORT` (orchestrator event bridge port)
+- `OPENCODE_ORCH_BRIDGE_HOST` (bridge bind host, use `0.0.0.0` for Docker)
 - `OPENCODE_CONFIG_CONTENT` (OpenCode config JSON, used internally by desktop)
 
 ## Release checklist
@@ -50,3 +51,7 @@ Desktop/sidecar:
 - `bun run test`
 - `bun run build`
 - Confirm the desktop bundle launches and the control panel shows a live dashboard.
+
+## Worktrees
+
+- See `docs/worktrees.md` for sandboxed 24/7 operation using git worktrees.

@@ -8,6 +8,13 @@ import {
 } from "./worker-pool";
 import { startBridgeServer, type BridgeServer } from "./bridge-server";
 import { isProcessAlive } from "../helpers/process";
+import { CleanupScheduler } from "./cleanup-scheduler";
+import { workerJobs } from "./jobs";
+import { JobsPersistence } from "./jobs-persistence";
+import { loadOrchestratorConfig } from "../config/orchestrator";
+import { resolveCircuitBreakerConfig } from "./circuit-breaker";
+import { startEventCleanup } from "./orchestrator-events";
+import { wireJobEventsToOrchestrator } from "./orchestrator-events";
 
 export type OrchestratorRuntime = {
   instanceId: string;
@@ -16,6 +23,9 @@ export type OrchestratorRuntime = {
 
 let runtime: OrchestratorRuntime | undefined;
 let cleanupInstalled = false;
+let cleanupScheduler: CleanupScheduler | undefined;
+let jobsPersistence: JobsPersistence | undefined;
+let jobEventsUnsubscribe: (() => void) | undefined;
 let shutdownPromise: Promise<void> | undefined;
 let shutdownRequested = false;
 
@@ -25,6 +35,15 @@ async function runShutdown(_reason: string): Promise<void> {
   if (shutdownPromise) return shutdownPromise;
   shutdownRequested = true;
   shutdownPromise = (async () => {
+    // Unsubscribe from job events
+    jobEventsUnsubscribe?.();
+
+    // Stop jobs persistence first
+    jobsPersistence?.stop();
+
+    // Stop cleanup scheduler first
+    cleanupScheduler?.stop();
+
     const workers = [...workerPool.workers.values()];
     const finished = await Promise.race([
       shutdownAllWorkers().then(() => true),
@@ -71,9 +90,48 @@ export async function ensureRuntime(): Promise<OrchestratorRuntime> {
   runtime = { instanceId, bridge };
   workerPool.setInstanceId(instanceId);
 
+  // Wire job events to orchestrator event stream
+  jobEventsUnsubscribe = wireJobEventsToOrchestrator(workerJobs);
+
   // Cleanup orphaned workers and sessions from previous crashes/terminations
   void cleanupOrphanedWorkers().catch(() => {});
   void cleanupOrphanedSessions().catch(() => {});
+
+  // Load config before creating components that need it
+  const { config } = await loadOrchestratorConfig({ directory: process.cwd() });
+
+  // Start periodic cleanup scheduler
+  cleanupScheduler = new CleanupScheduler(async () => {
+    await pruneDeadEntries();
+    workerJobs.pruneStaleJobs();
+  }, config.cleanup);
+  cleanupScheduler.start();
+
+  // Start event listener cleanup
+  startEventCleanup();
+
+  // Configure job registry limits for 24/7 operation
+  if (config.tasks?.jobs) {
+    workerJobs.configure(config.tasks.jobs);
+  }
+
+  // Configure circuit breaker for worker spawn protection
+  workerPool.configureCircuitBreaker(
+    resolveCircuitBreakerConfig(config.circuitBreaker),
+  );
+
+  jobsPersistence = new JobsPersistence(
+    () => workerJobs.getAllJobs(),
+    (jobId, reason) => {
+      const job = workerJobs.get(jobId);
+      if (job && job.status === "running") {
+        workerJobs.setError(jobId, { error: reason });
+      }
+    },
+    config.tasks?.persist,
+  );
+  jobsPersistence.start();
+  await jobsPersistence.restoreRunningJobs();
 
   if (!cleanupInstalled) {
     cleanupInstalled = true;

@@ -55,13 +55,7 @@ export const ChatPage: Component = () => {
   });
 
   return (
-    <div class="flex-1 flex flex-col overflow-hidden">
-      <header class="px-6 py-5 border-b border-border">
-        <h1 class="text-2xl font-semibold text-foreground">Chat</h1>
-        <p class="text-sm text-muted-foreground">Send messages to OpenCode sessions and review responses.</p>
-      </header>
-
-      <div class="flex-1 flex overflow-hidden">
+    <div class="flex-1 flex overflow-hidden">
         {/* Sidebar toggle + sidebar */}
         <div class="flex">
           {/* Collapse button */}
@@ -81,10 +75,9 @@ export const ChatPage: Component = () => {
           </Show>
         </div>
 
-        {/* Chat area */}
-        <div class="flex-1 overflow-hidden">
-          <ChatView />
-        </div>
+      {/* Chat area */}
+      <div class="flex-1 overflow-hidden">
+        <ChatView />
       </div>
     </div>
   );

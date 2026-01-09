@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import type {
   OrchestratorConfig,
   OrchestratorConfigFile,
@@ -18,6 +18,61 @@ import {
   deepMerge,
 } from "../helpers/format";
 
+const isWithin = (child: string, parent: string): boolean => {
+  const rel = relative(parent, child);
+  if (!rel) return true;
+  return !rel.startsWith(`..${sep}`) && rel !== ".." && !rel.startsWith("../");
+};
+
+const walkUp = (start: string, stop: string): string[] => {
+  const paths: string[] = [];
+  let current = start;
+  while (true) {
+    paths.push(current);
+    if (current === stop) break;
+    const next = dirname(current);
+    if (next === current) break;
+    current = next;
+  }
+  return paths;
+};
+
+const findGitRoot = (start: string): string | undefined => {
+  let current = resolve(start);
+  while (true) {
+    if (existsSync(join(current, ".git"))) return current;
+    const next = dirname(current);
+    if (next === current) return undefined;
+    current = next;
+  }
+};
+
+const findNearestProjectConfig = (
+  start: string,
+  stop: string,
+): { base?: string; local?: string } | undefined => {
+  for (const current of walkUp(start, stop)) {
+    const primary = getDefaultProjectOrchestratorConfigPath(current);
+    const primaryLocal = join(current, ".opencode", "orchestrator.local.json");
+    if (existsSync(primary) || existsSync(primaryLocal)) {
+      return {
+        base: existsSync(primary) ? primary : undefined,
+        local: existsSync(primaryLocal) ? primaryLocal : undefined,
+      };
+    }
+
+    const legacy = join(current, "orchestrator.json");
+    const legacyLocal = join(current, "orchestrator.local.json");
+    if (existsSync(legacy) || existsSync(legacyLocal)) {
+      return {
+        base: existsSync(legacy) ? legacy : undefined,
+        local: existsSync(legacyLocal) ? legacyLocal : undefined,
+      };
+    }
+  }
+  return undefined;
+};
+
 function isWorkerKind(value: unknown): value is WorkerKind {
   return value === "server" || value === "agent" || value === "subagent";
 }
@@ -34,14 +89,26 @@ function backendFromKind(kind: WorkerKind): WorkerBackend {
   return kind === "server" ? "server" : "agent";
 }
 
-export function resolveWorkerEntry(entry: unknown): WorkerProfile | undefined {
+export function resolveWorkerEntry(
+  entry: unknown,
+  options?: { knownProfiles?: Record<string, WorkerProfile> },
+): WorkerProfile | undefined {
   if (typeof entry === "string") return builtInProfiles[entry];
   if (!isPlainObject(entry)) return undefined;
 
   const id = typeof entry.id === "string" ? entry.id : undefined;
   if (!id) return undefined;
 
-  const base = builtInProfiles[id];
+  const knownProfiles = options?.knownProfiles;
+  const baseId =
+    typeof (entry as any).base === "string"
+      ? ((entry as any).base as string)
+      : typeof (entry as any).extends === "string"
+        ? ((entry as any).extends as string)
+        : undefined;
+  const base =
+    (baseId ? knownProfiles?.[baseId] : knownProfiles?.[id]) ??
+    (baseId ? builtInProfiles[baseId] : builtInProfiles[id]);
   const merged: Record<string, unknown> = { ...(base ?? {}), ...entry };
 
   if (
@@ -52,6 +119,13 @@ export function resolveWorkerEntry(entry: unknown): WorkerProfile | undefined {
     typeof merged.whenToUse !== "string"
   ) {
     return undefined;
+  }
+
+  if ("base" in merged && merged.base !== undefined) {
+    if (typeof merged.base !== "string") return undefined;
+  }
+  if ("directory" in merged && merged.directory !== undefined) {
+    if (typeof merged.directory !== "string") return undefined;
   }
 
   if ("tools" in merged) {
@@ -327,7 +401,26 @@ export function parseOrchestratorConfigFile(
     ) {
       tasks.defaultModelPolicy = raw.tasks.defaultModelPolicy;
     }
-    partial.tasks = tasks as OrchestratorConfig["tasks"];
+
+    if (isPlainObject(raw.tasks.persist)) {
+      const persist: Record<string, unknown> = {};
+      if (typeof raw.tasks.persist.enabled === "boolean")
+        persist.enabled = raw.tasks.persist.enabled;
+      if (typeof raw.tasks.persist.intervalMs === "number")
+        persist.intervalMs = raw.tasks.persist.intervalMs;
+      tasks.persist = persist;
+    }
+
+    if (isPlainObject(raw.tasks.jobs)) {
+      const jobs: Record<string, unknown> = {};
+      if (typeof raw.tasks.jobs.maxAgeMs === "number")
+        jobs.maxAgeMs = raw.tasks.jobs.maxAgeMs;
+      if (typeof raw.tasks.jobs.maxCount === "number")
+        jobs.maxCount = raw.tasks.jobs.maxCount;
+      tasks.jobs = jobs;
+    }
+
+    partial.tasks = tasks as unknown as OrchestratorConfig["tasks"];
   }
 
   if (isPlainObject(raw.workflows)) {
@@ -582,6 +675,25 @@ export function parseOrchestratorConfigFile(
     partial.workflows = workflows as OrchestratorConfig["workflows"];
   }
 
+  if (isPlainObject(raw.cleanup)) {
+    const cleanup: Record<string, unknown> = {};
+    if (typeof raw.cleanup.intervalMs === "number")
+      cleanup.intervalMs = raw.cleanup.intervalMs;
+    partial.cleanup = cleanup as OrchestratorConfig["cleanup"];
+  }
+
+  if (isPlainObject(raw.circuitBreaker)) {
+    const circuitBreaker: Record<string, unknown> = {};
+    if (typeof raw.circuitBreaker.failureThreshold === "number")
+      circuitBreaker.failureThreshold = raw.circuitBreaker.failureThreshold;
+    if (typeof raw.circuitBreaker.failureWindowMs === "number")
+      circuitBreaker.failureWindowMs = raw.circuitBreaker.failureWindowMs;
+    if (typeof raw.circuitBreaker.halfOpenTimeoutMs === "number")
+      circuitBreaker.halfOpenTimeoutMs = raw.circuitBreaker.halfOpenTimeoutMs;
+    partial.circuitBreaker =
+      circuitBreaker as OrchestratorConfig["circuitBreaker"];
+  }
+
   if (isPlainObject(raw.security)) {
     const security: Record<string, unknown> = {};
     if (isPlainObject(raw.security.workflows)) {
@@ -683,7 +795,7 @@ function collectProfilesAndSpawn(input: OrchestratorConfigFile): {
   const seen = new Set<string>();
 
   const registerProfile = (entry: unknown): WorkerProfile | undefined => {
-    const resolved = resolveWorkerEntry(entry);
+    const resolved = resolveWorkerEntry(entry, { knownProfiles: profiles });
     if (resolved) profiles[resolved.id] = resolved;
     return resolved;
   };
@@ -714,7 +826,7 @@ function collectProfilesAndSpawn(input: OrchestratorConfigFile): {
 
 export type LoadedOrchestratorConfig = {
   config: OrchestratorConfig;
-  sources: { global?: string; project?: string };
+  sources: { global?: string; project?: string; projectLocal?: string };
 };
 
 export async function loadOrchestratorConfig(input: {
@@ -761,6 +873,14 @@ export async function loadOrchestratorConfig(input: {
       defaultTimeoutMs: 600_000,
       defaultAutoSpawn: true,
       defaultModelPolicy: "dynamic",
+      persist: {
+        enabled: true,
+        intervalMs: 30000,
+      },
+      jobs: {
+        maxAgeMs: 3600000,
+        maxCount: 100,
+      },
     },
     workflows: {
       enabled: true,
@@ -846,6 +966,14 @@ export async function loadOrchestratorConfig(input: {
         maxGlobalEntries: 3,
       },
     },
+    cleanup: {
+      intervalMs: 300000,
+    },
+    circuitBreaker: {
+      failureThreshold: 5,
+      failureWindowMs: 600000,
+      halfOpenTimeoutMs: 300000,
+    },
     telemetry: {
       enabled: false,
     },
@@ -854,14 +982,21 @@ export async function loadOrchestratorConfig(input: {
   };
 
   const globalPath = getDefaultGlobalOrchestratorConfigPath();
-  const projectCandidates = [
-    getDefaultProjectOrchestratorConfigPath(input.directory),
-    input.worktree
-      ? getDefaultProjectOrchestratorConfigPath(input.worktree)
-      : undefined,
-    join(input.directory, "orchestrator.json"),
-    input.worktree ? join(input.worktree, "orchestrator.json") : undefined,
-  ].filter(Boolean) as string[];
+
+  const directory = resolve(input.directory);
+  const worktree = input.worktree ? resolve(input.worktree) : undefined;
+  const stop = (() => {
+    if (worktree && isWithin(directory, worktree)) return worktree;
+    return findGitRoot(directory) ?? directory;
+  })();
+
+  const projectPaths =
+    findNearestProjectConfig(directory, stop) ??
+    (worktree
+      ? findNearestProjectConfig(worktree, findGitRoot(worktree) ?? worktree)
+      : undefined);
+  const projectBasePath = projectPaths?.base;
+  const projectLocalPath = projectPaths?.local;
 
   const sources: LoadedOrchestratorConfig["sources"] = {};
 
@@ -876,24 +1011,63 @@ export async function loadOrchestratorConfig(input: {
     }
   })();
 
-  const projectPath = projectCandidates.find((p) => existsSync(p));
   const projectPartial = await (async () => {
-    if (!projectPath) return {};
-    sources.project = projectPath;
+    if (!projectBasePath) return {};
+    sources.project = projectBasePath;
     try {
-      const raw = JSON.parse(await readFile(projectPath, "utf8")) as unknown;
+      const raw = JSON.parse(
+        await readFile(projectBasePath, "utf8"),
+      ) as unknown;
       return parseOrchestratorConfigFile(raw);
     } catch {
       return {};
     }
   })();
 
+  const projectLocalPartial = await (async () => {
+    if (!projectLocalPath) return {};
+    sources.projectLocal = projectLocalPath;
+    try {
+      const raw = JSON.parse(
+        await readFile(projectLocalPath, "utf8"),
+      ) as unknown;
+      return parseOrchestratorConfigFile(raw);
+    } catch {
+      return {};
+    }
+  })();
+
+  const projectMerged = deepMerge(
+    projectPartial as unknown as Record<string, unknown>,
+    projectLocalPartial as unknown as Record<string, unknown>,
+  ) as Record<string, unknown>;
+
+  const baseProfiles = Array.isArray((projectPartial as any).profiles)
+    ? ((projectPartial as any).profiles as unknown[])
+    : undefined;
+  const localProfiles = Array.isArray((projectLocalPartial as any).profiles)
+    ? ((projectLocalPartial as any).profiles as unknown[])
+    : undefined;
+  if (baseProfiles && localProfiles)
+    projectMerged.profiles = [...baseProfiles, ...localProfiles];
+  else if (localProfiles) projectMerged.profiles = localProfiles;
+
+  const baseWorkers = Array.isArray((projectPartial as any).workers)
+    ? ((projectPartial as any).workers as unknown[])
+    : undefined;
+  const localWorkers = Array.isArray((projectLocalPartial as any).workers)
+    ? ((projectLocalPartial as any).workers as unknown[])
+    : undefined;
+  if (baseWorkers && localWorkers)
+    projectMerged.workers = [...baseWorkers, ...localWorkers];
+  else if (localWorkers) projectMerged.workers = localWorkers;
+
   const mergedFile = deepMerge(
     deepMerge(
       defaultsFile as unknown as Record<string, unknown>,
       globalPartial as unknown as Record<string, unknown>,
     ),
-    projectPartial as unknown as Record<string, unknown>,
+    projectMerged as unknown as Record<string, unknown>,
   ) as unknown as OrchestratorConfigFile;
 
   const { profiles, spawn } = collectProfilesAndSpawn(mergedFile);
@@ -929,6 +1103,10 @@ export async function loadOrchestratorConfig(input: {
       defaultsFile.tasks) as OrchestratorConfig["tasks"],
     workflows: (mergedFile.workflows ??
       defaultsFile.workflows) as OrchestratorConfig["workflows"],
+    cleanup: (mergedFile.cleanup ??
+      defaultsFile.cleanup) as OrchestratorConfig["cleanup"],
+    circuitBreaker: (mergedFile.circuitBreaker ??
+      defaultsFile.circuitBreaker) as OrchestratorConfig["circuitBreaker"],
     security: (mergedFile.security ??
       defaultsFile.security) as OrchestratorConfig["security"],
     memory: (mergedFile.memory ??

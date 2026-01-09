@@ -26,6 +26,7 @@ import {
 } from "./orchestrator-events";
 import { fetchOpencodeConfig, fetchProviders } from "../models/catalog";
 import { resolveWorkerModel } from "../models/resolve";
+import { CircuitBreaker, type CircuitBreakerConfig } from "./circuit-breaker";
 
 // =============================================================================
 // Types
@@ -268,9 +269,16 @@ export class WorkerPool {
   // Orchestrator instance ID (for device registry)
   private instanceId = "";
 
+  // Circuit breaker for spawn protection
+  private circuitBreaker: CircuitBreaker;
+
   // ==========================================================================
   // Lifecycle
   // ==========================================================================
+
+  constructor(config?: CircuitBreakerConfig) {
+    this.circuitBreaker = new CircuitBreaker(config);
+  }
 
   setInstanceId(id: string): void {
     this.instanceId = id;
@@ -320,6 +328,13 @@ export class WorkerPool {
       options: SpawnOptions,
     ) => Promise<WorkerInstance>,
   ): Promise<WorkerInstance> {
+    // Check circuit breaker before attempting spawn
+    if (!this.circuitBreaker.canExecute()) {
+      throw new Error(
+        `Circuit breaker is open - worker spawn blocked. State: ${this.circuitBreaker.getState()}. Try again later.`,
+      );
+    }
+
     // Check in-memory registry first
     const existing = this.workers.get(profile.id);
     if (
@@ -344,11 +359,19 @@ export class WorkerPool {
       if (backend === "server" && !forceNew) {
         const reused = await this.tryReuseFromDeviceRegistry(profile, options);
         if (reused) {
+          this.circuitBreaker.recordSuccess();
           return reused;
         }
       }
 
-      return spawnFn(profile, options);
+      try {
+        const instance = await spawnFn(profile, options);
+        this.circuitBreaker.recordSuccess();
+        return instance;
+      } catch (error) {
+        this.circuitBreaker.recordFailure();
+        throw error;
+      }
     })();
 
     this.inFlightSpawns.set(profile.id, spawnPromise);
@@ -816,6 +839,38 @@ export class WorkerPool {
     } catch {
       return false;
     }
+  }
+
+  // ==========================================================================
+  // Circuit Breaker
+  // ==========================================================================
+
+  canSpawn(): boolean {
+    return this.circuitBreaker.canExecute();
+  }
+
+  recordSpawnSuccess(): void {
+    this.circuitBreaker.recordSuccess();
+  }
+
+  recordSpawnFailure(): void {
+    this.circuitBreaker.recordFailure();
+  }
+
+  getCircuitBreakerState(): "closed" | "open" | "half-open" {
+    return this.circuitBreaker.getState();
+  }
+
+  getCircuitBreakerMetrics(): ReturnType<CircuitBreaker["getMetrics"]> {
+    return this.circuitBreaker.getMetrics();
+  }
+
+  resetCircuitBreaker(): void {
+    this.circuitBreaker.reset();
+  }
+
+  configureCircuitBreaker(config?: CircuitBreakerConfig): void {
+    this.circuitBreaker = new CircuitBreaker(config);
   }
 }
 

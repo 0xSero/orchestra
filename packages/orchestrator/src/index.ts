@@ -481,9 +481,8 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
         (opencodeConfig as any).agent = agents;
       }
 
-      // Exclude orchestrator tools from the build agent to prevent tool leakage
+      // Exclude orchestrator tools from non-orchestrator agents to prevent tool leakage
       {
-        const agents = (opencodeConfig.agent ?? {}) as Record<string, any>;
         const orchestratorToolNames = Object.keys(coreOrchestratorTools);
         const toolExclusions = orchestratorToolNames.reduce(
           (acc, name) => {
@@ -492,14 +491,28 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
           },
           {} as Record<string, boolean>,
         );
-        const buildAgent = agents.build ?? {};
-        agents.build = {
-          ...buildAgent,
-          tools: {
-            ...(buildAgent.tools ?? {}),
-            ...toolExclusions,
-          },
+
+        const baseTools = (opencodeConfig as any).tools;
+        (opencodeConfig as any).tools = {
+          ...(baseTools && typeof baseTools === "object" ? baseTools : {}),
+          ...toolExclusions,
         };
+
+        const agents = (opencodeConfig.agent ?? {}) as Record<string, any>;
+        for (const [agentName, agentConfig] of Object.entries(agents)) {
+          if (agentName === orchestratorAgentName) continue;
+          if (!agentConfig || typeof agentConfig !== "object") continue;
+          agents[agentName] = {
+            ...(agentConfig as any),
+            tools: {
+              ...(((agentConfig as any).tools ?? {}) as Record<
+                string,
+                unknown
+              >),
+              ...toolExclusions,
+            },
+          };
+        }
         (opencodeConfig as any).agent = agents;
       }
 
@@ -615,6 +628,7 @@ export const OrchestratorPlugin: Plugin = async (ctx) => {
           : undefined;
       if (role === "user") {
         updateSelfImproveActivity();
+        void workflowTriggers.handleInfiniteOrchestraIdle();
         const passthrough = getPassthrough(input.sessionID);
         if (passthrough) {
           const parts = Array.isArray(output.parts) ? output.parts : [];

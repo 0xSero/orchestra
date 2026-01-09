@@ -2,7 +2,7 @@
  * Workers Page - View all workers, their status, and last activation
  */
 
-import { type Component, createMemo, createSignal, For, Show } from "solid-js";
+import { type Component, createMemo, For, Show } from "solid-js";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useOpenCode, type WorkerRuntime } from "@/context/opencode";
@@ -136,6 +136,11 @@ export const WorkersPage: Component = () => {
                                 <span class="font-medium">Port:</span> {worker.port}
                               </div>
                             </Show>
+                            <Show when={worker.serverUrl}>
+                              <div>
+                                <span class="font-medium">Server:</span> <span class="font-mono text-xs">{worker.serverUrl}</span>
+                              </div>
+                            </Show>
                             <Show when={worker.lastActivity}>
                               <div>
                                 <span class="font-medium">Last Activity:</span>{" "}
@@ -163,9 +168,42 @@ export const WorkersPage: Component = () => {
                                 <div class="text-xs font-medium text-foreground mb-1">
                                   Last Result
                                 </div>
+                                <Show when={result().jobId}>
+                                  <div class="text-xs text-muted-foreground mb-1">
+                                    <span class="font-medium">Job ID:</span> <span class="font-mono">{result().jobId}</span>
+                                  </div>
+                                </Show>
                                 <Show when={result().report?.summary}>
                                   <div class="text-sm text-muted-foreground mb-2">
                                     {result().report!.summary}
+                                  </div>
+                                </Show>
+                                <Show when={result().report?.details}>
+                                  <div class="text-xs text-muted-foreground mb-2">
+                                    <span class="font-medium">Details:</span> {result().report!.details}
+                                  </div>
+                                </Show>
+                                <Show when={result().report?.issues && result().report!.issues!.length > 0}>
+                                  <div class="text-xs mb-2">
+                                    <span class="font-medium text-foreground">Issues:</span>
+                                    <ul class="list-disc list-inside mt-1 text-muted-foreground">
+                                      <For each={result().report!.issues}>
+                                        {(issue) => <li>{issue}</li>}
+                                      </For>
+                                    </ul>
+                                  </div>
+                                </Show>
+                                <Show when={result().report?.notes}>
+                                  <div class="text-xs text-muted-foreground mb-2">
+                                    <span class="font-medium">Notes:</span> {result().report!.notes}
+                                  </div>
+                                </Show>
+                                <Show when={result().response}>
+                                  <div class="text-xs mb-2">
+                                    <span class="font-medium text-foreground">Response:</span>
+                                    <pre class="mt-1 p-2 bg-muted rounded text-xs overflow-x-auto max-h-24">
+{result().response}
+                                    </pre>
                                   </div>
                                 </Show>
                                 <div class="flex items-center gap-3 text-xs text-muted-foreground">

@@ -62,10 +62,12 @@ export async function spawnOpencodeServe(options: {
   timeout: number;
   config: Record<string, unknown>;
   env: Record<string, string | undefined>;
+  directory: string;
 }): Promise<{ url: string; proc: ChildProcess; close: () => Promise<void> }> {
   const mergedConfig = await mergeOpenCodeConfig(options.config ?? {}, {
     dropOrchestratorPlugin: true,
     excludeAgentConfigs: true,
+    directory: options.directory,
   });
   // CRITICAL: Mark this as a worker process to prevent recursive spawning.
   // Workers should NOT load the orchestrator plugin or spawn more workers.
@@ -260,6 +262,7 @@ export async function spawnOpencodeServeDocker(options: {
   const mergedConfig = await mergeOpenCodeConfig(options.config ?? {}, {
     dropOrchestratorPlugin: true,
     excludeAgentConfigs: true,
+    directory: options.directory,
   });
 
   const mergedConfigObj = (mergedConfig ?? options.config ?? {}) as Record<

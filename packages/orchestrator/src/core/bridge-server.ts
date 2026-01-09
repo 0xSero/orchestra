@@ -6,6 +6,8 @@ import {
 import { randomBytes } from "node:crypto";
 import { URL } from "node:url";
 import { workerPool } from "./worker-pool";
+import { workerJobs } from "./jobs";
+import { getLogBuffer } from "./logger";
 import { EventEmitter } from "node:events";
 import {
   onOrchestratorEvent,
@@ -13,6 +15,7 @@ import {
   type OrchestratorEvent,
 } from "./orchestrator-events";
 import { getWorkflowContextForWorker } from "../skills/context";
+import { healthCheck } from "./health-check";
 
 // Stream event emitter for real-time worker output
 export const streamEmitter = new EventEmitter();
@@ -92,10 +95,16 @@ function resolveBridgePort(): number {
   return value;
 }
 
+function resolveBridgeHost(): string {
+  const raw = process.env.OPENCODE_ORCH_BRIDGE_HOST;
+  const value = raw?.trim();
+  return value ? value : "127.0.0.1";
+}
+
 export async function startBridgeServer(): Promise<BridgeServer> {
   const token = randomBytes(18).toString("base64url");
   const port = resolveBridgePort();
-  const host = "127.0.0.1";
+  const host = resolveBridgeHost();
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     const auth = req.headers.authorization ?? "";
@@ -237,6 +246,56 @@ export async function startBridgeServer(): Promise<BridgeServer> {
       });
 
       return;
+    }
+
+    // Health check endpoint
+    if (url.pathname === "/health") {
+      if (req.method !== "GET") return methodNotAllowed(res);
+
+      const report = await healthCheck.check();
+      const status = report.healthy ? 200 : 503;
+      return writeJson(res, status, report);
+    }
+
+    // Status endpoint - read-only snapshot of workers and jobs
+    if (url.pathname === "/v1/status") {
+      if (req.method !== "GET") return methodNotAllowed(res);
+
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      return writeJson(res, 200, {
+        workers: workerPool.toJSON(),
+        jobs: workerJobs.getJobSummary(),
+      });
+    }
+
+    // Output endpoint - recent jobs and logs with filtering
+    if (url.pathname === "/v1/output") {
+      if (req.method !== "GET") return methodNotAllowed(res);
+
+      const limitParam = url.searchParams.get("limit");
+      const afterParam = url.searchParams.get("after");
+
+      const limit = limitParam
+        ? Math.max(1, Number.parseInt(limitParam, 10) || 50)
+        : 50;
+      const after = afterParam ? Number.parseInt(afterParam, 10) || 0 : 0;
+
+      // Get jobs with optional filtering
+      let jobs = workerJobs.list({ limit: limit * 2 }); // Get extra to filter
+      if (after > 0) {
+        jobs = jobs.filter((j) => j.startedAt >= after);
+      }
+      jobs = jobs.slice(0, limit);
+
+      // Get logs with optional filtering
+      let logs = getLogBuffer(limit * 2);
+      if (after > 0) {
+        logs = logs.filter((l) => l.at >= after);
+      }
+      logs = logs.slice(-limit);
+
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      return writeJson(res, 200, { jobs, logs });
     }
 
     return writeJson(res, 404, { error: "not_found" });

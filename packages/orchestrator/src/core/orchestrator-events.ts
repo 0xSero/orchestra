@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { EventEmitter } from "node:events";
 import type {
   WorkerBackend,
   WorkerExecution,
@@ -7,6 +6,7 @@ import type {
   WorkerKind,
   WorkerStatus,
 } from "../types";
+import { EventCleanup } from "./event-cleanup";
 
 export const ORCHESTRATOR_EVENT_VERSION = 1 as const;
 
@@ -22,6 +22,11 @@ export type OrchestratorEventType =
   | "orchestra.skill.load.completed"
   | "orchestra.skill.load.failed"
   | "orchestra.skill.permission"
+  | "orchestra.job.created"
+  | "orchestra.job.progress"
+  | "orchestra.job.completed"
+  | "orchestra.job.failed"
+  | "orchestra.job.canceled"
   | "orchestra.error";
 
 export type OrchestratorSkillLoadEvent = {
@@ -160,6 +165,49 @@ export type OrchestratorEventDataMap = {
   "orchestra.skill.load.completed": OrchestratorSkillLoadEvent;
   "orchestra.skill.load.failed": OrchestratorSkillLoadEvent;
   "orchestra.skill.permission": OrchestratorSkillPermissionEvent;
+  "orchestra.job.created": {
+    jobId: string;
+    workerId: string;
+    message: string;
+    sessionId?: string;
+    requestedBy?: string;
+    startedAt: number;
+  };
+  "orchestra.job.progress": {
+    jobId: string;
+    workerId: string;
+    message: string;
+    percent?: number;
+    updatedAt: number;
+  };
+  "orchestra.job.completed": {
+    jobId: string;
+    workerId: string;
+    message: string;
+    startedAt: number;
+    finishedAt: number;
+    durationMs: number;
+    responsePreview?: string;
+    responseLength?: number;
+  };
+  "orchestra.job.failed": {
+    jobId: string;
+    workerId: string;
+    message: string;
+    error: string;
+    startedAt: number;
+    finishedAt: number;
+    durationMs: number;
+  };
+  "orchestra.job.canceled": {
+    jobId: string;
+    workerId: string;
+    message: string;
+    reason?: string;
+    startedAt: number;
+    finishedAt: number;
+    durationMs: number;
+  };
   "orchestra.error": {
     message: string;
     source?: string;
@@ -181,8 +229,7 @@ export type OrchestratorEvent<
   data: OrchestratorEventDataMap[T];
 };
 
-const emitter = new EventEmitter();
-emitter.setMaxListeners(100);
+const emitter = new EventCleanup({ intervalMs: 300000, maxListeners: 100 });
 
 function resolveWorkerBackend(
   profile: WorkerInstance["profile"],
@@ -295,6 +342,101 @@ export function publishErrorEvent(input: {
 export function onOrchestratorEvent(
   handler: (event: OrchestratorEvent) => void,
 ): () => void {
-  emitter.on("event", handler);
-  return () => emitter.off("event", handler);
+  return emitter.on("event", handler);
+}
+
+export function startEventCleanup(): void {
+  emitter.startPeriodicCleanup();
+}
+
+/** Maximum length for response preview in job events */
+const RESPONSE_PREVIEW_LENGTH = 200;
+
+/**
+ * Subscribe to workerJobs events and publish corresponding orchestrator events.
+ * Returns an unsubscribe function.
+ */
+export function wireJobEventsToOrchestrator(registry: {
+  onJobEvent: (
+    callback: (
+      job: {
+        id: string;
+        workerId: string;
+        message: string;
+        sessionId?: string;
+        requestedBy?: string;
+        startedAt: number;
+        finishedAt?: number;
+        durationMs?: number;
+        responseText?: string;
+        error?: string;
+        progress?: { message: string; percent?: number; updatedAt: number };
+      },
+      event: "created" | "progress" | "completed" | "failed" | "canceled",
+    ) => void,
+  ) => () => void;
+}): () => void {
+  return registry.onJobEvent((job, event) => {
+    switch (event) {
+      case "created":
+        publishOrchestratorEvent("orchestra.job.created", {
+          jobId: job.id,
+          workerId: job.workerId,
+          message: job.message,
+          sessionId: job.sessionId,
+          requestedBy: job.requestedBy,
+          startedAt: job.startedAt,
+        });
+        break;
+
+      case "progress":
+        if (job.progress) {
+          publishOrchestratorEvent("orchestra.job.progress", {
+            jobId: job.id,
+            workerId: job.workerId,
+            message: job.progress.message,
+            percent: job.progress.percent,
+            updatedAt: job.progress.updatedAt,
+          });
+        }
+        break;
+
+      case "completed":
+        publishOrchestratorEvent("orchestra.job.completed", {
+          jobId: job.id,
+          workerId: job.workerId,
+          message: job.message,
+          startedAt: job.startedAt,
+          finishedAt: job.finishedAt ?? Date.now(),
+          durationMs: job.durationMs ?? 0,
+          responsePreview: job.responseText?.slice(0, RESPONSE_PREVIEW_LENGTH),
+          responseLength: job.responseText?.length,
+        });
+        break;
+
+      case "failed":
+        publishOrchestratorEvent("orchestra.job.failed", {
+          jobId: job.id,
+          workerId: job.workerId,
+          message: job.message,
+          error: job.error ?? "Unknown error",
+          startedAt: job.startedAt,
+          finishedAt: job.finishedAt ?? Date.now(),
+          durationMs: job.durationMs ?? 0,
+        });
+        break;
+
+      case "canceled":
+        publishOrchestratorEvent("orchestra.job.canceled", {
+          jobId: job.id,
+          workerId: job.workerId,
+          message: job.message,
+          reason: job.error,
+          startedAt: job.startedAt,
+          finishedAt: job.finishedAt ?? Date.now(),
+          durationMs: job.durationMs ?? 0,
+        });
+        break;
+    }
+  });
 }

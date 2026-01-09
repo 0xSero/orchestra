@@ -76,3 +76,8 @@ The orchestrator agent ships with a minimal Task API allowlist. Use these tools 
 - `task_cancel`
 
 See `docs/reference.md` and `tools.md` for details. Legacy tools exist for compatibility; avoid teaching models to use them.
+
+## Worktrees (24/7 sandbox)
+
+- See `docs/worktrees.md` for the recommended git worktree pattern (via the `open-trees` plugin).
+- See `docs/docker.md` for running Infinite Orchestra inside a resource-limited Docker container.

@@ -9,6 +9,8 @@
 import { createOpencodeClient } from "@opencode-ai/sdk/client";
 import { createContext, createEffect, onCleanup, type ParentComponent, useContext } from "solid-js";
 import { createStore } from "solid-js/store";
+import { resolveOrchestratorEventsUrl } from "@/lib/opencode-base";
+import { createOrchestratorBridgeClient, resolveOrchestratorBaseUrl } from "@/lib/orchestrator-bridge";
 import { createOpenCodeActions } from "./opencode-actions";
 import type { OpenCodeContextValue, OpenCodeState } from "./opencode-types";
 import { subscribeToOrchestratorEvents } from "./orchestrator-events";
@@ -19,6 +21,8 @@ import { subscribeToOrchestratorEvents } from "./orchestrator-events";
 
 export type {
   Agent,
+  JobRecord,
+  JobSummary,
   Message,
   ModelOption,
   OpenCodeContextValue,
@@ -59,15 +63,27 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
     workerStreams: {},
     workflowRuns: {},
     skillEvents: [],
+    jobs: {},
+    jobSummary: null,
     modelOptions: [],
     toolIds: [],
     lastUpdate: 0,
   });
 
-  const actions = createOpenCodeActions({ client, state, setState });
+  // Create orchestrator bridge client for REST API calls
+  const orchestratorEventsUrl = resolveOrchestratorEventsUrl();
+  const orchestratorBaseUrl = resolveOrchestratorBaseUrl(orchestratorEventsUrl);
+  const orchestratorClient = orchestratorBaseUrl
+    ? createOrchestratorBridgeClient({ baseUrl: orchestratorBaseUrl })
+    : undefined;
+
+  const actions = createOpenCodeActions({ client, state, setState, orchestratorClient });
 
   createEffect(() => {
     actions.fetchAll(true);
+    // Bootstrap workers and jobs from orchestrator REST API
+    actions.bootstrapFromOrchestrator();
+
     const pollInterval = setInterval(() => {
       actions.fetchAll(false);
     }, 5000);
@@ -154,6 +170,8 @@ export const OpenCodeProvider: ParentComponent<{ baseUrl?: string }> = (props) =
           .filter((w) => w.sessionId && (w.status === "ready" || w.status === "busy"))
           .map((w) => w.sessionId as string),
       ),
+    jobs: () => Object.values(state.jobs),
+    jobSummary: () => state.jobSummary,
     modelOptions: () => state.modelOptions,
     toolIds: () => state.toolIds,
 

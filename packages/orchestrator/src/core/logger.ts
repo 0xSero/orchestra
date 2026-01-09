@@ -23,8 +23,7 @@ async function initLogFile() {
     const dir = dirname(filePath);
     await mkdir(dir, { recursive: true });
     logFilePath = filePath;
-  } catch {
-  }
+  } catch {}
 }
 
 function formatArg(arg: unknown): string {
@@ -49,8 +48,7 @@ async function writeToFile(level: LogLevel, message: string) {
   try {
     const logLine = JSON.stringify({ at: Date.now(), level, message }) + "\n";
     await appendFile(logFilePath, logLine, { encoding: "utf8" });
-  } catch {
-  }
+  } catch {}
 }
 
 function emit(level: LogLevel, args: unknown[]) {

@@ -354,6 +354,14 @@
             "required": ["id"],
             "properties": {
               "id": { "type": "string" },
+              "base": {
+                "type": "string",
+                "description": "Inherit defaults from a built-in profile while keeping a unique id"
+              },
+              "extends": {
+                "type": "string",
+                "description": "Alias for base"
+              },
               "name": { "type": "string" },
               "kind": {
                 "type": "string",
@@ -372,6 +380,10 @@
               },
               "model": { "type": "string" },
               "providerID": { "type": "string" },
+              "directory": {
+                "type": "string",
+                "description": "Directory to run this worker in (useful for git worktrees / sandboxing)"
+              },
               "purpose": { "type": "string" },
               "whenToUse": { "type": "string" },
               "promptFile": { "type": "string" },
@@ -437,6 +449,14 @@
             "required": ["id"],
             "properties": {
               "id": { "type": "string" },
+              "base": {
+                "type": "string",
+                "description": "Inherit defaults from a built-in profile while keeping a unique id"
+              },
+              "extends": {
+                "type": "string",
+                "description": "Alias for base"
+              },
               "name": { "type": "string" },
               "kind": {
                 "type": "string",
@@ -455,6 +475,10 @@
               },
               "model": { "type": "string" },
               "providerID": { "type": "string" },
+              "directory": {
+                "type": "string",
+                "description": "Directory to run this worker in (useful for git worktrees / sandboxing)"
+              },
               "purpose": { "type": "string" },
               "whenToUse": { "type": "string" },
               "promptFile": { "type": "string" },

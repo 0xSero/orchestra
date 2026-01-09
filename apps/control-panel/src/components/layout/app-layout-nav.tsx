@@ -26,6 +26,40 @@ const DashboardIcon: Component = () => (
   </svg>
 );
 
+const TasksIcon: Component = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+    <path d="m9 11 3 3L22 4" />
+  </svg>
+);
+
+const ComposeIcon: Component = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.375 2.625a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4Z" />
+  </svg>
+);
+
 const WorkflowsIcon: Component = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -62,6 +96,23 @@ const MemoryIcon: Component = () => (
     <ellipse cx="12" cy="5" rx="9" ry="3" />
     <path d="M3 5v6c0 1.7 4 3 9 3s9-1.3 9-3V5" />
     <path d="M3 11v6c0 1.7 4 3 9 3s9-1.3 9-3v-6" />
+  </svg>
+);
+
+const ObservabilityIcon: Component = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d="M3 3v18h18" />
+    <path d="m19 9-5 5-4-4-3 3" />
   </svg>
 );
 
@@ -176,8 +227,11 @@ const SearchIcon: Component = () => (
 /** Navigation items for the top app layout tabs. */
 export const navItems: NavItem[] = [
   { path: "/dashboard", label: "Dashboard", icon: DashboardIcon },
+  { path: "/tasks", label: "Tasks", icon: TasksIcon },
+  { path: "/compose", label: "Compose", icon: ComposeIcon },
   { path: "/workflows", label: "Workflows", icon: WorkflowsIcon },
   { path: "/memory", label: "Memory", icon: MemoryIcon },
+  { path: "/observability", label: "Observe", icon: ObservabilityIcon },
   { path: "/config", label: "Config", icon: ConfigIcon },
   { path: "/prompts", label: "Prompts", icon: PromptsIcon },
   { path: "/chat", label: "Chat", icon: ChatIcon },

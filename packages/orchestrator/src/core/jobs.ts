@@ -36,14 +36,28 @@ export type JobEventCallback = (
   event: "created" | "progress" | "completed" | "failed" | "canceled",
 ) => void;
 
-const MAX_JOBS = 200;
-const MAX_JOB_AGE_MS = 24 * 60 * 60 * 1000;
+/** Maximum number of completed jobs to retain (tuned for 24/7 operation, override via config.tasks.jobs.maxCount) */
+const DEFAULT_MAX_JOBS = 100;
+/** Maximum age of completed jobs in ms (tuned for 24/7 operation, override via config.tasks.jobs.maxAgeMs) */
+const DEFAULT_MAX_JOB_AGE_MS = 60 * 60 * 1000;
 const NO_TIMEOUT = 0;
+
+export interface JobsConfig {
+  maxAgeMs?: number;
+  maxCount?: number;
+}
 
 export class WorkerJobRegistry {
   private jobs = new Map<string, WorkerJob>();
   private waiters = new Map<string, Set<(job: WorkerJob) => void>>();
   private eventListeners = new Set<JobEventCallback>();
+  private maxJobs: number;
+  private maxJobAgeMs: number;
+
+  constructor(config?: JobsConfig) {
+    this.maxJobs = config?.maxCount ?? DEFAULT_MAX_JOBS;
+    this.maxJobAgeMs = config?.maxAgeMs ?? DEFAULT_MAX_JOB_AGE_MS;
+  }
 
   onJobEvent(callback: JobEventCallback): () => void {
     this.eventListeners.add(callback);
@@ -111,6 +125,10 @@ export class WorkerJobRegistry {
 
   getRunningJobs(): WorkerJob[] {
     return [...this.jobs.values()].filter((j) => j.status === "running");
+  }
+
+  getAllJobs(): WorkerJob[] {
+    return [...this.jobs.values()];
   }
 
   getRunningJobsCount(): number {
@@ -264,18 +282,34 @@ export class WorkerJobRegistry {
     for (const [id, job] of this.jobs) {
       if (job.status === "running") continue;
       const ageMs = now - (job.finishedAt ?? job.startedAt);
-      if (ageMs <= MAX_JOB_AGE_MS) continue;
+      if (ageMs <= this.maxJobAgeMs) continue;
       if (this.waiters.has(id)) continue;
       this.jobs.delete(id);
     }
 
-    if (this.jobs.size <= MAX_JOBS) return;
+    if (this.jobs.size <= this.maxJobs) return;
     for (const [id, job] of this.jobs) {
-      if (this.jobs.size <= MAX_JOBS) break;
+      if (this.jobs.size <= this.maxJobs) break;
       if (job.status === "running") continue;
       if (this.waiters.has(id)) continue;
       this.jobs.delete(id);
     }
+  }
+
+  pruneStaleJobs(): void {
+    this.prune();
+  }
+
+  configure(config: JobsConfig): void {
+    this.maxJobs = config.maxCount ?? this.maxJobs;
+    this.maxJobAgeMs = config.maxAgeMs ?? this.maxJobAgeMs;
+  }
+
+  getConfig(): { maxJobs: number; maxJobAgeMs: number } {
+    return {
+      maxJobs: this.maxJobs,
+      maxJobAgeMs: this.maxJobAgeMs,
+    };
   }
 }
 

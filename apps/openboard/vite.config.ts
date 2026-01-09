@@ -1,0 +1,28 @@
+import { defineConfig } from "vite";
+import solid from "vite-plugin-solid";
+
+export default defineConfig(({ command }) => ({
+  base: command === "build" ? "./" : "/",
+  plugins: [solid()],
+  server: {
+    port: 3001,
+    host: "0.0.0.0",
+    proxy: {
+      // Proxy API requests to OpenCode server (dev only)
+      "/api": {
+        target: "http://localhost:4096",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ""),
+      },
+    },
+  },
+  build: {
+    target: "esnext",
+    sourcemap: true,
+  },
+  resolve: {
+    alias: {
+      "@": "/src",
+    },
+  },
+}));

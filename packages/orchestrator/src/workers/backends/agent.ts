@@ -27,6 +27,7 @@ export async function spawnAgentWorker(
         status: "starting",
         port: 0,
         directory: spawnOptions.directory,
+        spawnDirectory: spawnOptions.directory,
         startedAt: new Date(),
         modelRef,
         modelPolicy: "dynamic",

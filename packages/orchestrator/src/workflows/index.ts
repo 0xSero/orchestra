@@ -6,6 +6,7 @@ import { buildBoomerangPlanWorkflow } from "./boomerang-plan";
 import { buildVisionWorkflow } from "./builtins/vision";
 import { buildMemoryWorkflow } from "./builtins/memory";
 import { buildSelfImproveWorkflow } from "./builtins/self-improve";
+import { buildWorktreeSandboxWorkflow } from "./builtins/worktrees";
 import {
   buildInfiniteOrchestraPlanWorkflow,
   buildInfiniteOrchestraWorkflow,
@@ -25,6 +26,7 @@ export function loadWorkflows(config: OrchestratorConfig) {
   registerWorkflow(buildVisionWorkflow());
   registerWorkflow(buildMemoryWorkflow());
   registerWorkflow(buildSelfImproveWorkflow());
+  registerWorkflow(buildWorktreeSandboxWorkflow());
   registerWorkflow(buildInfiniteOrchestraPlanWorkflow());
   registerWorkflow(buildInfiniteOrchestraWorkflow());
   registerWorkflow(buildBoomerangPlanWorkflow());

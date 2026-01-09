@@ -152,6 +152,7 @@ async function _spawnWorkerCore(
     status: "starting",
     port: requestedPort,
     directory: options.directory,
+    spawnDirectory: options.directory,
     startedAt: new Date(),
     modelRef,
     modelPolicy: "dynamic",
@@ -191,6 +192,7 @@ async function _spawnWorkerCore(
         OPENCODE_ORCH_INSTANCE_ID: rt.instanceId,
         OPENCODE_ORCH_WORKER_ID: resolvedProfile.id,
       },
+      directory: options.directory,
     };
 
     let url: string;

@@ -5,7 +5,10 @@ import type { OrchestratorConfig } from "../../src/types";
 import { registerWorkflow } from "../../src/workflows/engine";
 import { buildVisionWorkflow } from "../../src/workflows/builtins/vision";
 import { buildMemoryWorkflow } from "../../src/workflows/builtins/memory";
-import { createWorkflowTriggers } from "../../src/workflows/triggers";
+import {
+  createWorkflowTriggers,
+  updateSelfImproveActivity,
+} from "../../src/workflows/triggers";
 import { createTaskTools } from "../../src/command/tasks";
 import { workerJobs } from "../../src/core/jobs";
 
@@ -45,6 +48,20 @@ const baseConfig: OrchestratorConfig = {
 beforeAll(() => {
   registerWorkflow(buildVisionWorkflow());
   registerWorkflow(buildMemoryWorkflow());
+  registerWorkflow({
+    id: "infinite-orchestra-test",
+    name: "Infinite Orchestra Test",
+    description: "Test workflow for infinite orchestra scheduling.",
+    steps: [
+      {
+        id: "test",
+        title: "Test",
+        workerId: "coder",
+        prompt: "Test",
+        carry: false,
+      },
+    ],
+  });
 });
 
 describe("workflow triggers", () => {
@@ -169,15 +186,91 @@ describe("workflow triggers", () => {
         task: "memory.done",
         memory: { taskId: payload.taskId },
       } as any,
-      {} as any,
+      { agent: "orchestrator", sessionID: "s1" } as any,
     );
     const opJob = JSON.parse(String(started));
     await tools.taskAwait.execute(
       { taskId: opJob.taskId, timeoutMs: 5000 } as any,
-      {} as any,
+      { agent: "orchestrator", sessionID: "s1" } as any,
     );
 
     const job = workerJobs.get(payload.taskId);
     expect(job?.status).toBe("succeeded");
+  });
+
+  test("infinite orchestra trigger schedules without session idle events", async () => {
+    updateSelfImproveActivity();
+
+    let resolveCalled: (() => void) | undefined;
+    const called = new Promise<void>((resolve) => {
+      resolveCalled = resolve;
+    });
+    let receivedSessionId: string | undefined;
+
+    const context = createOrchestratorContext({
+      directory: "/tmp",
+      projectId: "project-1",
+      client: {
+        session: {
+          create: async () => ({ data: { id: "session-auto-1" } }),
+        },
+      } as any,
+      config: {
+        ...baseConfig,
+        workflows: {
+          enabled: true,
+          triggers: {
+            infiniteOrchestra: {
+              enabled: true,
+              workflowId: "infinite-orchestra-test",
+              autoSpawn: false,
+              blocking: true,
+              idleMinutes: 0.001,
+              cooldownMinutes: 60,
+            },
+          },
+        },
+      },
+    });
+
+    const triggers = createWorkflowTriggers(context, {
+      visionTimeoutMs: 1000,
+      runWorkflow: async (input, options) => {
+        receivedSessionId = options?.sessionId;
+        resolveCalled?.();
+        return {
+          runId: "run-infinite-1",
+          workflowId: input.workflowId,
+          workflowName: "Infinite Orchestra Test",
+          status: "success",
+          startedAt: 0,
+          finishedAt: 1,
+          currentStepIndex: 1,
+          steps: [
+            {
+              id: "test",
+              title: "Test",
+              workerId: "coder",
+              status: "success",
+              response: "ok",
+              startedAt: 0,
+              finishedAt: 1,
+              durationMs: 1,
+            },
+          ],
+        };
+      },
+      showToast: async () => {},
+    });
+
+    await Promise.race([
+      called,
+      new Promise<void>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 1000),
+      ),
+    ]);
+
+    expect(receivedSessionId).toBe("session-auto-1");
+    triggers.shutdown();
   });
 });

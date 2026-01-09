@@ -40,6 +40,7 @@ Symptoms:
 Fixes:
 - Ensure the orchestrator event stream is configured.
 - Provide `?events=http://host:14096` or set `OPENCODE_ORCH_BRIDGE_PORT`.
+- In Docker, also set `OPENCODE_ORCH_BRIDGE_HOST=0.0.0.0` and publish the bridge port.
 - Verify the events endpoint responds at `/v1/events`.
 
 ## Skills API unavailable

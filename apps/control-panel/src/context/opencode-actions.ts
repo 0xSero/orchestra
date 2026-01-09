@@ -16,6 +16,8 @@ import {
   toWorkerRuntime,
 } from "./opencode-helpers";
 import type {
+  JobRecord,
+  JobStatus,
   OpenCodeEventItem,
   OpenCodeState,
   OrchestratorEvent,
@@ -24,15 +26,19 @@ import type {
   WorkflowRun,
   WorkflowRunStep,
 } from "./opencode-types";
+import type { OrchestratorBridgeClient } from "../lib/orchestrator-bridge";
 
 type ActionDeps = {
   client: OpencodeClient;
   state: OpenCodeState;
   setState: SetStoreFunction<OpenCodeState>;
+  orchestratorClient?: OrchestratorBridgeClient;
 };
 
-export function createOpenCodeActions({ client, state, setState }: ActionDeps) {
+export function createOpenCodeActions({ client, state, setState, orchestratorClient }: ActionDeps) {
   const asRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
+  const isJobStatus = (value: unknown): value is JobStatus =>
+    value === "running" || value === "succeeded" || value === "failed" || value === "canceled";
 
   const fetchCatalog = async () => {
     const [providersRes, toolIdsRes] = await Promise.allSettled([client.config.providers(), client.tool.ids()]);
@@ -364,11 +370,151 @@ export function createOpenCodeActions({ client, state, setState }: ActionDeps) {
       );
     }
   };
+  const upsertJob = (job: JobRecord) => {
+    setState(
+      produce((s) => {
+        s.jobs[job.id] = job;
+      }),
+    );
+  };
+
+  const updateJobFromEvent = (event: OrchestratorEvent) => {
+    if (!event.type.startsWith("orchestra.job.")) return;
+    const data = event.data;
+    if (!asRecord(data)) return;
+
+    const jobId = typeof data.jobId === "string" ? data.jobId : "";
+    if (!jobId) return;
+
+    if (event.type === "orchestra.job.created") {
+      const job: JobRecord = {
+        id: jobId,
+        workerId: typeof data.workerId === "string" ? data.workerId : "",
+        message: typeof data.message === "string" ? data.message : "",
+        sessionId: typeof data.sessionId === "string" ? data.sessionId : undefined,
+        requestedBy: typeof data.requestedBy === "string" ? data.requestedBy : undefined,
+        status: "running",
+        startedAt: typeof data.startedAt === "number" ? data.startedAt : event.timestamp,
+      };
+      upsertJob(job);
+      return;
+    }
+
+    if (event.type === "orchestra.job.progress") {
+      setState(
+        produce((s) => {
+          const existing = s.jobs[jobId];
+          if (!existing) return;
+          existing.progress = {
+            message: typeof data.message === "string" ? data.message : "",
+            percent: typeof data.percent === "number" ? data.percent : undefined,
+            updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : event.timestamp,
+          };
+        }),
+      );
+      return;
+    }
+
+    if (event.type === "orchestra.job.completed") {
+      setState(
+        produce((s) => {
+          const existing = s.jobs[jobId];
+          if (!existing) return;
+          existing.status = "succeeded";
+          existing.finishedAt = typeof data.finishedAt === "number" ? data.finishedAt : event.timestamp;
+          existing.durationMs = typeof data.durationMs === "number" ? data.durationMs : undefined;
+          existing.responsePreview = typeof data.responsePreview === "string" ? data.responsePreview : undefined;
+          existing.responseLength = typeof data.responseLength === "number" ? data.responseLength : undefined;
+        }),
+      );
+      return;
+    }
+
+    if (event.type === "orchestra.job.failed") {
+      setState(
+        produce((s) => {
+          const existing = s.jobs[jobId];
+          if (!existing) return;
+          existing.status = "failed";
+          existing.finishedAt = typeof data.finishedAt === "number" ? data.finishedAt : event.timestamp;
+          existing.durationMs = typeof data.durationMs === "number" ? data.durationMs : undefined;
+          existing.error = typeof data.error === "string" ? data.error : undefined;
+        }),
+      );
+      return;
+    }
+
+    if (event.type === "orchestra.job.canceled") {
+      setState(
+        produce((s) => {
+          const existing = s.jobs[jobId];
+          if (!existing) return;
+          existing.status = "canceled";
+          existing.finishedAt = typeof data.finishedAt === "number" ? data.finishedAt : event.timestamp;
+          existing.durationMs = typeof data.durationMs === "number" ? data.durationMs : undefined;
+          existing.error = typeof data.reason === "string" ? data.reason : undefined;
+        }),
+      );
+      return;
+    }
+  };
+
+  const bootstrapFromOrchestrator = async () => {
+    if (!orchestratorClient) return;
+
+    try {
+      const status = await orchestratorClient.fetchStatus();
+      if (status) {
+        setState(
+          produce((s) => {
+            // Update workers from status
+            for (const worker of status.workers) {
+              const runtime = toWorkerRuntime(worker);
+              if (runtime) {
+                s.workers[runtime.id] = runtime;
+              }
+            }
+            // Update job summary
+            s.jobSummary = status.jobs;
+          }),
+        );
+      }
+
+      const output = await orchestratorClient.fetchOutput({ limit: 50 });
+      if (output) {
+        setState(
+          produce((s) => {
+            // Update jobs from output
+            for (const job of output.jobs) {
+              const status = isJobStatus(job.status) ? job.status : "running";
+              s.jobs[job.id] = {
+                id: job.id,
+                workerId: job.workerId,
+                message: job.message,
+                sessionId: job.sessionId,
+                requestedBy: job.requestedBy,
+                status,
+                startedAt: job.startedAt,
+                finishedAt: job.finishedAt,
+                durationMs: job.durationMs,
+                responseText: job.responseText,
+                error: job.error,
+              };
+            }
+          }),
+        );
+      }
+    } catch (err) {
+      console.error("[orchestrator] Failed to bootstrap:", err);
+    }
+  };
+
   const handleOrchestratorEvent = (event: OrchestratorEvent) => {
     const worker = extractWorkerSnapshotFromEvent(event);
     if (worker) upsertWorker(worker);
     handleWorkerStream(extractWorkerStreamChunkFromEvent(event));
     updateWorkflowRunFromEvent(event);
+    updateJobFromEvent(event);
     const skillEvent = extractSkillLoadEventFromEvent(event);
     if (skillEvent) {
       setState(
@@ -520,5 +666,6 @@ export function createOpenCodeActions({ client, state, setState }: ActionDeps) {
     deleteAllSessions,
     disposeAllInstances,
     hydrateWorkers,
+    bootstrapFromOrchestrator,
   };
 }

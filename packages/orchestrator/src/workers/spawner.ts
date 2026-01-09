@@ -20,6 +20,7 @@ import {
 } from "./backends/server";
 import type { SendToWorkerOptions } from "./send";
 import { isFullModelID } from "../models/catalog";
+import { resolve } from "node:path";
 
 function resolveWorkerBackend(profile: WorkerProfile): WorkerBackend {
   if (profile.kind === "server") return "server";
@@ -27,15 +28,29 @@ function resolveWorkerBackend(profile: WorkerProfile): WorkerBackend {
   return profile.backend === "agent" ? "agent" : "server";
 }
 
+function resolveProfileDirectory(
+  fallback: string,
+  profile: WorkerProfile,
+): string {
+  const configured =
+    typeof profile.directory === "string" ? profile.directory.trim() : "";
+  if (!configured) return fallback;
+  return resolve(fallback, configured);
+}
+
 export async function spawnWorker(
   profile: WorkerProfile,
   options: SpawnOptions & { forceNew?: boolean },
 ): Promise<WorkerInstance> {
+  const directory = resolveProfileDirectory(options.directory, profile);
+  const resolvedOptions =
+    directory === options.directory ? options : { ...options, directory };
+
   const backend = resolveWorkerBackend(profile);
   if (backend === "agent") {
-    return spawnAgentWorker(profile, options);
+    return spawnAgentWorker(profile, resolvedOptions);
   }
-  return spawnServerWorker(profile, options);
+  return spawnServerWorker(profile, resolvedOptions);
 }
 
 export async function connectToWorker(

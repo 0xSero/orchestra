@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/input";
 import { useLayout } from "@/context/layout";
 import { type WorkflowCarryTrim, useOpenCode } from "@/context/opencode";
 import { formatDuration, formatRelativeTime, truncate } from "@/lib/utils";
+import { ORCHESTRATOR_WORKFLOWS } from "@/lib/orchestrator-config";
 
 type WorkflowDefinition = {
   id: string;
@@ -55,6 +56,22 @@ export const WorkflowsPage: Component = () => {
   const [workflowsLoading, setWorkflowsLoading] = createSignal(false);
   const [workflowsError, setWorkflowsError] = createSignal<string | null>(null);
   const [workflowRaw, setWorkflowRaw] = createSignal("");
+
+  // Show configured workflows from orchestrator.json
+  const configuredWorkflows = createMemo<WorkflowDefinition[]>(() => {
+    return ORCHESTRATOR_WORKFLOWS.map((w) => ({
+      id: w.id,
+      name: w.name,
+      description: w.description,
+    }));
+  });
+
+  // Combine configured workflows with dynamically loaded ones
+  const allWorkflows = createMemo(() => {
+    const dynamic = availableWorkflows();
+    if (dynamic.length > 0) return dynamic;
+    return configuredWorkflows();
+  });
 
   const [selectedWorkflowId, setSelectedWorkflowId] = createSignal<string>("");
   const [task, setTask] = createSignal("");
@@ -258,7 +275,7 @@ export const WorkflowsPage: Component = () => {
                     onChange={(e) => setSelectedWorkflowId(e.currentTarget.value)}
                   >
                     <For
-                      each={availableWorkflows()}
+                      each={allWorkflows()}
                       fallback={
                         <option value="" disabled>
                           No workflows loaded
@@ -267,7 +284,9 @@ export const WorkflowsPage: Component = () => {
                     >
                       {(workflow) => (
                         <option value={workflow.id}>
-                          {workflow.name ?? workflow.id} · {workflow.steps?.length ?? 0} steps
+                          {workflow.name ?? workflow.id}
+                          {workflow.steps ? ` · ${workflow.steps.length} steps` : ""}
+                          {workflow.description ? ` · ${workflow.description}` : ""}
                         </option>
                       )}
                     </For>
@@ -452,8 +471,16 @@ export const WorkflowsPage: Component = () => {
                                     </Show>
                                   </div>
                                 </Show>
-                                <Show when={step.warning || step.carryTrim}>
+                                <Show when={step.error || step.warning || step.carryTrim}>
                                   <div class="mt-1 flex flex-wrap gap-1">
+                                    <Show when={step.error}>
+                                      <span
+                                        class="rounded-full border border-destructive/40 px-2 py-0.5 text-[10px] text-destructive"
+                                        title={step.error}
+                                      >
+                                        Error
+                                      </span>
+                                    </Show>
                                     <Show when={step.warning}>
                                       <span
                                         class="rounded-full border border-status-error/40 px-2 py-0.5 text-[10px] text-status-error"

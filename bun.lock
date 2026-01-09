@@ -64,6 +64,33 @@
         "vite": "^6.0.5",
       },
     },
+    "apps/openboard": {
+      "name": "@opencode-ai/openboard",
+      "version": "0.1.0",
+      "dependencies": {
+        "@fontsource/geist-mono": "^5.2.7",
+        "@fontsource/geist-sans": "^5.2.5",
+        "@kobalte/core": "^0.13.7",
+        "@opencode-ai/sdk": "^1.0.203",
+        "@solid-primitives/storage": "^4.3.1",
+        "@solidjs/router": "^0.14.10",
+        "clsx": "^2.1.1",
+        "solid-js": "^1.9.3",
+        "tailwind-merge": "^2.6.0",
+      },
+      "devDependencies": {
+        "@solidjs/testing-library": "^0.8.10",
+        "@vitest/coverage-v8": "^4.0.16",
+        "autoprefixer": "^10.4.20",
+        "jsdom": "^25.0.1",
+        "postcss": "^8.4.49",
+        "tailwindcss": "^3.4.17",
+        "typescript": "^5.7.2",
+        "vite": "^6.0.5",
+        "vite-plugin-solid": "^2.10.2",
+        "vitest": "^3.2.2",
+      },
+    },
     "packages/orchestrator": {
       "name": "opencode-orchestrator",
       "version": "0.2.3",
@@ -320,6 +347,8 @@
     "@opencode-ai/app": ["@opencode-ai/app@workspace:apps/control-panel"],
 
     "@opencode-ai/desktop": ["@opencode-ai/desktop@workspace:apps/desktop"],
+
+    "@opencode-ai/openboard": ["@opencode-ai/openboard@workspace:apps/openboard"],
 
     "@opencode-ai/plugin": ["@opencode-ai/plugin@1.0.207", "", { "dependencies": { "@opencode-ai/sdk": "1.0.207", "zod": "4.1.8" } }, "sha512-UOjZ09lVwWv0MRHUcluLm3eeYC7rmQyuSRfaaK6RLKn1bdsypp8lnuw9HZ2nrR5kmkiF12+9yMM4bVgER6lTBw=="],
 

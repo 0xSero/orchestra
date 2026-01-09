@@ -61,6 +61,26 @@ let infiniteInFlight = false;
 let infiniteNextEligibleAt = 0;
 let infiniteTimer: ReturnType<typeof setTimeout> | undefined;
 
+async function createTriggerSession(
+  context: OrchestratorContext,
+  input: { title: string; fallbackId: string },
+): Promise<string> {
+  const client = context.client;
+  if (!client?.session) return input.fallbackId;
+
+  try {
+    const result = await client.session.create({
+      body: { title: input.title },
+      query: { directory: context.directory },
+    } as any);
+    const session = (result as any)?.data;
+    const id = typeof session?.id === "string" ? session.id : undefined;
+    return id ?? input.fallbackId;
+  } catch {
+    return input.fallbackId;
+  }
+}
+
 export function updateSelfImproveActivity(): void {
   selfImproveLastActivity = Date.now();
   selfImproveTriggeredThisCycle = false;
@@ -618,7 +638,10 @@ export function createWorkflowTriggers(
     selfImproveTriggeredThisCycle = true;
 
     const agentId = "self-improve";
-    const sessionId = `self-improve-${now}`;
+    const sessionId = await createTriggerSession(context, {
+      title: "Autonomous: Self Improve",
+      fallbackId: `self-improve-${now}`,
+    });
     const workerId = selectWorkflowWorker(
       context,
       trigger.workflowId,
@@ -690,7 +713,10 @@ export function createWorkflowTriggers(
 
     const now = Date.now();
     const idleMs = (trigger.idleMinutes ?? 30) * 60 * 1000;
-    if (now - infiniteLastActivity < idleMs) return;
+    if (now - infiniteLastActivity < idleMs) {
+      scheduleInfinite(idleMs - (now - infiniteLastActivity));
+      return;
+    }
 
     if (infiniteNextEligibleAt > now) {
       scheduleInfinite(infiniteNextEligibleAt - now);
@@ -702,7 +728,10 @@ export function createWorkflowTriggers(
     infiniteNextEligibleAt = now + cooldownMs;
 
     const agentId = "infinite-orchestra";
-    const sessionId = `infinite-orchestra-${now}`;
+    const sessionId = await createTriggerSession(context, {
+      title: "Autonomous: Infinite Orchestra",
+      fallbackId: `infinite-orchestra-${now}`,
+    });
     const workerId = selectWorkflowWorker(context, trigger.workflowId, "coder");
 
     const job = workerJobs.create({
@@ -756,6 +785,8 @@ export function createWorkflowTriggers(
       void run().finally(onDone);
     }
   };
+
+  void handleInfiniteOrchestraIdle();
 
   return {
     handleVisionMessage,

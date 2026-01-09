@@ -20,9 +20,11 @@ import {
   DashboardPage,
   MemoryPage,
   ObservabilityPage,
+  ProfilesPage,
   PromptsPage,
   SkillsPage,
   SettingsPage,
+  TasksPage,
   TasksKanbanPage,
   WorkersPage,
   WorkflowsPage,
@@ -67,7 +69,12 @@ export const App: Component = () => {
 
                 {/* Main pages */}
                 <Route path="/dashboard" component={DashboardPage} />
-                <Route path="/tasks" component={TasksKanbanPage} />
+                <Route path="/tasks">
+                  {/* Tasks now defaults to Kanban board */}
+                  <Route path="/" component={() => <Navigate href="/tasks/board" />} />
+                  <Route path="/board" component={TasksKanbanPage} />
+                  <Route path="/jobs" component={TasksPage} />
+                </Route>
                 <Route path="/workers" component={WorkersPage} />
                 <Route path="/memory" component={MemoryPage} />
                 <Route path="/chat" component={ChatPage} />
@@ -80,6 +87,14 @@ export const App: Component = () => {
                     component={() => (
                       <AutomationLayout>
                         <WorkflowsPage />
+                      </AutomationLayout>
+                    )}
+                  />
+                  <Route
+                    path="/profiles"
+                    component={() => (
+                      <AutomationLayout>
+                        <ProfilesPage />
                       </AutomationLayout>
                     )}
                   />
@@ -105,7 +120,8 @@ export const App: Component = () => {
                 <Route path="/workflows" component={() => <Navigate href="/automation/workflows" />} />
                 <Route path="/skills" component={() => <Navigate href="/automation/skills" />} />
                 <Route path="/prompts" component={() => <Navigate href="/automation/prompts" />} />
-                <Route path="/compose" component={() => <Navigate href="/tasks" />} />
+                <Route path="/compose" component={() => <Navigate href="/tasks/board" />} />
+                <Route path="/board" component={() => <Navigate href="/tasks/board" />} />
 
                 {/* Observe - map /observe and /observability to same page */}
                 <Route path="/observe" component={ObservabilityPage} />

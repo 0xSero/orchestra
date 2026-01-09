@@ -89,6 +89,39 @@ describe("resolveWorkerEntry", () => {
     expect(resolved?.systemPrompt).toBe(builtInProfiles.coder.systemPrompt);
   });
 
+  test("supports base profile inheritance for new ids", () => {
+    const resolved = resolveWorkerEntry(
+      {
+        id: "coder-wt-01",
+        base: "coder",
+        directory: "../orchestra-worktree-01",
+      },
+      { knownProfiles: builtInProfiles },
+    );
+
+    expect(resolved?.id).toBe("coder-wt-01");
+    expect(resolved?.name).toBe(builtInProfiles.coder.name);
+    expect(resolved?.model).toBe(builtInProfiles.coder.model);
+    expect(resolved?.directory).toBe("../orchestra-worktree-01");
+  });
+
+  test("resolves base from known profiles before built-ins", () => {
+    const known = {
+      ...builtInProfiles,
+      coder: { ...builtInProfiles.coder, model: "node:fast" },
+    };
+    const resolved = resolveWorkerEntry(
+      {
+        id: "coder-wt-02",
+        base: "coder",
+      },
+      { knownProfiles: known },
+    );
+
+    expect(resolved?.id).toBe("coder-wt-02");
+    expect(resolved?.model).toBe("node:fast");
+  });
+
   test("accepts kind and execution with backend mapping", () => {
     const resolved = resolveWorkerEntry({
       id: "custom",
@@ -143,6 +176,19 @@ describe("resolveWorkerEntry", () => {
       docker: {
         workdir: "/workspace",
       },
+    });
+
+    expect(resolved).toBeUndefined();
+  });
+
+  test("rejects invalid directory override type", () => {
+    const resolved = resolveWorkerEntry({
+      id: "coder",
+      name: "Custom Coder",
+      model: "node:fast",
+      purpose: "Overrides the default",
+      whenToUse: "Unit test",
+      directory: 123,
     });
 
     expect(resolved).toBeUndefined();

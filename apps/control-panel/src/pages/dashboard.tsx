@@ -37,7 +37,7 @@ const getMemoryField = (data: Record<string, unknown>, key: string) => {
 export const DashboardPage: Component = () => {
   const navigate = useNavigate();
   const { selectWorker } = useLayout();
-  const { workers, workerStreams, workflowRuns, events } = useOpenCode();
+  const { connected, workers, workerStreams, workflowRuns, events } = useOpenCode();
 
   const sortedWorkers = createMemo(() =>
     workers()
@@ -92,6 +92,37 @@ export const DashboardPage: Component = () => {
 
       <div class="flex-1 overflow-auto">
         <div class="p-6 space-y-6">
+          {/* Connection Status */}
+          <Show when={!connected()}>
+            <Card class="border-status-error/40 bg-status-error/5">
+              <CardHeader>
+                <CardTitle class="flex items-center gap-2 text-status-error">
+                  <StatusDot status="error" />
+                  OpenCode Server Not Connected
+                </CardTitle>
+              </CardHeader>
+              <CardContent class="space-y-3">
+                <p class="text-sm text-muted-foreground">
+                  The control panel needs an OpenCode server running with the orchestrator plugin.
+                </p>
+                <div class="bg-card/70 border border-border rounded-md p-4 space-y-2 text-sm">
+                  <div class="font-medium text-foreground">To start OpenCode:</div>
+                  <ol class="list-decimal list-inside space-y-1 text-muted-foreground">
+                    <li>Open a terminal in this project directory</li>
+                    <li>
+                      Run: <code class="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">opencode</code>
+                    </li>
+                    <li>The server will start on port 4096 (default)</li>
+                    <li>This control panel will automatically connect</li>
+                  </ol>
+                </div>
+                <div class="text-xs text-muted-foreground">
+                  The orchestrator plugin is configured in <code class="px-1 py-0.5 bg-muted rounded font-mono">.opencode/orchestrator.json</code>
+                </div>
+              </CardContent>
+            </Card>
+          </Show>
+
           <div class="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader>

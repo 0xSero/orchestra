@@ -119,6 +119,27 @@ function pickWorkflowResponse(result: WorkflowRunResult): {
   return { success: true, response: responseStep.response };
 }
 
+function isWorkerToolSession(
+  context: OrchestratorContext,
+  sessionId: string | undefined,
+): boolean {
+  if (!sessionId) return false;
+  return context.workerPool
+    .list()
+    .some((worker) => worker.sessionId === sessionId);
+}
+
+function assertTaskToolAccess(
+  context: OrchestratorContext,
+  ctx: ToolContext | undefined,
+  toolId: string,
+): void {
+  const orchestratorAgentName = context.config.agent?.name ?? "orchestrator";
+  if (ctx?.agent === orchestratorAgentName) return;
+  if (isWorkerToolSession(context, ctx?.sessionID)) return;
+  throw new Error(`Tool "${toolId}" is restricted to the orchestrator.`);
+}
+
 function resolveMemoryScope(
   context: OrchestratorContext,
   input?: string,
@@ -317,7 +338,8 @@ async function runWorkerModelOp(
     const spawned = await spawnWorker(nextProfile, {
       basePort,
       timeout,
-      directory: instance.directory ?? context.directory,
+      directory:
+        instance.spawnDirectory ?? instance.directory ?? context.directory,
       client,
       parentSessionId: instance.parentSessionId ?? sessionId,
     });
@@ -520,6 +542,7 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
         .describe("Source worker id (for worker-to-worker communication)"),
     },
     async execute(args, ctx: ToolContext) {
+      assertTaskToolAccess(context, ctx, "task_start");
       const kind = args.kind ?? "auto";
       const taskDefaults = context.config.tasks;
       const autoSpawn =
@@ -809,7 +832,8 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
         .optional()
         .describe("Timeout in ms (default: 10 minutes)"),
     },
-    async execute(args) {
+    async execute(args, ctx: ToolContext) {
+      assertTaskToolAccess(context, ctx, "task_await");
       const timeoutMs =
         args.timeoutMs ?? context.config.tasks?.defaultTimeoutMs ?? 600_000;
       const ids = args.taskId ? [args.taskId] : (args.taskIds ?? []);
@@ -843,7 +867,8 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
         .optional()
         .describe("Multiple task ids"),
     },
-    async execute(args) {
+    async execute(args, ctx: ToolContext) {
+      assertTaskToolAccess(context, ctx, "task_peek");
       const ids = args.taskId ? [args.taskId] : (args.taskIds ?? []);
       if (ids.length === 0) return "Missing taskId/taskIds.";
       const results = ids.map(
@@ -904,7 +929,8 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
         .optional()
         .describe("Task ID for workflow view"),
     },
-    async execute(args) {
+    async execute(args, ctx: ToolContext) {
+      assertTaskToolAccess(context, ctx, "task_list");
       const format: "markdown" | "json" =
         args.format ?? context.defaultListFormat;
       const view = args.view ?? "tasks";
@@ -1280,7 +1306,8 @@ export function createTaskTools(context: OrchestratorContext): TaskTools {
         .optional()
         .describe("Optional cancel reason"),
     },
-    async execute(args) {
+    async execute(args, ctx: ToolContext) {
+      assertTaskToolAccess(context, ctx, "task_cancel");
       const ids = args.taskId ? [args.taskId] : (args.taskIds ?? []);
       if (ids.length === 0) return "Missing taskId/taskIds.";
       for (const id of ids) {

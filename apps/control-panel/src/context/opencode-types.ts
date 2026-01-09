@@ -78,6 +78,11 @@ export type OrchestratorEventType =
   | "orchestra.skill.load.completed"
   | "orchestra.skill.load.failed"
   | "orchestra.skill.permission"
+  | "orchestra.job.created"
+  | "orchestra.job.progress"
+  | "orchestra.job.completed"
+  | "orchestra.job.failed"
+  | "orchestra.job.canceled"
   | "orchestra.error";
 
 export type OrchestratorEvent = {
@@ -147,6 +152,38 @@ export type ModelOption = {
   label: string;
 };
 
+export type JobStatus = "running" | "succeeded" | "failed" | "canceled";
+
+export type JobRecord = {
+  id: string;
+  workerId: string;
+  message: string;
+  sessionId?: string;
+  requestedBy?: string;
+  status: JobStatus;
+  startedAt: number;
+  finishedAt?: number;
+  durationMs?: number;
+  responseText?: string;
+  responsePreview?: string;
+  responseLength?: number;
+  error?: string;
+  progress?: {
+    message: string;
+    percent?: number;
+    updatedAt: number;
+  };
+};
+
+export type JobSummary = {
+  total: number;
+  running: number;
+  succeeded: number;
+  failed: number;
+  canceled: number;
+  oldestRunningMs?: number;
+};
+
 export interface OpenCodeState {
   connected: boolean;
   version: string | null;
@@ -162,6 +199,10 @@ export interface OpenCodeState {
   workerStreams: Record<string, WorkerStreamChunk>;
   workflowRuns: Record<string, WorkflowRun>;
   skillEvents: SkillLoadEvent[];
+  /** Job records from orchestrator */
+  jobs: Record<string, JobRecord>;
+  /** Job summary from orchestrator */
+  jobSummary: JobSummary | null;
   modelOptions: ModelOption[];
   toolIds: string[];
   lastUpdate: number;
@@ -183,6 +224,10 @@ export interface OpenCodeContextValue {
   activeSubagent: Accessor<SubagentSession | null>;
   lastSubagentEvent: Accessor<SubagentEvent | null>;
   activeWorkerSessionIds: Accessor<Set<string>>;
+  /** Job records from orchestrator */
+  jobs: Accessor<JobRecord[]>;
+  /** Job summary from orchestrator */
+  jobSummary: Accessor<JobSummary | null>;
   modelOptions: Accessor<ModelOption[]>;
   toolIds: Accessor<string[]>;
 

@@ -1,0 +1,4 @@
+services:
+  orchestra:
+    volumes:
+      - ${OPENCODE_HOST_AUTH_JSON:?set OPENCODE_HOST_AUTH_JSON to your host opencode auth.json}:/data/opencode/auth.json:ro

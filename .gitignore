@@ -8,6 +8,10 @@ node_modules
 .opencode/attachments/
 .opencode/vision/
 .opencode/orchestra/
+.opencode/orchestrator.local.json
+.opencode/opencode.local.json
+orchestrator.local.json
+opencode.local.json
 examples/**/node_modules/
 examples/**/dist/
 examples/**/coverage/

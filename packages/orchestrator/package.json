@@ -11,16 +11,7 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": [
-    "dist",
-    "bin",
-    "src",
-    "schema",
-    "prompts",
-    "docs",
-    "README.md",
-    "HEADLESS_TESTING.md"
-  ],
+  "files": ["dist", "bin", "src", "schema", "prompts", "docs", "README.md"],
   "scripts": {
     "build:plugin": "bun build ./src/index.ts --outdir ./dist --target node --external @opencode-ai/sdk --external @opencode-ai/plugin --external zod && tsc --emitDeclarationOnly --declaration --outDir dist -p tsconfig.json",
     "build": "bun run build:plugin",

@@ -11,9 +11,26 @@ Open Orchestra reads configuration from multiple locations, merged in order (lat
 | Built-in defaults | Global | Sensible defaults for all options |
 | `~/.config/opencode/orchestrator.json` | Global | User preferences across all projects |
 | `.opencode/orchestrator.json` | Project | Project-specific settings |
+| `.opencode/orchestrator.local.json` | Project | Local overrides (gitignored; ideal for worktrees/24-7) |
 | `orchestrator.json` (root) | Project | Legacy location (still supported) |
+| `orchestrator.local.json` (root) | Project | Legacy local overrides (gitignored) |
 
 **Recommended:** Use `.opencode/orchestrator.json` for project configs.
+Use `.opencode/orchestrator.local.json` for machine/worktree-specific overrides without touching tracked config.
+
+## Config Doctor
+
+Inspect global/plugin config state:
+
+```bash
+bun run opencode:doctor
+```
+
+Optionally make global config safer (disable global `autoSpawn`) and relink the global plugin to this repo’s built dist:
+
+```bash
+bun run opencode:doctor --link-plugin --safe-global --apply
+```
 
 ---
 
@@ -413,6 +430,8 @@ Built-in profile prompts are stored under `packages/orchestrator/prompts/workers
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
 | `id` | string | Yes | Unique identifier |
+| `base` | string | No | Inherit defaults from a built-in/known profile |
+| `directory` | string | No | Directory to run this worker in (useful for git worktrees / sandboxing) |
 | `name` | string | No | Display name |
 | `model` | string | No | Model ID or tag |
 | `providerID` | string | No | Specific provider |
