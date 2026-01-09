@@ -15,6 +15,7 @@ import { AgentsProvider } from "@/context/agents";
 import { resolveAgentsBase, resolveOpenCodeBase } from "@/lib/opencode-base";
 import {
   AgentsPage,
+  AutomationLayout,
   ChatPage,
   DashboardPage,
   MemoryPage,
@@ -70,11 +71,34 @@ export const App: Component = () => {
                 <Route path="/memory" component={MemoryPage} />
                 <Route path="/chat" component={ChatPage} />
 
-                {/* Automation hub - redirect legacy routes */}
-                <Route path="/automation/workflows" component={WorkflowsPage} />
-                <Route path="/automation/skills" component={SkillsPage} />
-                <Route path="/automation/prompts" component={PromptsPage} />
-                <Route path="/automation" component={() => <Navigate href="/automation/workflows" />} />
+                {/* Automation hub - unified layout with tabs */}
+                <Route path="/automation">
+                  <Route path="/" component={() => <Navigate href="/automation/workflows" />} />
+                  <Route
+                    path="/workflows"
+                    component={() => (
+                      <AutomationLayout>
+                        <WorkflowsPage />
+                      </AutomationLayout>
+                    )}
+                  />
+                  <Route
+                    path="/skills"
+                    component={() => (
+                      <AutomationLayout>
+                        <SkillsPage />
+                      </AutomationLayout>
+                    )}
+                  />
+                  <Route
+                    path="/prompts"
+                    component={() => (
+                      <AutomationLayout>
+                        <PromptsPage />
+                      </AutomationLayout>
+                    )}
+                  />
+                </Route>
 
                 {/* Legacy route redirects for backward compatibility */}
                 <Route path="/workflows" component={() => <Navigate href="/automation/workflows" />} />

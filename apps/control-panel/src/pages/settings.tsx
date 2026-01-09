@@ -10,6 +10,7 @@ import { SettingsPreferencesCard } from "./settings-preferences-card";
 import { SettingsConnectionsCard } from "./settings-connections-card";
 import { SettingsSidebar } from "./settings-sidebar";
 import { SettingsSqliteCard } from "./settings-sqlite-card";
+import { SettingsConfigCard } from "./settings-config-card";
 
 /** Settings page for preferences and worker overrides. */
 export const SettingsPage: Component = () => {
@@ -66,6 +67,7 @@ export const SettingsPage: Component = () => {
           <div class="max-w-4xl space-y-6 animate-fade-in">
             <SettingsSqliteCard dbPath={dbPath()} user={user()} onMarkOnboarded={markOnboarded} />
             <SettingsConnectionsCard />
+            <SettingsConfigCard />
             <SettingsPreferencesCard preferences={preferences()} onSave={setPreference} onDelete={deletePreference} />
             <SettingsOverridesCard
               agent={selectedAgent()}

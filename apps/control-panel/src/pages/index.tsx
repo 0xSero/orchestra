@@ -3,6 +3,7 @@
  */
 
 export { AgentsPage } from "./agents";
+export { AutomationLayout } from "./automation";
 export { ChatPage } from "./chat";
 export { ConfigPage } from "./config";
 export { DashboardPage } from "./dashboard";
