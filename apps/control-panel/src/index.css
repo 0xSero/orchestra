@@ -234,7 +234,7 @@
 
   /* Session/Worker list items */
   .session-item {
-    @apply flex flex-col gap-1 px-3 py-3 cursor-pointer border-b border-border;
+    @apply flex flex-col gap-1 px-3 py-2 mx-2 mb-1 cursor-pointer rounded-md;
     @apply hover:bg-accent/50 transition-colors;
   }
 
@@ -704,6 +704,15 @@
   }
 }
 
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
 @keyframes pulse-soft {
   0%,
   100% {
@@ -720,6 +729,10 @@
 
 .animate-slide-up {
   animation: slide-up 0.3s ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .animate-pulse-soft {

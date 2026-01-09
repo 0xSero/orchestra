@@ -5,10 +5,10 @@
  * Uses the OpenCode SDK for session/agent data.
  */
 
-import { Navigate, Route, Router, useLocation, useNavigate } from "@solidjs/router";
-import { type Component, createEffect, ErrorBoundary, type JSX } from "solid-js";
-import { AppLayout } from "@/components/layout/app-layout";
-import { DbProvider, useDb } from "@/context/db";
+import { Navigate, Route, Router } from "@solidjs/router";
+import { type Component, ErrorBoundary, type JSX } from "solid-js";
+import { AppShell } from "@/components/layout/app-shell";
+import { DbProvider } from "@/context/db";
 import { LayoutProvider } from "@/context/layout";
 import { OpenCodeProvider } from "@/context/opencode";
 import { AgentsProvider } from "@/context/agents";
@@ -16,39 +16,16 @@ import { resolveAgentsBase, resolveOpenCodeBase } from "@/lib/opencode-base";
 import {
   AgentsPage,
   ChatPage,
-  ConfigPage,
   DashboardPage,
   MemoryPage,
-  OnboardingPage,
+  ObservabilityPage,
   PromptsPage,
   SkillsPage,
   SettingsPage,
+  TasksPage,
   WorkflowsPage,
 } from "@/pages";
-
-const OnboardingGate: Component = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { preferences, ready, user } = useDb();
-
-  createEffect(() => {
-    // Wait for SQLite snapshot before deciding whether to redirect.
-    if (!ready()) return;
-    // Check both API preferences and localStorage fallback
-    const completed =
-      preferences()["onboarding.completed"] === "true" ||
-      user()?.onboarded ||
-      localStorage.getItem("onboarding.completed") === "true";
-    const skipped =
-      preferences()["onboarding.skipped"] === "true" ||
-      localStorage.getItem("onboarding.skipped") === "true";
-    if (completed || skipped) return;
-    if (location.pathname.startsWith("/onboarding")) return;
-    navigate("/onboarding", { replace: true });
-  });
-
-  return null;
-};
+import { OpenBoardRoute } from "@/components/openboard-seam";
 
 const ErrorFallback: Component<{ error: Error }> = (props) => {
   console.error("[App] Render error:", props.error);
@@ -65,10 +42,9 @@ const ErrorFallback: Component<{ error: Error }> = (props) => {
 // Layout wrapper that provides shared navigation
 const LayoutWrapper: Component<{ children?: JSX.Element }> = (props) => {
   return (
-    <AppLayout>
-      <OnboardingGate />
+    <AppShell>
       {props.children}
-    </AppLayout>
+    </AppShell>
   );
 };
 
@@ -89,15 +65,36 @@ export const App: Component = () => {
 
                 {/* Main pages */}
                 <Route path="/dashboard" component={DashboardPage} />
-                <Route path="/workflows" component={WorkflowsPage} />
+                <Route path="/tasks" component={TasksPage} />
+                <Route path="/workers" component={DashboardPage} /> {/* Placeholder - will create dedicated page */}
                 <Route path="/memory" component={MemoryPage} />
-                <Route path="/config" component={ConfigPage} />
-                <Route path="/prompts" component={PromptsPage} />
                 <Route path="/chat" component={ChatPage} />
-                <Route path="/agents" component={AgentsPage} />
-                <Route path="/skills" component={SkillsPage} />
+
+                {/* Automation hub - redirect legacy routes */}
+                <Route path="/automation/workflows" component={WorkflowsPage} />
+                <Route path="/automation/skills" component={SkillsPage} />
+                <Route path="/automation/prompts" component={PromptsPage} />
+                <Route path="/automation" component={() => <Navigate href="/automation/workflows" />} />
+
+                {/* Legacy route redirects for backward compatibility */}
+                <Route path="/workflows" component={() => <Navigate href="/automation/workflows" />} />
+                <Route path="/skills" component={() => <Navigate href="/automation/skills" />} />
+                <Route path="/prompts" component={() => <Navigate href="/automation/prompts" />} />
+                <Route path="/compose" component={() => <Navigate href="/tasks" />} />
+
+                {/* Observe - map /observe and /observability to same page */}
+                <Route path="/observe" component={ObservabilityPage} />
+                <Route path="/observability" component={ObservabilityPage} />
+
+                {/* Settings - merge config into settings */}
                 <Route path="/settings" component={SettingsPage} />
-                <Route path="/onboarding" component={OnboardingPage} />
+                <Route path="/config" component={() => <Navigate href="/settings" />} />
+
+                {/* Other pages */}
+                <Route path="/agents" component={AgentsPage} />
+
+                {/* OpenBoard integration seam */}
+                <Route path="/openboard/*" component={OpenBoardRoute} />
 
                 {/* Fallback - redirect unknown routes to dashboard */}
                 <Route path="*" component={() => <Navigate href="/dashboard" />} />
